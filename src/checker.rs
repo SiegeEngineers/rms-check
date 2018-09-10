@@ -66,12 +66,15 @@ impl<'a> Warning<'a> {
 
 pub struct Checker {
     is_comment: bool,
+    if_depth: u32,
 }
+
 impl Checker {
     /// Create an RMS syntax checker.
     pub fn new() -> Self {
         Checker {
             is_comment: false,
+            if_depth: 0,
         }
     }
 
@@ -99,6 +102,10 @@ impl Checker {
                         .replacement(&format!("{} */", &token.value[2..token.value.len() - 2])));
         }
 
+        if self.if_depth == 0 && token.value == "endif" {
+            return Some(Warning::warning(token, "Unexpected `endif`–no open if"));
+        }
+
         None
     }
 
@@ -108,10 +115,16 @@ impl Checker {
             None => (),
         }
 
-        if token.value == "/*" {
-            self.is_comment = true;
-        } else if token.value == "*/" {
-            self.is_comment = false;
+        match token.value {
+            "/*" => self.is_comment = true,
+            "*/" => self.is_comment = false,
+            "if" => self.if_depth += 1,
+            "endif" => {
+                if self.if_depth > 0 {
+                    self.if_depth -= 1;
+                }
+            }
+            _ => (),
         }
     }
 }
