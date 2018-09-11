@@ -229,6 +229,14 @@ impl Checker {
         match token.value {
             "/*" => self.is_comment = true,
             "*/" => self.is_comment = false,
+            _ => (),
+        }
+
+        // TODO check whether this should happen
+        // Before UP1.5 a parser bug could cause things inside comments to be parsed
+        if self.is_comment { return None }
+
+        match token.value {
             "if" => self.if_depth += 1,
             "endif" => {
                 if self.if_depth > 0 {
