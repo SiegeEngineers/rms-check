@@ -100,11 +100,21 @@ impl Checker {
         }
     }
 
-    fn check_arg_type(&self, arg_type: &ArgType, token: &Word) -> Option<Warning> {
+    fn check_arg_type(&self, arg_type: &ArgType, _token: &Word) -> Option<Warning> {
         match arg_type {
-            ArgType::Number => token.value.parse::<i32>()
-                .err()
-                .map(|_| Warning::warning(token, format!("Expected a number, got {}", token.value))),
+            ArgType::Number => {
+                // Check if this is
+                // 1. a number
+                // 2. a #const-ed constant
+                None
+            },
+            ArgType::Word => None,
+            ArgType::OptionalToken => None,
+            ArgType::Token => {
+                // 1. Check if this may or may not be defined—else warn
+                // 2. Check if this has a value (is defined using #const)—else warn
+                None
+            },
             _ => None,
         }
     }
