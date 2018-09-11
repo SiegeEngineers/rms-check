@@ -83,13 +83,14 @@ impl Warning {
     }
 }
 
+#[derive(Default)]
 pub struct Checker {
     is_comment: bool,
     if_depth: u32,
     current_token: Option<&'static TokenType>,
     token_arg_index: u8,
-    next_is_const: bool,
-    next_is_define: bool,
+    expect_const_name: bool,
+    expect_define_name: bool,
     seen_consts: HashSet<String>,
     seen_defines: HashSet<String>,
 }
@@ -114,14 +115,8 @@ impl Checker {
         }
 
         Checker {
-            is_comment: false,
-            if_depth: 0,
-            current_token: None,
-            token_arg_index: 0,
-            next_is_const: false,
-            next_is_define: false,
-            seen_consts: HashSet::new(),
             seen_defines,
+            ..Default::default()
         }
     }
 
@@ -216,14 +211,14 @@ impl Checker {
 
         let lint_warning = self.lint_token(token);
 
-        if self.next_is_const {
+        if self.expect_const_name {
             self.seen_consts.insert(token.value.into());
-            self.next_is_const = false;
+            self.expect_const_name = false;
         }
 
-        if self.next_is_define {
+        if self.expect_define_name {
             self.seen_defines.insert(token.value.into());
-            self.next_is_define = false;
+            self.expect_define_name = false;
         }
 
         match token.value {
@@ -243,8 +238,8 @@ impl Checker {
                     self.if_depth -= 1;
                 }
             },
-            "#const" => self.next_is_const = true,
-            "#define" => self.next_is_define = true,
+            "#const" => self.expect_const_name = true,
+            "#define" => self.expect_define_name = true,
             _ => (),
         }
 
