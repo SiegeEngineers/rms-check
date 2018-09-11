@@ -26,7 +26,7 @@ main!(|args: Cli| {
             .take(warn.end().line() as usize + 2)
             .skip(start as usize)
             .enumerate()
-            .map(|(offs, line)| (start + offs as u32, line));
+            .map(|(offs, line)| (start + 1 + offs as u32, line));
 
         let message = format!("{} {}", match warn.severity() {
             Severity::Warning => Yellow.bold().paint("WARN"),
@@ -36,7 +36,7 @@ main!(|args: Cli| {
         println!("\n{}", message);
         lines.for_each(|(n, line)| {
             println!("{} | {}", n, line);
-            if n == start + 1 {
+            if n == start {
                 let cstart = warn.start().column();
                 let cend = warn.end().column();
                 let mut ptrs = String::new();
