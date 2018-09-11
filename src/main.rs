@@ -6,7 +6,7 @@ mod tokens;
 mod wordize;
 mod checker;
 
-use ansi_term::Colour::{Red, Yellow, Cyan};
+use ansi_term::Colour::{Blue, Red, Yellow, Cyan};
 use wordize::Wordize;
 use checker::{Severity, Checker};
 
@@ -38,7 +38,7 @@ fn main() {
                 let mut ptrs = String::new();
                 for _ in 0..cstart { ptrs.push(' '); }
                 for _ in cstart..cend { ptrs.push('^'); }
-                println!("{} | {}", n.to_string().replace(|_| true, " "), ptrs);
+                println!("{}", Blue.bold().paint(format!("{}-->{}", n.to_string().replace(|_| true, " "), ptrs)));
             }
         });
         match warn.suggestion() {
