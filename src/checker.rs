@@ -143,7 +143,7 @@ impl Checker {
 
     fn check_ever_defined(&self, token: &Word) -> Option<Warning> {
         if !self.seen_defines.contains(token.value) {
-            Some(Warning::warning(token, format!("Token `{}` is never defined", token.value)))
+            Some(Warning::warning(token, format!("Token `{}` is never defined, this condition will always fail", token.value)))
         } else {
             None
         }
@@ -218,6 +218,20 @@ impl Checker {
 
         if self.if_depth == 0 && token.value == "endif" {
             return Some(Warning::warning(token, "Unexpected `endif`–no open if".into()));
+        }
+
+        if token.value == "#include_drs" {
+            return Some(Warning::warning(token, "#include_drs can only be used by builtin maps".into())
+                .suggest(Suggestion {
+                    start: token.start,
+                    end: token.end,
+                    message: "Move the included file to the Random/ folder and #include it normally".into(),
+                    replacement: None,
+                }));
+        }
+
+        if token.value.starts_with("<") && token.value.ends_with(">") && !TOKENS.contains_key(token.value) {
+            return Some(Warning::error(token, format!("Invalid section {}", token.value)));
         }
 
         if let Some(current_token) = self.current_token {
