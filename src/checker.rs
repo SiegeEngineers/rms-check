@@ -95,7 +95,7 @@ pub struct Checker {
     seen_defines: HashSet<String>,
 }
 
-const BUILTIN_NAMES: [&str; 7] = [
+const BUILTIN_NAMES: [&str; 8] = [
     "TINY_MAP",
     "SMALL_MAP",
     "MEDIUM_MAP",
@@ -104,6 +104,7 @@ const BUILTIN_NAMES: [&str; 7] = [
     "GIGANTIC_MAP",
 
     "REGICIDE",
+    "DEATH_MATCH",
 ];
 
 impl Checker {
