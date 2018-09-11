@@ -1,12 +1,24 @@
 extern crate ansi_term;
 extern crate rms_check;
+#[macro_use] extern crate quicli;
 
+use std::fs::File;
+use std::io::Read;
 use ansi_term::Colour::{Blue, Red, Yellow, Cyan};
 use rms_check::{check, Severity};
+use quicli::prelude::*;
 
-fn main() {
-    let source = include_str!("../CM_Houseboat_v2.rms");
-    let warnings = check(source);
+#[derive(Debug, StructOpt)]
+struct Cli {
+    /// The file to check.
+    file: String,
+}
+
+main!(|args: Cli| {
+    let mut file = File::open(args.file)?;
+    let mut source = String::new();
+    file.read_to_string(&mut source)?;
+    let warnings = check(&source);
 
     for warn in warnings {
         let start = warn.start().line() - 1;
@@ -38,4 +50,4 @@ fn main() {
             None => (),
         }
     }
-}
+});

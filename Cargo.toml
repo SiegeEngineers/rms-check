@@ -9,3 +9,4 @@ repository = "https://github.com/goto-bus-stop/rms-check.git"
 [dependencies]
 ansi_term = "^0.9"
 lazy_static = "^1.1.0"
+quicli = "^0.3"
