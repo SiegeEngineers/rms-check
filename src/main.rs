@@ -21,7 +21,7 @@ main!(|args: Cli| {
     let warnings = check(&source);
 
     for warn in warnings {
-        let start = warn.start().line() - 1;
+        let start = warn.start().line().saturating_sub(1);
         let lines = source.lines()
             .take(warn.end().line() as usize + 2)
             .skip(start as usize)
