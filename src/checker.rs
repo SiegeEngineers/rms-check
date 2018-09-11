@@ -94,13 +94,15 @@ pub struct Checker {
     seen_defines: HashSet<String>,
 }
 
-const BUILTIN_NAMES: [&str; 6] = [
+const BUILTIN_NAMES: [&str; 7] = [
     "TINY_MAP",
     "SMALL_MAP",
     "MEDIUM_MAP",
     "LARGE_MAP",
     "HUGE_MAP",
     "GIGANTIC_MAP",
+
+    "REGICIDE",
 ];
 
 impl Checker {
@@ -123,6 +125,28 @@ impl Checker {
         }
     }
 
+    fn check_ever_defined(&self, token: &Word) -> Option<Warning> {
+        if !self.seen_defines.contains(token.value) {
+            Some(Warning::warning(token, format!("Token `{}` is never defined", token.value)))
+        } else {
+            None
+        }
+    }
+
+    fn check_defined_with_value(&self, token: &Word) -> Option<Warning> {
+        // 1. Check if this may or may not be defined—else warn
+        if !self.seen_consts.contains(token.value) {
+            if self.seen_defines.contains(token.value) {
+                // 2. Check if this has a value (is defined using #const)—else warn
+                Some(Warning::warning(token, format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
+            } else {
+                Some(Warning::warning(token, format!("Token `{}` is never defined", token.value)))
+            }
+        } else {
+            None
+        }
+    }
+
     fn check_arg_type(&self, arg_type: &ArgType, token: &Word) -> Option<Warning> {
         match arg_type {
             ArgType::Number => {
@@ -132,26 +156,8 @@ impl Checker {
                 None
             },
             ArgType::Word => None,
-            ArgType::OptionalToken => {
-                if !self.seen_defines.contains(token.value) {
-                    Some(Warning::warning(token, format!("Token `{}` is never defined", token.value)))
-                } else {
-                    None
-                }
-            },
-            ArgType::Token => {
-                // 1. Check if this may or may not be defined—else warn
-                if !self.seen_consts.contains(token.value) {
-                    if self.seen_defines.contains(token.value) {
-                        // 2. Check if this has a value (is defined using #const)—else warn
-                        Some(Warning::warning(token, format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
-                    } else {
-                        Some(Warning::warning(token, format!("Token `{}` is never defined", token.value)))
-                    }
-                } else {
-                    None
-                }
-            },
+            ArgType::OptionalToken => self.check_ever_defined(token),
+            ArgType::Token => self.check_defined_with_value(token),
             _ => None,
         }
     }
