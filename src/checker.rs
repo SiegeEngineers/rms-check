@@ -1,4 +1,5 @@
 use wordize::{Pos, Word};
+use tokens::{ArgType, TokenType, TOKENS};
 
 /// Warning severity.
 enum Severity {
@@ -9,7 +10,7 @@ enum Severity {
 }
 
 /// A warning.
-struct Warning<'a> {
+struct Warning {
     /// Warning severity.
     severity: Severity,
     /// The first character in the source code that this warning applies to.
@@ -17,15 +18,15 @@ struct Warning<'a> {
     /// The last character in the source code that this warning applies to.
     end: Pos,
     /// Human-readable warning text.
-    message: &'a str,
+    message: String,
     /// A change suggestion: when present, the problem can be fixed by replacing the
     /// range of text this warning applies to by the string in this suggestion.
     suggestion: Option<String>,
 }
 
-impl<'a> Warning<'a> {
+impl Warning {
     /// Create a new warning with severity "Warning".
-    fn warning(token: &Word, message: &'a str) -> Self {
+    fn warning(token: &Word, message: String) -> Self {
         Warning {
             severity: Severity::Warning,
             start: token.start.clone(),
@@ -36,7 +37,7 @@ impl<'a> Warning<'a> {
     }
 
     /// Create a new warning with severity "Error".
-    fn error(token: &Word, message: &'a str) -> Self {
+    fn error(token: &Word, message: String) -> Self {
         Warning {
             severity: Severity::Error,
             start: token.start.clone(),
@@ -56,7 +57,7 @@ impl<'a> Warning<'a> {
 
     /// Print this warning to the screen.
     fn print(&self) -> () {
-        eprintln!("({}:{}) {}", self.start.line(), self.start.column(), self.message);
+        eprintln!("({}:{}) {}", self.start.line(), self.start.column(), &self.message);
         match &self.suggestion {
             Some(ref msg) => eprintln!("  ! Suggested replacement: {}", msg),
             None => (),
@@ -67,6 +68,8 @@ impl<'a> Warning<'a> {
 pub struct Checker {
     is_comment: bool,
     if_depth: u32,
+    current_token: Option<&'static TokenType>,
+    token_arg_index: u8,
 }
 
 impl Checker {
@@ -75,18 +78,29 @@ impl Checker {
         Checker {
             is_comment: false,
             if_depth: 0,
+            current_token: None,
+            token_arg_index: 0,
+        }
+    }
+
+    fn check_arg_type(&self, arg_type: &ArgType, token: &Word) -> Option<Warning> {
+        match arg_type {
+            ArgType::Number => token.value.parse::<i32>()
+                .err()
+                .map(|_| Warning::warning(token, format!("Expected a number, got {}", token.value))),
+            _ => None,
         }
     }
 
     /// Check an incoming token.
     fn lint_token(&mut self, token: &Word) -> Option<Warning> {
         if token.value == "*/" && !self.is_comment {
-            return Some(Warning::error(token, "Unexpected closing `*/`"))
+            return Some(Warning::error(token, "Unexpected closing `*/`".into()))
         }
 
         // "/**" does not work to open a comment
         if token.value.len() > 2 && token.value.starts_with("/*") {
-            let warning = Warning::error(token, "Incorrect comment: there must be a space after the opening /*");
+            let warning = Warning::error(token, "Incorrect comment: there must be a space after the opening /*".into());
             let replacement = if token.value.ends_with("*/") {
                 format!("/* {} */", &token.value[2..token.value.len() - 2])
             } else {
@@ -98,18 +112,38 @@ impl Checker {
         // "**/" was probably meant to be a closing comment, but only <whitespace>*/ actually closes
         // comments.
         if token.value.len() > 2 && token.value.ends_with("*/") {
-            return Some(Warning::warning(token, "Possibly unclosed comment")
+            return Some(Warning::warning(token, "Possibly unclosed comment".into())
                         .replacement(&format!("{} */", &token.value[2..token.value.len() - 2])));
         }
 
         if self.if_depth == 0 && token.value == "endif" {
-            return Some(Warning::warning(token, "Unexpected `endif`–no open if"));
+            return Some(Warning::warning(token, "Unexpected `endif`–no open if".into()));
+        }
+
+        if let Some(current_token) = self.current_token {
+            let current_arg_type = current_token.arg_type(self.token_arg_index);
+            match current_arg_type {
+                Some(arg_type) => {
+                    match self.check_arg_type(arg_type, &token) {
+                        Some(warning) => return Some(warning),
+                        None => (),
+                    };
+                },
+                None => return Some(Warning::error(token, format!("Too many arguments ({}) to command `{}`", self.token_arg_index + 1, current_token.name))),
+            }
         }
 
         None
     }
 
     pub fn write_token(&mut self, token: &Word) -> () {
+        if let Some(current_token) = self.current_token {
+            if self.token_arg_index >= current_token.arg_len() {
+                self.current_token = None;
+                self.token_arg_index = 0;
+            }
+        }
+
         match self.lint_token(token) {
             Some(warning) => warning.print(),
             None => (),
@@ -125,6 +159,18 @@ impl Checker {
                 }
             }
             _ => (),
+        }
+
+        if let Some(current_token) = self.current_token {
+            self.token_arg_index += 1;
+        }
+
+        match TOKENS.get(token.value) {
+            Some(ref token_type) => {
+                self.current_token = Some(token_type);
+                self.token_arg_index = 0;
+            },
+            None => (),
         }
     }
 }
