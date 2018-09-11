@@ -46,9 +46,13 @@ main!(|args: Cli| {
                 println!("{}", Blue.bold().paint(format!("{}-->{}", n.to_string().replace(|_| true, " "), ptrs)));
             }
         });
-        match warn.suggestion() {
-            Some(ref new_text) => println!("\n    {} Replace with:\n    {}", Cyan.paint("SUGGESTION"), new_text),
-            None => (),
+
+        for suggestion in warn.suggestions() {
+            println!("\n    {} {}", Cyan.paint("SUGGESTION"), suggestion.message());
+            match suggestion.replacement() {
+                Some(ref new_text) => println!("    {}", new_text),
+                None => (),
+            }
         }
     }
 });

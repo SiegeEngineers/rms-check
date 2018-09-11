@@ -11,6 +11,22 @@ pub enum Severity {
     Error,
 }
 
+/// A suggestion that may fix a warning.
+pub struct Suggestion {
+    start: Pos,
+    end: Pos,
+    message: String,
+    replacement: Option<String>,
+}
+impl Suggestion {
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+    pub fn replacement(&self) -> &Option<String> {
+        &self.replacement
+    }
+}
+
 /// A warning.
 pub struct Warning {
     /// Warning severity.
@@ -23,7 +39,7 @@ pub struct Warning {
     message: String,
     /// A change suggestion: when present, the problem can be fixed by replacing the
     /// range of text this warning applies to by the string in this suggestion.
-    suggestion: Option<String>,
+    suggestions: Vec<Suggestion>,
 }
 
 impl Warning {
@@ -39,8 +55,11 @@ impl Warning {
     pub fn message(&self) -> &str {
         &self.message
     }
-    pub fn suggestion(&self) -> &Option<String> {
-        &self.suggestion
+    pub fn has_suggestions(&self) -> bool {
+        self.suggestions.len() > 0
+    }
+    pub fn suggestions(&self) -> &Vec<Suggestion> {
+        &self.suggestions
     }
 
     /// Create a new warning with severity "Warning".
@@ -50,7 +69,7 @@ impl Warning {
             start: token.start.clone(),
             end: token.end.clone(),
             message,
-            suggestion: None,
+            suggestions: vec![],
         }
     }
 
@@ -61,24 +80,25 @@ impl Warning {
             start: token.start.clone(),
             end: token.end.clone(),
             message,
-            suggestion: None,
+            suggestions: vec![],
         }
     }
 
     /// Define a replacement suggestion for this warning.
-    fn replacement(self, suggestion: &str) -> Self {
-        Warning {
-            suggestion: Some(suggestion.into()),
-            ..self
-        }
+    fn suggest(mut self, suggestion: Suggestion) -> Self {
+        self.suggestions.push(suggestion);
+        self
     }
 
     /// Print this warning to the screen.
     fn print(&self) -> () {
         eprintln!("({}:{}) {}", self.start.line(), self.start.column(), &self.message);
-        match &self.suggestion {
-            Some(ref msg) => eprintln!("  ! Suggested replacement: {}", msg),
-            None => (),
+        for suggestion in &self.suggestions {
+            eprintln!("  SUGGESTION {}", suggestion.message);
+            match suggestion.replacement {
+                Some(ref msg) => eprintln!("  ! Suggested replacement: {}", msg),
+                None => (),
+            }
         }
     }
 }
@@ -169,19 +189,31 @@ impl Checker {
         // "/**" does not work to open a comment
         if token.value.len() > 2 && token.value.starts_with("/*") {
             let warning = Warning::error(token, "Incorrect comment: there must be a space after the opening /*".into());
-            let replacement = if token.value.ends_with("*/") {
-                format!("/* {} */", &token.value[2..token.value.len() - 2])
+            let (message, replacement) = if token.value.ends_with("*/") {
+                ("Add spaces at the start and end of the comment".into(),
+                 Some(format!("/* {} */", &token.value[2..token.value.len() - 2])))
             } else {
-                format!("/* {}", &token.value[2..])
+                ("Add a space after the /*".into(),
+                 Some(format!("/* {}", &token.value[2..])))
             };
-            return Some(warning.replacement(&replacement));
+            return Some(warning.suggest(Suggestion {
+                start: token.start,
+                end: token.end,
+                message,
+                replacement,
+            }));
         }
 
         // "**/" was probably meant to be a closing comment, but only <whitespace>*/ actually closes
         // comments.
         if token.value.len() > 2 && token.value.ends_with("*/") {
-            return Some(Warning::warning(token, "Possibly unclosed comment".into())
-                        .replacement(&format!("{} */", &token.value[2..token.value.len() - 2])));
+            return Some(Warning::warning(token, "Possibly unclosed comment, */ must be preceded by whitespace".into())
+                .suggest(Suggestion {
+                    start: token.start,
+                    end: token.end,
+                    message: "Add a space before the */".into(),
+                    replacement: Some(format!("{} */", &token.value[2..token.value.len() - 2])),
+                }));
         }
 
         if self.if_depth == 0 && token.value == "endif" {
