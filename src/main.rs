@@ -1,20 +1,13 @@
 extern crate ansi_term;
-#[macro_use]
-extern crate lazy_static;
-
-mod tokens;
-mod wordize;
-mod checker;
+extern crate rms_check;
 
 use ansi_term::Colour::{Blue, Red, Yellow, Cyan};
-use wordize::Wordize;
-use checker::{Severity, Checker};
+use rms_check::check;
+use rms_check::checker::Severity;
 
 fn main() {
     let source = include_str!("../CM_Houseboat_v2.rms");
-    let words = Wordize::new(source);
-    let mut checker = Checker::new();
-    let warnings = words.filter_map(|w| checker.write_token(&w));
+    let warnings = check(source);
 
     for warn in warnings {
         let start = warn.start().line() - 1;
