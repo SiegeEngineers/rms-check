@@ -25,6 +25,8 @@ pub enum TokenContext {
     TopLevelAttribute(Option<&'static str>),
     /// An attribute inside a block, with an optional block type restriction.
     Attribute(Option<&'static str>),
+    /// This token can occur in multiple places.
+    AnyOf(Vec<TokenContext>),
 }
 
 pub type TokenArgTypes = [Option<ArgType>; 4];
@@ -146,6 +148,52 @@ lazy_static! {
             name: "<CONNECTION_GENERATION>",
             context: TokenContext::Section,
             arg_types: [None, None, None, None],
+        });
+
+        m.insert("random_placement".into(), TokenType {
+            name: "random_placement",
+            context: TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")),
+            arg_types: [None, None, None, None],
+        });
+        m.insert("grouped_by_team".into(), TokenType {
+            name: "grouped_by_team",
+            context: TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")),
+            arg_types: [None, None, None, None],
+        });
+
+        m.insert("create_land".into(), TokenType {
+            name: "create_land",
+            context: TokenContext::Command(Some("<LAND_GENERATION>")),
+            arg_types: [None, None, None, None],
+        });
+        m.insert("land_percent".into(), TokenType {
+            name: "land_percent",
+            context: TokenContext::Attribute(Some("create_land")),
+            arg_types: [Some(ArgType::Number), None, None, None],
+        });
+        m.insert("land_position".into(), TokenType {
+            name: "land_position",
+            context: TokenContext::Attribute(Some("create_land")),
+            arg_types: [Some(ArgType::Number), None, None, None],
+        });
+        m.insert("land_id".into(), TokenType {
+            name: "land_id",
+            context: TokenContext::Attribute(Some("create_land")),
+            arg_types: [Some(ArgType::Number), None, None, None],
+        });
+        m.insert("create_player_lands".into(), TokenType {
+            name: "create_player_lands",
+            context: TokenContext::Command(Some("<LAND_GENERATION>")),
+            arg_types: [None, None, None, None],
+        });
+
+        m.insert("base_terrain".into(), TokenType {
+            name: "base_terrain",
+            context: TokenContext::AnyOf(vec![
+                TokenContext::TopLevelAttribute(Some("<LAND_GENERATION>")),
+                TokenContext::Attribute(Some("create_land")),
+            ]),
+            arg_types: [Some(ArgType::Number), None, None, None],
         });
 
         m

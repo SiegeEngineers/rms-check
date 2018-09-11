@@ -14,7 +14,8 @@ pub use wordize::Pos;
 pub use checker::{Severity, Warning};
 
 pub fn check(source: &str) -> Vec<Warning> {
-    let words = Wordize::new(source);
+    let words = Wordize::new(include_str!("random_map.def"))
+        .chain(Wordize::new(source));
     let mut checker = Checker::new();
     words.filter_map(|w| checker.write_token(&w)).collect()
 }

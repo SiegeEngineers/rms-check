@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use wordize::{Pos, Word};
 use tokens::{ArgType, TokenType, TOKENS};
 
@@ -87,20 +88,42 @@ pub struct Checker {
     if_depth: u32,
     current_token: Option<&'static TokenType>,
     token_arg_index: u8,
+    next_is_const: bool,
+    next_is_define: bool,
+    seen_consts: HashSet<String>,
+    seen_defines: HashSet<String>,
 }
+
+const BUILTIN_NAMES: [&str; 6] = [
+    "TINY_MAP",
+    "SMALL_MAP",
+    "MEDIUM_MAP",
+    "LARGE_MAP",
+    "HUGE_MAP",
+    "GIGANTIC_MAP",
+];
 
 impl Checker {
     /// Create an RMS syntax checker.
     pub fn new() -> Self {
+        let mut seen_defines = HashSet::new();
+        for name in BUILTIN_NAMES.iter() {
+            seen_defines.insert((*name).into());
+        }
+
         Checker {
             is_comment: false,
             if_depth: 0,
             current_token: None,
             token_arg_index: 0,
+            next_is_const: false,
+            next_is_define: false,
+            seen_consts: HashSet::new(),
+            seen_defines,
         }
     }
 
-    fn check_arg_type(&self, arg_type: &ArgType, _token: &Word) -> Option<Warning> {
+    fn check_arg_type(&self, arg_type: &ArgType, token: &Word) -> Option<Warning> {
         match arg_type {
             ArgType::Number => {
                 // Check if this is
@@ -109,11 +132,25 @@ impl Checker {
                 None
             },
             ArgType::Word => None,
-            ArgType::OptionalToken => None,
+            ArgType::OptionalToken => {
+                if !self.seen_defines.contains(token.value) {
+                    Some(Warning::warning(token, format!("Token `{}` is never defined", token.value)))
+                } else {
+                    None
+                }
+            },
             ArgType::Token => {
                 // 1. Check if this may or may not be defined—else warn
-                // 2. Check if this has a value (is defined using #const)—else warn
-                None
+                if !self.seen_consts.contains(token.value) {
+                    if self.seen_defines.contains(token.value) {
+                        // 2. Check if this has a value (is defined using #const)—else warn
+                        Some(Warning::warning(token, format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
+                    } else {
+                        Some(Warning::warning(token, format!("Token `{}` is never defined", token.value)))
+                    }
+                } else {
+                    None
+                }
             },
             _ => None,
         }
@@ -173,6 +210,16 @@ impl Checker {
 
         let lint_warning = self.lint_token(token);
 
+        if self.next_is_const {
+            self.seen_consts.insert(token.value.into());
+            self.next_is_const = false;
+        }
+
+        if self.next_is_define {
+            self.seen_defines.insert(token.value.into());
+            self.next_is_define = false;
+        }
+
         match token.value {
             "/*" => self.is_comment = true,
             "*/" => self.is_comment = false,
@@ -181,7 +228,9 @@ impl Checker {
                 if self.if_depth > 0 {
                     self.if_depth -= 1;
                 }
-            }
+            },
+            "#const" => self.next_is_const = true,
+            "#define" => self.next_is_define = true,
             _ => (),
         }
 
