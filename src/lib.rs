@@ -4,11 +4,14 @@ extern crate lazy_static;
 
 mod tokens;
 mod wordize;
-pub mod checker;
+mod checker;
 
 use ansi_term::Colour::{Blue, Red, Yellow, Cyan};
 use wordize::Wordize;
-use checker::{Warning, Checker};
+use checker::Checker;
+
+pub use wordize::Pos;
+pub use checker::{Severity, Warning};
 
 pub fn check(source: &str) -> Vec<Warning> {
     let words = Wordize::new(source);

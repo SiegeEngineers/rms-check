@@ -2,8 +2,7 @@ extern crate ansi_term;
 extern crate rms_check;
 
 use ansi_term::Colour::{Blue, Red, Yellow, Cyan};
-use rms_check::check;
-use rms_check::checker::Severity;
+use rms_check::{check, Severity};
 
 fn main() {
     let source = include_str!("../CM_Houseboat_v2.rms");
