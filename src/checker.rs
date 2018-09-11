@@ -145,10 +145,12 @@ impl Checker {
     fn check_arg_type(&self, arg_type: &ArgType, token: &Word) -> Option<Warning> {
         match arg_type {
             ArgType::Number => {
-                // Check if this is
-                // 1. a number
-                // 2. a #const-ed constant
-                None
+                // This may be a valued (#const) constant or a number (12, -35)
+                self.check_defined_with_value(token).and_then(|_warn| {
+                    token.value.parse::<i32>()
+                        .err()
+                        .map(|_| Warning::warning(token, format!("Expected a number, got {}", token.value)))
+                })
             },
             ArgType::Word => None,
             ArgType::OptionalToken => self.check_ever_defined(token),
