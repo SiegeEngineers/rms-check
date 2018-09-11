@@ -16,17 +16,18 @@ struct Cli {
 
 main!(|args: Cli| {
     let mut file = File::open(args.file)?;
-    let mut source = String::new();
-    file.read_to_string(&mut source)?;
+    let mut bytes = vec![];
+    file.read_to_end(&mut bytes)?;
+    let source = String::from_utf8_lossy(&bytes);
     let warnings = check(&source);
 
     for warn in warnings {
-        let start = warn.start().line().saturating_sub(1);
+        let start = warn.start().line();
         let lines = source.lines()
             .take(warn.end().line() as usize + 2)
-            .skip(start as usize)
+            .skip(start.saturating_sub(1) as usize)
             .enumerate()
-            .map(|(offs, line)| (start + 1 + offs as u32, line));
+            .map(|(offs, line)| (if start > 0 { 0 } else { 1 } + start + offs as u32, line));
 
         let message = format!("{} {}", match warn.severity() {
             Severity::Warning => Yellow.bold().paint("WARN"),
@@ -36,7 +37,7 @@ main!(|args: Cli| {
         println!("\n{}", message);
         lines.for_each(|(n, line)| {
             println!("{} | {}", n, line);
-            if n == start {
+            if n - 1 == start {
                 let cstart = warn.start().column();
                 let cend = warn.end().column();
                 let mut ptrs = String::new();

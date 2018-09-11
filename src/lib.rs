@@ -6,7 +6,6 @@ mod tokens;
 mod wordize;
 mod checker;
 
-use ansi_term::Colour::{Blue, Red, Yellow, Cyan};
 use wordize::Wordize;
 use checker::Checker;
 
