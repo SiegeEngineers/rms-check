@@ -2,7 +2,8 @@ use wordize::{Pos, Word};
 use tokens::{ArgType, TokenType, TOKENS};
 
 /// Warning severity.
-enum Severity {
+#[derive(Clone, Copy)]
+pub enum Severity {
     /// This needs attention but may not be incorrect.
     Warning,
     /// This is 100% incorrect.
@@ -10,7 +11,7 @@ enum Severity {
 }
 
 /// A warning.
-struct Warning {
+pub struct Warning {
     /// Warning severity.
     severity: Severity,
     /// The first character in the source code that this warning applies to.
@@ -25,6 +26,22 @@ struct Warning {
 }
 
 impl Warning {
+    pub fn severity(&self) -> Severity {
+        self.severity
+    }
+    pub fn start(&self) -> &Pos {
+        &self.start
+    }
+    pub fn end(&self) -> &Pos {
+        &self.end
+    }
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+    pub fn suggestion(&self) -> &Option<String> {
+        &self.suggestion
+    }
+
     /// Create a new warning with severity "Warning".
     fn warning(token: &Word, message: String) -> Self {
         Warning {
@@ -136,7 +153,7 @@ impl Checker {
         None
     }
 
-    pub fn write_token(&mut self, token: &Word) -> () {
+    pub fn write_token(&mut self, token: &Word) -> Option<Warning> {
         if let Some(current_token) = self.current_token {
             if self.token_arg_index >= current_token.arg_len() {
                 self.current_token = None;
@@ -144,10 +161,7 @@ impl Checker {
             }
         }
 
-        match self.lint_token(token) {
-            Some(warning) => warning.print(),
-            None => (),
-        }
+        let lint_warning = self.lint_token(token);
 
         match token.value {
             "/*" => self.is_comment = true,
@@ -172,5 +186,7 @@ impl Checker {
             },
             None => (),
         }
+
+        lint_warning
     }
 }
