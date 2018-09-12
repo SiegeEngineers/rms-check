@@ -166,14 +166,26 @@ impl Checker {
     fn check_arg_type(&self, arg_type: &ArgType, token: &Word) -> Option<Warning> {
         match arg_type {
             ArgType::Number => {
-                // This may be a valued (#const) constant or a number (12, -35)
+                // This may be a valued (#const) constant,
                 self.check_defined_with_value(token).and_then(|_warn| {
+                    // or a number (12, -35),
                     token.value.parse::<i32>()
                         .err()
-                        .map(|_| Warning::warning(token, format!("Expected a number, got {}", token.value)))
+                        .map(|_| Warning::warning(token, format!("Expected a number, but got {}", token.value)))
+                }).and_then(|_warn| {
+                    // or rnd(\d+,\d+)
+                    if token.value.starts_with("rnd(") && token.value.ends_with(")") && token.value[4..token.value.len() - 1].split(",").all(|part| part.parse::<i32>().is_ok()) {
+                        None
+                    } else {
+                        Some(_warn)
+                    }
                 })
             },
-            ArgType::Word => None,
+            ArgType::Word => {
+                token.value.parse::<i32>()
+                    .ok()
+                    .map(|_| Warning::warning(token, format!("Expected a word, but got a number {}. This uses the number as the constant *name*, so it may not do what you expect.", token.value)))
+            },
             ArgType::OptionalToken => self.check_ever_defined(token),
             ArgType::Token => self.check_defined_with_value(token),
             _ => None,
