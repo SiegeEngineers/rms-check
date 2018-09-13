@@ -2,6 +2,18 @@ use std::collections::HashSet;
 use wordize::{Pos, Word};
 use tokens::{ArgType, TokenType, TOKENS};
 
+#[derive(Clone, Copy)]
+enum Expect {
+    None,
+    DefineName,
+    ConstName,
+}
+impl Default for Expect {
+    fn default() -> Self {
+        Expect::None
+    }
+}
+
 /// Warning severity.
 #[derive(Clone, Copy)]
 pub enum Severity {
@@ -109,8 +121,7 @@ pub struct Checker {
     if_depth: u32,
     current_token: Option<&'static TokenType>,
     token_arg_index: u8,
-    expect_const_name: bool,
-    expect_define_name: bool,
+    expect: Expect,
     seen_consts: HashSet<String>,
     seen_defines: HashSet<String>,
 }
@@ -272,14 +283,16 @@ impl Checker {
 
         let lint_warning = self.lint_token(token);
 
-        if self.expect_const_name {
-            self.seen_consts.insert(token.value.into());
-            self.expect_const_name = false;
-        }
-
-        if self.expect_define_name {
-            self.seen_defines.insert(token.value.into());
-            self.expect_define_name = false;
+        match self.expect {
+            Expect::ConstName => {
+                self.seen_consts.insert(token.value.into());
+                self.expect = Expect::None;
+            },
+            Expect::DefineName => {
+                self.seen_defines.insert(token.value.into());
+                self.expect = Expect::None;
+            },
+            _ => (),
         }
 
         match token.value {
@@ -299,8 +312,8 @@ impl Checker {
                     self.if_depth -= 1;
                 }
             },
-            "#const" => self.expect_const_name = true,
-            "#define" => self.expect_define_name = true,
+            "#const" => self.expect = Expect::ConstName,
+            "#define" => self.expect = Expect::DefineName,
             _ => (),
         }
 
