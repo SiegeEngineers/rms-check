@@ -222,18 +222,18 @@ impl<'a> Checker<'a> {
                     token.value.parse::<i32>()
                         .err()
                         .map(|_| {
-                            let mut warn = token.warning(format!("Expected a number, but got {}", token.value));
+                            let warn = token.warning(format!("Expected a number, but got {}", token.value));
                             if token.value.starts_with("(") {
-                                if let (false, replacement) = is_valid_rnd(&format!("rnd{}", token.value)) {
-                                    warn = warn.suggest(Suggestion {
-                                        start: token.start,
-                                        end: token.end,
-                                        message: "Did you forget the `rnd`?".into(),
-                                        replacement,
-                                    });
-                                }
+                                let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
+                                warn.suggest(Suggestion {
+                                    start: token.start,
+                                    end: token.end,
+                                    message: "Did you forget the `rnd`?".into(),
+                                    replacement: replacement.or_else(|| Some(format!("rnd{}", token.value))),
+                                })
+                            } else {
+                                warn
                             }
-                            warn
                         })
                 }).and_then(|warn| {
                     // or rnd(\d+,\d+)
