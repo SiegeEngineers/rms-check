@@ -83,22 +83,22 @@ impl Warning {
     }
 
     /// Create a new warning with severity "Warning".
-    fn warning(token: &Word, message: String) -> Self {
+    fn warning(start: Pos, end: Pos, message: String) -> Self {
         Warning {
             severity: Severity::Warning,
-            start: token.start.clone(),
-            end: token.end.clone(),
+            start,
+            end,
             message,
             suggestions: vec![],
         }
     }
 
     /// Create a new warning with severity "Error".
-    fn error(token: &Word, message: String) -> Self {
+    fn error(start: Pos, end: Pos, message: String) -> Self {
         Warning {
             severity: Severity::Error,
-            start: token.start.clone(),
-            end: token.end.clone(),
+            start,
+            end,
             message,
             suggestions: vec![],
         }
@@ -120,6 +120,15 @@ impl Warning {
                 None => (),
             }
         }
+    }
+}
+
+impl<'a> Word<'a> {
+    pub fn warning(&self, message: String) -> Warning {
+        Warning::warning(self.start, self.end, message)
+    }
+    pub fn error(&self, message: String) -> Warning {
+        Warning::error(self.start, self.end, message)
     }
 }
 
@@ -162,7 +171,7 @@ impl<'a> Checker<'a> {
 
     fn check_ever_defined(&self, token: &Word) -> Option<Warning> {
         if !self.seen_defines.contains(token.value) {
-            Some(Warning::warning(token, format!("Token `{}` is never defined, this condition will always fail", token.value)))
+            Some(token.warning(format!("Token `{}` is never defined, this condition will always fail", token.value)))
         } else {
             None
         }
@@ -173,9 +182,9 @@ impl<'a> Checker<'a> {
         if !self.seen_consts.contains(token.value) {
             if self.seen_defines.contains(token.value) {
                 // 2. Check if this has a value (is defined using #const)—else warn
-                Some(Warning::warning(token, format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
+                Some(token.warning(format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
             } else {
-                Some(Warning::warning(token, format!("Token `{}` is never defined", token.value)))
+                Some(token.warning(format!("Token `{}` is never defined", token.value)))
             }
         } else {
             None
@@ -191,7 +200,7 @@ impl<'a> Checker<'a> {
                     token.value.parse::<i32>()
                         .err()
                         .map(|_| {
-                            let warn = Warning::warning(token, format!("Expected a number, but got {}", token.value));
+                            let warn = token.warning(format!("Expected a number, but got {}", token.value));
                             if token.value.starts_with("(") {
                                 warn.suggest(Suggestion {
                                     start: token.start,
@@ -223,7 +232,7 @@ impl<'a> Checker<'a> {
             ArgType::Word => {
                 token.value.parse::<i32>()
                     .ok()
-                    .map(|_| Warning::warning(token, format!("Expected a word, but got a number {}. This uses the number as the constant *name*, so it may not do what you expect.", token.value)))
+                    .map(|_| token.warning(format!("Expected a word, but got a number {}. This uses the number as the constant *name*, so it may not do what you expect.", token.value)))
             },
             ArgType::OptionalToken => self.check_ever_defined(token),
             ArgType::Token => self.check_defined_with_value(token),
@@ -234,12 +243,12 @@ impl<'a> Checker<'a> {
     /// Check an incoming token.
     fn lint_token(&mut self, token: &Word<'a>) -> Option<Warning> {
         if token.value == "*/" && !self.is_comment {
-            return Some(Warning::error(token, "Unexpected closing `*/`".into()))
+            return Some(token.error("Unexpected closing `*/`".into()))
         }
 
         // "/**" does not work to open a comment
         if token.value.len() > 2 && token.value.starts_with("/*") {
-            let warning = Warning::error(token, "Incorrect comment: there must be a space after the opening /*".into());
+            let warning = token.error("Incorrect comment: there must be a space after the opening /*".into());
             let (message, replacement) = if token.value.ends_with("*/") {
                 ("Add spaces at the start and end of the comment".into(),
                  Some(format!("/* {} */", &token.value[2..token.value.len() - 2])))
@@ -258,7 +267,7 @@ impl<'a> Checker<'a> {
         // "**/" was probably meant to be a closing comment, but only <whitespace>*/ actually closes
         // comments.
         if token.value.len() > 2 && token.value.ends_with("*/") {
-            return Some(Warning::warning(token, "Possibly unclosed comment, */ must be preceded by whitespace".into())
+            return Some(token.warning("Possibly unclosed comment, */ must be preceded by whitespace".into())
                 .suggest(Suggestion {
                     start: token.start,
                     end: token.end,
@@ -268,11 +277,11 @@ impl<'a> Checker<'a> {
         }
 
         if self.if_depth == 0 && token.value == "endif" {
-            return Some(Warning::warning(token, "Unexpected `endif`–no open if".into()));
+            return Some(token.warning("Unexpected `endif`–no open if".into()));
         }
 
         if token.value == "#include_drs" {
-            return Some(Warning::warning(token, "#include_drs can only be used by builtin maps".into())
+            return Some(token.warning("#include_drs can only be used by builtin maps".into())
                 .suggest(Suggestion {
                     start: token.start,
                     end: token.end,
@@ -282,12 +291,12 @@ impl<'a> Checker<'a> {
         }
 
         if token.value.starts_with("<") && token.value.ends_with(">") && !TOKENS.contains_key(token.value) {
-            return Some(Warning::error(token, format!("Invalid section {}", token.value)));
+            return Some(token.error(format!("Invalid section {}", token.value)));
         }
 
         if let Expect::UnfinishedRnd(pos, val) = self.expect {
             self.expect = Expect::None;
-            return Some(Warning::error(token, format!("Incorrect rnd() call")).suggest(Suggestion {
+            return Some(Warning::error(pos, token.end, format!("Incorrect rnd() call")).suggest(Suggestion {
                 start: pos,
                 end: token.end,
                 message: "rnd() must not contain spaces".into(),
@@ -304,7 +313,7 @@ impl<'a> Checker<'a> {
                         None => (),
                     };
                 },
-                None => return Some(Warning::error(token, format!("Too many arguments ({}) to command `{}`", self.token_arg_index + 1, current_token.name))),
+                None => return Some(token.error(format!("Too many arguments ({}) to command `{}`", self.token_arg_index + 1, current_token.name))),
             }
         }
 
