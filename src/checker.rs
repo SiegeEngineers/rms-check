@@ -132,6 +132,28 @@ impl<'a> Word<'a> {
     }
 }
 
+fn is_numeric(s: &str) -> bool {
+    s.parse::<i32>().is_ok()
+}
+
+/// Check if a string contains a valid rnd(1,10) call.
+///
+/// Returns a tuple with values:
+///
+///   0. whether the string was valid
+///   1. an optional valid replacement value
+fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
+    if s.starts_with("rnd(") && s.ends_with(")") && s[4..s.len() - 1].split(",").all(is_numeric) {
+        return (true, None)
+    } else if s.chars().any(char::is_whitespace) {
+        let no_ws = s.chars().filter(|c| !char::is_whitespace(*c)).collect::<String>();
+        if let (true, _) = is_valid_rnd(&no_ws) {
+            return (false, Some(no_ws))
+        }
+    }
+    (false, None)
+}
+
 #[derive(Default)]
 pub struct Checker<'a> {
     is_comment: bool,
@@ -200,21 +222,22 @@ impl<'a> Checker<'a> {
                     token.value.parse::<i32>()
                         .err()
                         .map(|_| {
-                            let warn = token.warning(format!("Expected a number, but got {}", token.value));
+                            let mut warn = token.warning(format!("Expected a number, but got {}", token.value));
                             if token.value.starts_with("(") {
-                                warn.suggest(Suggestion {
-                                    start: token.start,
-                                    end: token.end,
-                                    message: "Did you forget the rnd()?".into(),
-                                    replacement: format!("rnd{}", token.value).into(),
-                                })
-                            } else {
-                                warn
+                                if let (false, replacement) = is_valid_rnd(&format!("rnd{}", token.value)) {
+                                    warn = warn.suggest(Suggestion {
+                                        start: token.start,
+                                        end: token.end,
+                                        message: "Did you forget the `rnd`?".into(),
+                                        replacement,
+                                    });
+                                }
                             }
+                            warn
                         })
                 }).and_then(|warn| {
                     // or rnd(\d+,\d+)
-                    if token.value.starts_with("rnd(") && token.value.ends_with(")") && token.value[4..token.value.len() - 1].split(",").all(|part| part.parse::<i32>().is_ok()) {
+                    if let (true, _) = is_valid_rnd(token.value) {
                         None
                     } else if token.value.starts_with("rnd(") && token.value.ends_with(",") {
                         // probably "rnd(\d+, \d+)"
@@ -296,11 +319,12 @@ impl<'a> Checker<'a> {
 
         if let Expect::UnfinishedRnd(pos, val) = self.expect {
             self.expect = Expect::None;
+            let replacement = is_valid_rnd(&format!("{} {}", val, token.value)).1;
             return Some(Warning::error(pos, token.end, format!("Incorrect rnd() call")).suggest(Suggestion {
                 start: pos,
                 end: token.end,
                 message: "rnd() must not contain spaces".into(),
-                replacement: format!("{}{}", val, token.value).into(),
+                replacement,
             }));
         }
 
