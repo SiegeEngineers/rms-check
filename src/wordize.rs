@@ -31,6 +31,7 @@ pub struct Wordize<'a> {
 }
 
 /// Represents a word.
+#[derive(Clone, Copy)]
 pub struct Word<'a> {
     /// Position of the first character in the source code.
     pub start: Pos,

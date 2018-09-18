@@ -3,12 +3,13 @@ use wordize::{Pos, Word};
 use tokens::{ArgType, TokenType, TOKENS};
 
 #[derive(Clone, Copy)]
-enum Expect {
+enum Expect<'a> {
     None,
     DefineName,
     ConstName,
+    UnfinishedRnd(Pos, &'a str),
 }
-impl Default for Expect {
+impl<'a> Default for Expect<'a> {
     fn default() -> Self {
         Expect::None
     }
@@ -30,7 +31,14 @@ pub struct Suggestion {
     message: String,
     replacement: Option<String>,
 }
+
 impl Suggestion {
+    pub fn start(&self) -> &Pos {
+        &self.start
+    }
+    pub fn end(&self) -> &Pos {
+        &self.end
+    }
     pub fn message(&self) -> &str {
         &self.message
     }
@@ -116,12 +124,12 @@ impl Warning {
 }
 
 #[derive(Default)]
-pub struct Checker {
+pub struct Checker<'a> {
     is_comment: bool,
     if_depth: u32,
     current_token: Option<&'static TokenType>,
     token_arg_index: u8,
-    expect: Expect,
+    expect: Expect<'a>,
     seen_consts: HashSet<String>,
     seen_defines: HashSet<String>,
 }
@@ -138,7 +146,7 @@ const BUILTIN_NAMES: [&str; 8] = [
     "DEATH_MATCH",
 ];
 
-impl Checker {
+impl<'a> Checker<'a> {
     /// Create an RMS syntax checker.
     pub fn new() -> Self {
         let mut seen_defines = HashSet::new();
@@ -174,7 +182,7 @@ impl Checker {
         }
     }
 
-    fn check_arg_type(&self, arg_type: &ArgType, token: &Word) -> Option<Warning> {
+    fn check_arg_type(&mut self, arg_type: &ArgType, token: &Word<'a>) -> Option<Warning> {
         match arg_type {
             ArgType::Number => {
                 // This may be a valued (#const) constant,
@@ -182,13 +190,33 @@ impl Checker {
                     // or a number (12, -35),
                     token.value.parse::<i32>()
                         .err()
-                        .map(|_| Warning::warning(token, format!("Expected a number, but got {}", token.value)))
-                }).and_then(|_warn| {
+                        .map(|_| {
+                            let warn = Warning::warning(token, format!("Expected a number, but got {}", token.value));
+                            if token.value.starts_with("(") {
+                                warn.suggest(Suggestion {
+                                    start: token.start,
+                                    end: token.end,
+                                    message: "Did you forget the rnd()?".into(),
+                                    replacement: format!("rnd{}", token.value).into(),
+                                })
+                            } else {
+                                warn
+                            }
+                        })
+                }).and_then(|warn| {
                     // or rnd(\d+,\d+)
                     if token.value.starts_with("rnd(") && token.value.ends_with(")") && token.value[4..token.value.len() - 1].split(",").all(|part| part.parse::<i32>().is_ok()) {
                         None
+                    } else if token.value.starts_with("rnd(") && token.value.ends_with(",") {
+                        // probably "rnd(\d+, \d+)"
+                        self.expect = Expect::UnfinishedRnd(token.start, token.value);
+                        None
+                    } else if token.value == "rnd" {
+                        // probably "rnd (\d+,\d+)"
+                        self.expect = Expect::UnfinishedRnd(token.start, token.value);
+                        None
                     } else {
-                        Some(_warn)
+                        Some(warn)
                     }
                 })
             },
@@ -204,7 +232,7 @@ impl Checker {
     }
 
     /// Check an incoming token.
-    fn lint_token(&mut self, token: &Word) -> Option<Warning> {
+    fn lint_token(&mut self, token: &Word<'a>) -> Option<Warning> {
         if token.value == "*/" && !self.is_comment {
             return Some(Warning::error(token, "Unexpected closing `*/`".into()))
         }
@@ -257,6 +285,16 @@ impl Checker {
             return Some(Warning::error(token, format!("Invalid section {}", token.value)));
         }
 
+        if let Expect::UnfinishedRnd(pos, val) = self.expect {
+            self.expect = Expect::None;
+            return Some(Warning::error(token, format!("Incorrect rnd() call")).suggest(Suggestion {
+                start: pos,
+                end: token.end,
+                message: "rnd() must not contain spaces".into(),
+                replacement: format!("{}{}", val, token.value).into(),
+            }));
+        }
+
         if let Some(current_token) = self.current_token {
             let current_arg_type = current_token.arg_type(self.token_arg_index);
             match current_arg_type {
@@ -273,7 +311,7 @@ impl Checker {
         None
     }
 
-    pub fn write_token(&mut self, token: &Word) -> Option<Warning> {
+    pub fn write_token(&mut self, token: &Word<'a>) -> Option<Warning> {
         if let Some(current_token) = self.current_token {
             if self.token_arg_index >= current_token.arg_len() {
                 self.current_token = None;
