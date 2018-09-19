@@ -54,6 +54,7 @@ main!(|args: Cli| {
     file.read_to_end(&mut bytes)?;
     let source = String::from_utf8_lossy(&bytes);
     let warnings = check(&source);
+    let has_warnings = warnings.len() > 0;
 
     for warn in warnings {
         let offending_line = warn.start().line();
@@ -74,5 +75,9 @@ main!(|args: Cli| {
         for suggestion in warn.suggestions() {
             println!("\n{}", indent(&format_suggestion(&suggestion), "    "));
         }
+    }
+
+    if has_warnings {
+        bail!("There were warnings");
     }
 });
