@@ -131,7 +131,7 @@ fn is_numeric(s: &str) -> bool {
 ///   0. whether the string was valid
 ///   1. an optional valid replacement value
 fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
-    if s.starts_with("rnd(") && s.ends_with(")") && s[4..s.len() - 1].split(",").all(is_numeric) {
+    if s.starts_with("rnd(") && s.ends_with(')') && s[4..s.len() - 1].split(",").all(is_numeric) {
         return (true, None)
     } else if s.chars().any(char::is_whitespace) {
         let no_ws = s.chars().filter(|c| !char::is_whitespace(*c)).collect::<String>();
@@ -228,12 +228,11 @@ impl<'a> Checker<'a> {
                     // or rnd(\d+,\d+)
                     if let (true, _) = is_valid_rnd(token.value) {
                         None
-                    } else if token.value.starts_with("rnd(") && token.value.ends_with(",") {
+                    } else if
                         // probably "rnd(\d+, \d+)"
-                        self.expect = Expect::UnfinishedRnd(token.start, token.value);
-                        None
-                    } else if token.value == "rnd" {
+                        (token.value.starts_with("rnd(") && token.value.ends_with(',')) ||
                         // probably "rnd (\d+,\d+)"
+                        (token.value == "rnd") {
                         self.expect = Expect::UnfinishedRnd(token.start, token.value);
                         None
                     } else {
@@ -302,14 +301,14 @@ impl<'a> Checker<'a> {
                 }));
         }
 
-        if token.value.starts_with("<") && token.value.ends_with(">") && !TOKENS.contains_key(token.value) {
+        if token.value.starts_with('<') && token.value.ends_with('>') && !TOKENS.contains_key(token.value) {
             return Some(token.error(format!("Invalid section {}", token.value)));
         }
 
         if let Expect::UnfinishedRnd(pos, val) = self.expect {
             self.expect = Expect::None;
             let replacement = is_valid_rnd(&format!("{} {}", val, token.value)).1;
-            return Some(Warning::error(pos, token.end, format!("Incorrect rnd() call")).suggest(Suggestion {
+            return Some(Warning::error(pos, token.end, "Incorrect rnd() call".into()).suggest(Suggestion {
                 start: pos,
                 end: token.end,
                 message: "rnd() must not contain spaces".into(),
@@ -327,10 +326,9 @@ impl<'a> Checker<'a> {
             let current_arg_type = current_token.arg_type(self.token_arg_index);
             match current_arg_type {
                 Some(arg_type) => {
-                    match self.check_arg_type(arg_type, &token) {
-                        Some(warning) => return Some(warning),
-                        None => (),
-                    };
+                    if let Some(warning) = self.check_arg_type(arg_type, &token) {
+                        return Some(warning);
+                    }
                 },
                 None => return Some(token.error(format!("Too many arguments ({}) to command `{}`", self.token_arg_index + 1, current_token.name))),
             }
@@ -387,16 +385,13 @@ impl<'a> Checker<'a> {
             self.token_arg_index += 1;
         }
 
-        match TOKENS.get(token.value) {
-            Some(ref token_type) => {
-                self.current_token = Some(token_type);
-                self.token_arg_index = 0;
+        if let Some(ref token_type) = TOKENS.get(token.value) {
+            self.current_token = Some(token_type);
+            self.token_arg_index = 0;
 
-                if let TokenContext::Section = token_type.context() {
-                    self.current_section = Some(token_type.name);
-                }
-            },
-            None => (),
+            if let TokenContext::Section = token_type.context() {
+                self.current_section = Some(token_type.name);
+            }
         }
 
         lint_warning

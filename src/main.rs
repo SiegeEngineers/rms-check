@@ -54,7 +54,7 @@ main!(|args: Cli| {
     file.read_to_end(&mut bytes)?;
     let source = String::from_utf8_lossy(&bytes);
     let warnings = check(&source);
-    let has_warnings = warnings.len() > 0;
+    let has_warnings = !warnings.is_empty();
 
     for warn in warnings {
         let offending_line = warn.start().line();
