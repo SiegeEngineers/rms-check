@@ -47,6 +47,10 @@ impl TokenType {
             None => 4u8,
         }
     }
+
+    pub fn context(&self) -> &TokenContext {
+        &self.context
+    }
 }
 
 lazy_static! {

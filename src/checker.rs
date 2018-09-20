@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use wordize::{Pos, Word};
-use tokens::{ArgType, TokenType, TOKENS};
+use tokens::{ArgType, TokenType, TokenContext, TOKENS};
 
 #[derive(Clone, Copy)]
 enum Expect<'a> {
@@ -149,6 +149,7 @@ pub struct Checker<'a> {
     current_token: Option<&'static TokenType>,
     token_arg_index: u8,
     expect: Expect<'a>,
+    current_section: Option<&'static str>,
     seen_consts: HashSet<String>,
     seen_defines: HashSet<String>,
 }
@@ -317,6 +318,12 @@ impl<'a> Checker<'a> {
         }
 
         if let Some(current_token) = self.current_token {
+            if let TokenContext::Command(Some(section)) = current_token.context() {
+                if Some(*section) != self.current_section {
+                    return Some(token.error(format!("Command is invalid in section {}, it can only appear in {}", self.current_section.unwrap_or("<NONE>"), section)));
+                }
+            }
+
             let current_arg_type = current_token.arg_type(self.token_arg_index);
             match current_arg_type {
                 Some(arg_type) => {
@@ -384,6 +391,10 @@ impl<'a> Checker<'a> {
             Some(ref token_type) => {
                 self.current_token = Some(token_type);
                 self.token_arg_index = 0;
+
+                if let TokenContext::Section = token_type.context() {
+                    self.current_section = Some(token_type.name);
+                }
             },
             None => (),
         }
