@@ -109,18 +109,6 @@ impl Warning {
         self.suggestions.push(suggestion);
         self
     }
-
-    /// Print this warning to the screen.
-    fn print(&self) -> () {
-        eprintln!("({}:{}) {}", self.start.line(), self.start.column(), &self.message);
-        for suggestion in &self.suggestions {
-            eprintln!("  SUGGESTION {}", suggestion.message);
-            match suggestion.replacement {
-                Some(ref msg) => eprintln!("  ! Suggested replacement: {}", msg),
-                None => (),
-            }
-        }
-    }
 }
 
 impl<'a> Word<'a> {
@@ -388,7 +376,7 @@ impl<'a> Checker<'a> {
             _ => (),
         }
 
-        if let Some(current_token) = self.current_token {
+        if self.current_token.is_some() {
             self.token_arg_index += 1;
         }
 
