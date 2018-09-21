@@ -66,8 +66,13 @@ main!(|args: Cli| {
                 let cstart = warn.start().column();
                 let cend = warn.end().column();
                 let mut ptrs = String::new();
-                for _ in 0..cstart { ptrs.push(' '); }
-                for _ in cstart..cend { ptrs.push('^'); }
+                // Replace all characters with whitespace, except tabs, for alignment
+                for ch in line[0usize..cstart as usize].chars() {
+                    ptrs.push(if ch == '\t' { '\t' } else { ' ' });
+                }
+                for _ in cstart..cend {
+                    ptrs.push('^');
+                }
                 println!("{}", Blue.bold().paint(format!("{}-->{}", n.to_string().replace(|_| true, " "), ptrs)));
             }
         }
