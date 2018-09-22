@@ -15,7 +15,7 @@ pub enum ArgType {
     Filename = 5,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum TokenContext {
     /// A flow control token.
     Flow,
@@ -28,7 +28,7 @@ pub enum TokenContext {
     /// An attribute inside a block, with an optional block type restriction.
     Attribute(Option<&'static str>),
     /// This token can occur in multiple places.
-    AnyOf(Vec<TokenContext>),
+    AnyOf(&'static [TokenContext]),
 }
 
 pub type TokenArgTypes = [Option<ArgType>; 4];
@@ -70,457 +70,175 @@ impl TokenMapBuilder {
     }
 }
 
+macro_rules! token {
+    ( $name:expr, $context:expr ) => {
+        TokenType {
+            name: $name,
+            context: $context,
+            arg_types: [None, None, None, None],
+        }
+    };
+    ( $name:expr, $context:expr, [ $arg1:ident ] ) => {
+        TokenType {
+            name: $name,
+            context: $context,
+            arg_types: [Some(ArgType::$arg1), None, None, None],
+        }
+    };
+    ( $name:expr, $context:expr, [ $arg1:ident, $arg2:ident ] ) => {
+        TokenType {
+            name: $name,
+            context: $context,
+            arg_types: [Some(ArgType::$arg1), Some(ArgType::$arg2), None, None],
+        }
+    };
+    ( $name:expr, $context:expr, [ $arg1:ident, $arg2:ident, $arg3:ident ] ) => {
+        TokenType {
+            name: $name,
+            context: $context,
+            arg_types: [Some(ArgType::$arg1), Some(ArgType::$arg2), Some(ArgType::$arg3), None],
+        }
+    };
+    ( $name:expr, $context:expr, [ $arg1:ident, $arg2:ident, $arg3:ident, $arg4:ident ] ) => {
+        TokenType {
+            name: $name,
+            context: $context,
+            arg_types: [Some(ArgType::$arg1), Some(ArgType::$arg2), Some(ArgType::$arg3), Some(ArgType::$arg4)],
+        }
+    };
+}
+
 lazy_static! {
     pub static ref TOKENS: HashMap<String, TokenType> = {
         let mut m = TokenMapBuilder::new();
-        m.insert(TokenType {
-            name: "#define",
-            context: TokenContext::Flow,
-            arg_types: [Some(ArgType::Word), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "#undefine",
-            context: TokenContext::Flow,
-            arg_types: [Some(ArgType::Word), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "#const",
-            context: TokenContext::Flow,
-            arg_types: [Some(ArgType::Word), Some(ArgType::Number), None, None],
-        });
+        m.insert(token!("#define", TokenContext::Flow, [Word]));
+        m.insert(token!("#undefine", TokenContext::Flow, [Word]));
+        m.insert(token!("#const", TokenContext::Flow, [Word, Number]));
 
-        m.insert(TokenType {
-            name: "if",
-            context: TokenContext::Flow,
-            arg_types: [Some(ArgType::OptionalToken), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "elseif",
-            context: TokenContext::Flow,
-            arg_types: [Some(ArgType::OptionalToken), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "else",
-            context: TokenContext::Flow,
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "endif",
-            context: TokenContext::Flow,
-            arg_types: [None, None, None, None],
-        });
+        m.insert(token!("if", TokenContext::Flow, [OptionalToken]));
+        m.insert(token!("elseif", TokenContext::Flow, [OptionalToken]));
+        m.insert(token!("else", TokenContext::Flow));
+        m.insert(token!("endif", TokenContext::Flow));
 
-        m.insert(TokenType {
-            name: "start_random",
-            context: TokenContext::Flow,
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "percent_chance",
-            context: TokenContext::Flow,
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "end_random",
-            context: TokenContext::Flow,
-            arg_types: [None, None, None, None],
-        });
+        m.insert(token!("start_random", TokenContext::Flow));
+        m.insert(token!("percent_chance", TokenContext::Flow, [Number]));
+        m.insert(token!("end_random", TokenContext::Flow));
 
-        m.insert(TokenType {
-            name: "#include",
-            context: TokenContext::Flow,
-            arg_types: [Some(ArgType::Filename), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "#include_drs",
-            context: TokenContext::Flow,
-            arg_types: [Some(ArgType::Filename), Some(ArgType::Number), None, None],
-        });
+        m.insert(token!("#include", TokenContext::Flow, [Filename]));
+        m.insert(token!("#include_drs", TokenContext::Flow, [Filename, Number]));
 
-        m.insert(TokenType {
-            name: "<PLAYER_SETUP>",
-            context: TokenContext::Section,
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "<LAND_GENERATION>",
-            context: TokenContext::Section,
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "<ELEVATION_GENERATION>",
-            context: TokenContext::Section,
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "<TERRAIN_GENERATION>",
-            context: TokenContext::Section,
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "<CLIFF_GENERATION>",
-            context: TokenContext::Section,
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "<OBJECTS_GENERATION>",
-            context: TokenContext::Section,
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "<CONNECTION_GENERATION>",
-            context: TokenContext::Section,
-            arg_types: [None, None, None, None],
-        });
+        m.insert(token!("<PLAYER_SETUP>", TokenContext::Section));
+        m.insert(token!("<LAND_GENERATION>", TokenContext::Section));
+        m.insert(token!("<ELEVATION_GENERATION>", TokenContext::Section));
+        m.insert(token!("<TERRAIN_GENERATION>", TokenContext::Section));
+        m.insert(token!("<CLIFF_GENERATION>", TokenContext::Section));
+        m.insert(token!("<OBJECTS_GENERATION>", TokenContext::Section));
+        m.insert(token!("<CONNECTION_GENERATION>", TokenContext::Section));
 
-        m.insert(TokenType {
-            name: "random_placement",
-            context: TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "grouped_by_team",
-            context: TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")),
-            arg_types: [None, None, None, None],
-        });
+        m.insert(token!("random_placement", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>"))));
+        m.insert(token!("grouped_by_team", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>"))));
 
-        let land_attribute_context = TokenContext::AnyOf(vec![
+        let land_attribute_context = TokenContext::AnyOf(&[
            TokenContext::Attribute(Some("create_land")),
            TokenContext::Attribute(Some("create_player_lands")),
         ]);
 
-        m.insert(TokenType {
-            name: "create_land",
-            context: TokenContext::Command(Some("<LAND_GENERATION>")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "create_player_lands",
-            context: TokenContext::Command(Some("<LAND_GENERATION>")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "land_percent",
-            context: land_attribute_context.clone(),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "land_position",
-            context: land_attribute_context.clone(),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "land_id",
-            context: land_attribute_context.clone(),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "terrain_type",
-            context: TokenContext::AnyOf(vec![
-               TokenContext::Attribute(Some("create_land")),
-               TokenContext::Attribute(Some("create_player_lands")),
-               TokenContext::Attribute(Some("create_terrain")),
-            ]),
-            arg_types: [Some(ArgType::Token), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "base_size",
-            context: land_attribute_context.clone(),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "left_border",
-            context: land_attribute_context.clone(),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "right_border",
-            context: land_attribute_context.clone(),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "top_border",
-            context: land_attribute_context.clone(),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "bottom_border",
-            context: land_attribute_context.clone(),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "border_fuzziness",
-            context: land_attribute_context.clone(),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "zone",
-            context: land_attribute_context.clone(),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "set_zone_by_team",
-            context: land_attribute_context.clone(),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "set_zone_randomly",
-            context: land_attribute_context.clone(),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "other_zone_avoidance_distance",
-            context: land_attribute_context.clone(),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "assign_to_player",
-            context: TokenContext::Attribute(Some("create_land")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
+        m.insert(token!("create_land", TokenContext::Command(Some("<LAND_GENERATION>"))));
+        m.insert(token!("create_player_lands", TokenContext::Command(Some("<LAND_GENERATION>"))));
+        m.insert(token!("land_percent", land_attribute_context, [Number]));
+        m.insert(token!("land_position", land_attribute_context, [Number]));
+        m.insert(token!("land_id", land_attribute_context, [Number]));
+        m.insert(token!("terrain_type", TokenContext::AnyOf(&[
+           TokenContext::Attribute(Some("create_land")),
+           TokenContext::Attribute(Some("create_player_lands")),
+           TokenContext::Attribute(Some("create_terrain")),
+        ]), [Token]));
+        m.insert(token!("base_size", land_attribute_context, [Number]));
+        m.insert(token!("left_border", land_attribute_context, [Number]));
+        m.insert(token!("right_border", land_attribute_context, [Number]));
+        m.insert(token!("top_border", land_attribute_context, [Number]));
+        m.insert(token!("bottom_border", land_attribute_context, [Number]));
+        m.insert(token!("border_fuzziness", land_attribute_context, [Number]));
+        m.insert(token!("zone", land_attribute_context, [Number]));
+        m.insert(token!("set_zone_by_team", land_attribute_context));
+        m.insert(token!("set_zone_randomly", land_attribute_context));
+        m.insert(token!("other_zone_avoidance_distance", land_attribute_context, [Number]));
+        m.insert(token!("assign_to_player", TokenContext::Attribute(Some("create_land")), [Number]));
 
-        m.insert(TokenType {
-            name: "base_terrain",
-            context: TokenContext::AnyOf(vec![
-                TokenContext::TopLevelAttribute(Some("<LAND_GENERATION>")),
-                TokenContext::Attribute(Some("create_land")),
-                TokenContext::Attribute(Some("create_player_lands")),
-                TokenContext::Attribute(Some("create_elevation")),
-                TokenContext::Attribute(Some("create_terrain")),
-                TokenContext::Attribute(Some("create_object")),
-            ]),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
+        m.insert(token!("base_terrain", TokenContext::AnyOf(&[
+            TokenContext::TopLevelAttribute(Some("<LAND_GENERATION>")),
+            TokenContext::Attribute(Some("create_land")),
+            TokenContext::Attribute(Some("create_player_lands")),
+            TokenContext::Attribute(Some("create_elevation")),
+            TokenContext::Attribute(Some("create_terrain")),
+            TokenContext::Attribute(Some("create_object")),
+        ]), [Number]));
 
-        m.insert(TokenType {
-            name: "min_number_of_cliffs",
-            context: TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "max_number_of_cliffs",
-            context: TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "min_length_of_cliff",
-            context: TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "max_length_of_cliff",
-            context: TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "cliff_curliness",
-            context: TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "min_distance_cliffs",
-            context: TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "min_terrain_distance",
-            context: TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
+        m.insert(token!("min_number_of_cliffs", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));
+        m.insert(token!("max_number_of_cliffs", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));
+        m.insert(token!("min_length_of_cliff", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));
+        m.insert(token!("max_length_of_cliff", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));
+        m.insert(token!("cliff_curliness", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));
+        m.insert(token!("min_distance_cliffs", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));
+        m.insert(token!("min_terrain_distance", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));
 
 
-        m.insert(TokenType {
-            name: "create_terrain",
-            context: TokenContext::Command(Some("<TERRAIN_GENERATION>")),
-            arg_types: [Some(ArgType::Token), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "percent_of_land",
-            context: TokenContext::Attribute(Some("create_terrain")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "number_of_tiles",
-            context: TokenContext::AnyOf(vec![
-                 TokenContext::Attribute(Some("create_terrain")),
-                 TokenContext::Attribute(Some("create_elevation")),
-            ]),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "number_of_clumps",
-            context: TokenContext::AnyOf(vec![
-                 TokenContext::Attribute(Some("create_terrain")),
-                 TokenContext::Attribute(Some("create_elevation")),
-            ]),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "set_scale_by_groups",
-            context: TokenContext::AnyOf(vec![
-                 TokenContext::Attribute(Some("create_terrain")),
-                 TokenContext::Attribute(Some("create_elevation")),
-            ]),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "set_scale_by_size",
-            context: TokenContext::AnyOf(vec![
-                 TokenContext::Attribute(Some("create_terrain")),
-                 TokenContext::Attribute(Some("create_elevation")),
-            ]),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "spacing_to_other_terrain_types",
-            context: TokenContext::Attribute(Some("create_terrain")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "height_limits",
-            context: TokenContext::Attribute(Some("create_terrain")),
-            arg_types: [Some(ArgType::Number), Some(ArgType::Number), None, None],
-        });
-        m.insert(TokenType {
-            name: "set_flat_terrain_only",
-            context: TokenContext::Attribute(Some("create_terrain")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "clumping_factor",
-            context: TokenContext::Attribute(Some("create_terrain")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
+        m.insert(token!("create_terrain", TokenContext::Command(Some("<TERRAIN_GENERATION>")), [Token]));
+        m.insert(token!("percent_of_land", TokenContext::Attribute(Some("create_terrain")), [Number]));
+        m.insert(token!("number_of_tiles", TokenContext::AnyOf(&[
+             TokenContext::Attribute(Some("create_terrain")),
+             TokenContext::Attribute(Some("create_elevation")),
+        ]), [Number]));
+        m.insert(token!("number_of_clumps", TokenContext::AnyOf(&[
+             TokenContext::Attribute(Some("create_terrain")),
+             TokenContext::Attribute(Some("create_elevation")),
+        ]), [Number]));
+        m.insert(token!("set_scale_by_groups", TokenContext::AnyOf(&[
+             TokenContext::Attribute(Some("create_terrain")),
+             TokenContext::Attribute(Some("create_elevation")),
+        ])));
+        m.insert(token!("set_scale_by_size", TokenContext::AnyOf(&[
+             TokenContext::Attribute(Some("create_terrain")),
+             TokenContext::Attribute(Some("create_elevation")),
+        ])));
+        m.insert(token!("spacing_to_other_terrain_types", TokenContext::Attribute(Some("create_terrain")), [Number]));
+        m.insert(token!("height_limits", TokenContext::Attribute(Some("create_terrain")), [Number, Number]));
+        m.insert(token!("set_flat_terrain_only", TokenContext::Attribute(Some("create_terrain"))));
+        m.insert(token!("clumping_factor", TokenContext::Attribute(Some("create_terrain")), [Number]));
 
-        m.insert(TokenType {
-            name: "create_object",
-            context: TokenContext::Command(Some("<OBJECTS_GENERATION>")),
-            arg_types: [Some(ArgType::Token), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "set_scaling_to_map_size",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "number_of_groups",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "number_of_objects",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "group_variance",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "group_placement_radius",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "set_loose_grouping",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "set_tight_grouping",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "terrain_to_place_on",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [Some(ArgType::Token), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "set_gaia_object_only",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "set_place_for_every_player",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "place_on_specific_land_id",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "min_distance_to_players",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "max_distance_to_players",
-            context: TokenContext::Attribute(Some("create_object")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
+        m.insert(token!("create_object", TokenContext::Command(Some("<OBJECTS_GENERATION>")), [Token]));
+        m.insert(token!("set_scaling_to_map_size", TokenContext::Attribute(Some("create_object"))));
+        m.insert(token!("number_of_groups", TokenContext::Attribute(Some("create_object")), [Number]));
+        m.insert(token!("number_of_objects", TokenContext::Attribute(Some("create_object")), [Number]));
+        m.insert(token!("group_variance", TokenContext::Attribute(Some("create_object")), [Number]));
+        m.insert(token!("group_placement_radius", TokenContext::Attribute(Some("create_object")), [Number]));
+        m.insert(token!("set_loose_grouping", TokenContext::Attribute(Some("create_object"))));
+        m.insert(token!("set_tight_grouping", TokenContext::Attribute(Some("create_object"))));
+        m.insert(token!("terrain_to_place_on", TokenContext::Attribute(Some("create_object")), [Token]));
+        m.insert(token!("set_gaia_object_only", TokenContext::Attribute(Some("create_object"))));
+        m.insert(token!("set_place_for_every_player", TokenContext::Attribute(Some("create_object"))));
+        m.insert(token!("place_on_specific_land_id", TokenContext::Attribute(Some("create_object")), [Number]));
+        m.insert(token!("min_distance_to_players", TokenContext::Attribute(Some("create_object")), [Number]));
+        m.insert(token!("max_distance_to_players", TokenContext::Attribute(Some("create_object")), [Number]));
 
-        let connect_attribute_context = TokenContext::AnyOf(vec![
+        let connect_attribute_context = TokenContext::AnyOf(&[
             TokenContext::Attribute(Some("create_connect_all_players_land")),
             TokenContext::Attribute(Some("create_connect_teams_land")),
             TokenContext::Attribute(Some("create_connect_same_land_zones")),
             TokenContext::Attribute(Some("create_connect_all_lands")),
         ]);
 
-        m.insert(TokenType {
-            name: "create_connect_all_players_land",
-            context: TokenContext::Command(Some("<CONNECTION_GENERATION>")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "create_connect_teams_land",
-            context: TokenContext::Command(Some("<CONNECTION_GENERATION>")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "create_connect_same_land_zones",
-            context: TokenContext::Command(Some("<CONNECTION_GENERATION>")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "create_connect_all_lands",
-            context: TokenContext::Command(Some("<CONNECTION_GENERATION>")),
-            arg_types: [None, None, None, None],
-        });
-        m.insert(TokenType {
-            name: "replace_terrain",
-            context: connect_attribute_context.clone(),
-            arg_types: [Some(ArgType::Token), Some(ArgType::Token), None, None],
-        });
-        m.insert(TokenType {
-            name: "terrain_cost",
-            context: connect_attribute_context.clone(),
-            arg_types: [Some(ArgType::Token), Some(ArgType::Number), None, None],
-        });
-        m.insert(TokenType {
-            name: "terrain_size",
-            context: connect_attribute_context.clone(),
-            arg_types: [Some(ArgType::Token), Some(ArgType::Number), Some(ArgType::Number), None],
-        });
-        m.insert(TokenType {
-            name: "default_terrain_placement",
-            context: connect_attribute_context.clone(),
-            arg_types: [Some(ArgType::Token), None, None, None],
-        });
+        m.insert(token!("create_connect_all_players_land", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
+        m.insert(token!("create_connect_teams_land", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
+        m.insert(token!("create_connect_same_land_zones", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
+        m.insert(token!("create_connect_all_lands", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
+        m.insert(token!("replace_terrain", connect_attribute_context, [Token, Token]));
+        m.insert(token!("terrain_cost", connect_attribute_context, [Token, Number]));
+        m.insert(token!("terrain_size", connect_attribute_context, [Token, Number, Number]));
+        m.insert(token!("default_terrain_placement", connect_attribute_context, [Token]));
 
-        m.insert(TokenType {
-            name: "create_elevation",
-            context: TokenContext::Command(Some("<ELEVATION_GENERATION>")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
-        m.insert(TokenType {
-            name: "spacing",
-            context: TokenContext::Attribute(Some("create_elevation")),
-            arg_types: [Some(ArgType::Number), None, None, None],
-        });
+        m.insert(token!("create_elevation", TokenContext::Command(Some("<ELEVATION_GENERATION>")), [Number]));
+        m.insert(token!("spacing", TokenContext::Attribute(Some("create_elevation")), [Number]));
 
         m.build()
     };
