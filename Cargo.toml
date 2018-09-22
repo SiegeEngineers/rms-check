@@ -9,4 +9,5 @@ repository = "https://github.com/goto-bus-stop/rms-check.git"
 [dependencies]
 ansi_term = "^0.9"
 lazy_static = "^1.1.0"
+multisplice = { path = "../../goto-bus-stop/multisplice-rs" }
 quicli = "^0.3"
