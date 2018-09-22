@@ -93,7 +93,7 @@ pub fn report(source: &str, warnings: Vec<Warning>) -> () {
         }
     }
 
-    println!("");
+    println!();
     println!("{} errors, {} warnings found.", num_errors, num_warnings);
     if fixable_errors > 0 || fixable_warnings > 0 {
         println!("{} errors, {} warnings fixable using --fix", fixable_errors, fixable_warnings);
