@@ -318,42 +318,45 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// Check if a word is a valid number.
+    fn check_number(&mut self, token: &Word<'a>) -> Option<Warning> {
+        // This may be a valued (#const) constant,
+        // or a number (12, -35),
+        token.value.parse::<i32>().err()
+            .map(|_| {
+                let TokenType { name, .. } = self.current_token.unwrap();
+                let warn = token.warning(format!("Expected a number argument to {}, but got {}", name, token.value));
+                if token.value.starts_with("(") {
+                    let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
+                    warn.suggest(
+                        Suggestion::from(token, "Did you forget the `rnd`?".into())
+                        .replace(replacement.unwrap_or_else(|| format!("rnd{}", token.value)))
+                    )
+                } else {
+                    warn
+                }
+            })
+            .and_then(|warn| {
+                // or rnd(\d+,\d+)
+                if let (true, _) = is_valid_rnd(token.value) {
+                    None
+                } else if
+                    // probably "rnd(\d+, \d+)"
+                    (token.value.starts_with("rnd(") && token.value.ends_with(',')) ||
+                    // probably "rnd (\d+,\d+)"
+                    (token.value == "rnd") {
+                    self.expect = Expect::UnfinishedRnd(token.start(), token.value);
+                    None
+                } else {
+                    Some(warn)
+                }
+            })
+    }
+
     /// Check if a token is the correct argument type.
     fn check_arg_type(&mut self, arg_type: &ArgType, token: &Word<'a>) -> Option<Warning> {
         match arg_type {
-            ArgType::Number => {
-                // This may be a valued (#const) constant,
-                // or a number (12, -35),
-                token.value.parse::<i32>().err()
-                    .map(|_| {
-                        let TokenType { name, .. } = self.current_token.unwrap();
-                        let warn = token.warning(format!("Expected a number argument to {}, but got {}", name, token.value));
-                        if token.value.starts_with("(") {
-                            let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
-                            warn.suggest(
-                                Suggestion::from(token, "Did you forget the `rnd`?".into())
-                                .replace(replacement.unwrap_or_else(|| format!("rnd{}", token.value)))
-                            )
-                        } else {
-                            warn
-                        }
-                    })
-                    .and_then(|warn| {
-                        // or rnd(\d+,\d+)
-                        if let (true, _) = is_valid_rnd(token.value) {
-                            None
-                        } else if
-                            // probably "rnd(\d+, \d+)"
-                            (token.value.starts_with("rnd(") && token.value.ends_with(',')) ||
-                            // probably "rnd (\d+,\d+)"
-                            (token.value == "rnd") {
-                            self.expect = Expect::UnfinishedRnd(token.start(), token.value);
-                            None
-                        } else {
-                            Some(warn)
-                        }
-                    })
-            },
+            ArgType::Number => self.check_number(token),
             ArgType::Word => {
                 token.value.parse::<i32>()
                     .ok()
