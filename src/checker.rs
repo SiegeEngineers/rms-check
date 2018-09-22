@@ -361,6 +361,13 @@ impl<'a> Checker<'a> {
                 token.value.parse::<i32>()
                     .ok()
                     .map(|_| token.warning(format!("Expected a word, but got a number {}. This uses the number as the constant *name*, so it may not do what you expect.", token.value)))
+                    .or_else(|| if token.value.chars().any(char::is_lowercase) {
+                        Some(token.warning("Using lowercase for constant names may cause confusion with attribute or command names.".into())
+                             .suggest(Suggestion::from(token, "Use uppercase for constants.".into())
+                                      .replace(token.value.to_uppercase())))
+                    } else {
+                        None
+                    })
             },
             ArgType::OptionalToken => self.check_ever_defined(token),
             ArgType::Token => self.check_defined_with_value(token),
