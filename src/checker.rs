@@ -1,4 +1,6 @@
 use std::collections::HashSet;
+use strsim::levenshtein;
+
 use wordize::{Pos, Range, Word};
 use tokens::{ArgType, TokenType, TokenContext, TOKENS};
 
@@ -220,6 +222,21 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
     (false, None)
 }
 
+fn meant<'a>(actual: &str, possible: impl Iterator<Item = &'a String>) -> Option<&'a String> {
+    let mut lowest = 10000;
+    let mut result = None;
+
+    for expected in possible {
+        let lev = levenshtein(actual, expected);
+        if lev < lowest {
+            result = Some(expected);
+            lowest = lev;
+        }
+    }
+
+    result
+}
+
 #[derive(Default)]
 pub struct Checker<'a> {
     /// Whether we're currently inside a comment.
@@ -270,7 +287,12 @@ impl<'a> Checker<'a> {
     /// Check if a constant was ever defined using #define.
     fn check_ever_defined(&self, token: &Word) -> Option<Warning> {
         if !self.seen_defines.contains(token.value) {
-            Some(token.warning(format!("Token `{}` is never defined, this condition will always fail", token.value)))
+            let warn = token.warning(format!("Token `{}` is never defined, this condition will always fail", token.value));
+            Some(if let Some(similar) = meant(token.value, self.seen_defines.iter()) {
+                warn.suggest(Suggestion::from(token, format!("Did you mean `{}`?", similar)))
+            } else {
+                warn
+            })
         } else {
             None
         }
@@ -284,7 +306,12 @@ impl<'a> Checker<'a> {
                 // 2. Check if this has a value (is defined using #const)—else warn
                 Some(token.warning(format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
             } else {
-                Some(token.warning(format!("Token `{}` is never defined", token.value)))
+                let warn = token.warning(format!("Token `{}` is never defined", token.value));
+                Some(if let Some(similar) = meant(token.value, self.seen_consts.iter()) {
+                    warn.suggest(Suggestion::from(token, format!("Did you mean `{}`?", similar)))
+                } else {
+                    warn
+                })
             }
         } else {
             None
@@ -296,38 +323,36 @@ impl<'a> Checker<'a> {
         match arg_type {
             ArgType::Number => {
                 // This may be a valued (#const) constant,
-                self.check_defined_with_value(token).and_then(|_warn| {
-                    // or a number (12, -35),
-                    token.value.parse::<i32>()
-                        .err()
-                        .map(|_| {
-                            let TokenType { name, .. } = self.current_token.unwrap();
-                            let warn = token.warning(format!("Expected a number argument to {}, but got {}", name, token.value));
-                            if token.value.starts_with("(") {
-                                let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
-                                warn.suggest(
-                                    Suggestion::from(token, "Did you forget the `rnd`?".into())
-                                    .replace(replacement.unwrap_or_else(|| format!("rnd{}", token.value)))
-                                )
-                            } else {
-                                warn
-                            }
-                        })
-                }).and_then(|warn| {
-                    // or rnd(\d+,\d+)
-                    if let (true, _) = is_valid_rnd(token.value) {
-                        None
-                    } else if
-                        // probably "rnd(\d+, \d+)"
-                        (token.value.starts_with("rnd(") && token.value.ends_with(',')) ||
-                        // probably "rnd (\d+,\d+)"
-                        (token.value == "rnd") {
-                        self.expect = Expect::UnfinishedRnd(token.start(), token.value);
-                        None
-                    } else {
-                        Some(warn)
-                    }
-                })
+                // or a number (12, -35),
+                token.value.parse::<i32>().err()
+                    .map(|_| {
+                        let TokenType { name, .. } = self.current_token.unwrap();
+                        let warn = token.warning(format!("Expected a number argument to {}, but got {}", name, token.value));
+                        if token.value.starts_with("(") {
+                            let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
+                            warn.suggest(
+                                Suggestion::from(token, "Did you forget the `rnd`?".into())
+                                .replace(replacement.unwrap_or_else(|| format!("rnd{}", token.value)))
+                            )
+                        } else {
+                            warn
+                        }
+                    })
+                    .and_then(|warn| {
+                        // or rnd(\d+,\d+)
+                        if let (true, _) = is_valid_rnd(token.value) {
+                            None
+                        } else if
+                            // probably "rnd(\d+, \d+)"
+                            (token.value.starts_with("rnd(") && token.value.ends_with(',')) ||
+                            // probably "rnd (\d+,\d+)"
+                            (token.value == "rnd") {
+                            self.expect = Expect::UnfinishedRnd(token.start(), token.value);
+                            None
+                        } else {
+                            Some(warn)
+                        }
+                    })
             },
             ArgType::Word => {
                 token.value.parse::<i32>()
@@ -406,6 +431,7 @@ impl<'a> Checker<'a> {
 
     /// Parse and lint the next token.
     pub fn write_token(&mut self, token: &Word<'a>) -> Option<Warning> {
+        // Clear current token if we're past the end of its arguments list.
         if let Some(current_token) = self.current_token {
             if self.token_arg_index >= current_token.arg_len() {
                 self.current_token = None;
@@ -413,7 +439,6 @@ impl<'a> Checker<'a> {
             }
         }
 
-        let lint_warning = self.lint_token(token);
         let mut parse_error = None;
 
         match self.expect {
@@ -437,6 +462,8 @@ impl<'a> Checker<'a> {
             },
             _ => (),
         }
+
+        let lint_warning = self.lint_token(token);
 
         match token.value {
             "/*" => self.is_comment = true,
@@ -479,6 +506,8 @@ impl<'a> Checker<'a> {
             }
         }
 
+        // A parse error is more important than a lint warning, probably…
+        // chances are they're related anyway.
         parse_error.or(lint_warning)
     }
 }

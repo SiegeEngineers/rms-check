@@ -189,7 +189,7 @@ lazy_static! {
             TokenContext::Attribute(Some("create_elevation")),
             TokenContext::Attribute(Some("create_terrain")),
             TokenContext::Attribute(Some("create_object")),
-        ]), [Number]));
+        ]), [Token]));
 
         m.insert(token!("min_number_of_cliffs", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));
         m.insert(token!("max_number_of_cliffs", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));

@@ -1,6 +1,7 @@
 extern crate ansi_term;
 #[macro_use]
 extern crate lazy_static;
+extern crate strsim;
 
 mod tokens;
 mod wordize;
