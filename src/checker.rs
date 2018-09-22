@@ -2,11 +2,16 @@ use std::collections::HashSet;
 use wordize::{Pos, Word};
 use tokens::{ArgType, TokenType, TokenContext, TOKENS};
 
+/// Describes the next expected token.
 #[derive(Clone, Copy)]
 enum Expect<'a> {
+    /// No expectations!
     None,
+    /// A #define name.
     DefineName,
+    /// A #const name.
     ConstName,
+    /// The second part of an incorrectly formatted `rnd(A,B)` call.
     UnfinishedRnd(Pos, &'a str),
 }
 impl<'a> Default for Expect<'a> {
@@ -26,38 +31,50 @@ pub enum Severity {
 
 /// A suggestion that may fix a warning.
 pub struct Suggestion {
+    /// The start position in the source code that this suggestion would replace.
     start: Pos,
+    /// The end position in the source code that this suggestion would replace.
     end: Pos,
+    /// Human-readable suggestion message.
     message: String,
+    /// A replacement string that could fix the problem.
     replacement: Option<String>,
 }
 
 impl Suggestion {
+    /// Get the starting position this suggestion applies to.
     pub fn start(&self) -> &Pos {
         &self.start
     }
+    /// Get the end position this suggestion applies to.
     pub fn end(&self) -> &Pos {
         &self.end
     }
+    /// Get the suggestion message.
     pub fn message(&self) -> &str {
         &self.message
     }
+    /// Get the replacement string that could fix the problem.
     pub fn replacement(&self) -> &Option<String> {
         &self.replacement
     }
 
+    /// Create a suggestion.
     fn new(start: Pos, end: Pos, message: String) -> Self {
         Suggestion { start, end, message, replacement: None }
     }
+    /// Create a suggestion applying to a specific token.
     fn from(token: &Word, message: String) -> Self {
         Suggestion { start: token.start, end: token.end, message, replacement: None }
     }
+    /// Specify a possible fix for the problem.
     fn replace(mut self, replacement: String) -> Self {
         self.replacement = Some(replacement);
         self
     }
 }
 
+/// A range with a start and end position.
 pub struct Range(
     /// The first character in the source code that this range applies to.
     pub Pos,
@@ -73,9 +90,11 @@ pub struct Note {
 }
 
 impl Note {
+    /// Get the range of source code that this note applies to.
     pub fn range(&self) -> &Option<Range> {
         &self.range
     }
+    /// Get the note text.
     pub fn message(&self) -> &str {
         &self.message
     }
@@ -99,24 +118,31 @@ pub struct Warning {
 }
 
 impl Warning {
+    /// Get the severity of this warning.
     pub fn severity(&self) -> Severity {
         self.severity
     }
+    /// Get the starting position this warning applies to.
     pub fn start(&self) -> &Pos {
         &self.start
     }
+    /// Get the end position this warning applies to.
     pub fn end(&self) -> &Pos {
         &self.end
     }
+    /// Get the human-readable error message.
     pub fn message(&self) -> &str {
         &self.message
     }
-    pub fn has_suggestions(&self) -> bool {
-        !self.suggestions.is_empty()
-    }
+    /// Get any notes that may help clarify the problem or find a solution.
     pub fn notes(&self) -> &Vec<Note> {
         &self.notes
     }
+    /// Check whether any suggestions could be made.
+    pub fn has_suggestions(&self) -> bool {
+        !self.suggestions.is_empty()
+    }
+    /// Get any suggestions that may help to fix the problem.
     pub fn suggestions(&self) -> &Vec<Suggestion> {
         &self.suggestions
     }
@@ -171,14 +197,17 @@ impl Warning {
 }
 
 impl<'a> Word<'a> {
+    /// Create a warning applying to this token.
     pub fn warning(&self, message: String) -> Warning {
         Warning::warning(self.start, self.end, message)
     }
+    /// Create an error applying to this token.
     pub fn error(&self, message: String) -> Warning {
         Warning::error(self.start, self.end, message)
     }
 }
 
+/// Check if a string is numeric.
 fn is_numeric(s: &str) -> bool {
     s.parse::<i32>().is_ok()
 }
@@ -203,16 +232,25 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
 
 #[derive(Default)]
 pub struct Checker<'a> {
+    /// Whether we're currently inside a comment.
     is_comment: bool,
+    /// The amount of nested `if` statements we entered.
     if_depth: u32,
+    /// The token type that we are currently reading arguments for.
     current_token: Option<&'static TokenType>,
+    /// The amount of arguments we've read.
     token_arg_index: u8,
+    /// The type of token we expect to see next.
     expect: Expect<'a>,
+    /// The current <SECTION>, as well as its opening token.
     current_section: Option<(Word<'a>, &'static str)>,
+    /// List of #const definitions we've seen so far.
     seen_consts: HashSet<String>,
+    /// List of #define definitions we've seen so far.
     seen_defines: HashSet<String>,
 }
 
+/// Builtin #define or #const names.
 const BUILTIN_NAMES: [&str; 8] = [
     "TINY_MAP",
     "SMALL_MAP",
@@ -239,6 +277,7 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// Check if a constant was ever defined using #define.
     fn check_ever_defined(&self, token: &Word) -> Option<Warning> {
         if !self.seen_defines.contains(token.value) {
             Some(token.warning(format!("Token `{}` is never defined, this condition will always fail", token.value)))
@@ -247,6 +286,7 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// Check if a constant was ever defined with a value (using #const)
     fn check_defined_with_value(&self, token: &Word) -> Option<Warning> {
         // 1. Check if this may or may not be defined—else warn
         if !self.seen_consts.contains(token.value) {
@@ -261,6 +301,7 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// Check if a token is the correct argument type.
     fn check_arg_type(&mut self, arg_type: &ArgType, token: &Word<'a>) -> Option<Warning> {
         match arg_type {
             ArgType::Number => {
@@ -370,6 +411,7 @@ impl<'a> Checker<'a> {
         None
     }
 
+    /// Parse and lint the next token.
     pub fn write_token(&mut self, token: &Word<'a>) -> Option<Warning> {
         if let Some(current_token) = self.current_token {
             if self.token_arg_index >= current_token.arg_len() {

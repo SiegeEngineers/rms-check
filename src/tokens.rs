@@ -15,9 +15,10 @@ pub enum ArgType {
     Filename = 5,
 }
 
+/// Defines where a token can appear.
 #[derive(Clone, Copy)]
 pub enum TokenContext {
-    /// A flow control token.
+    /// A flow control token, can appear just about anywhere.
     Flow,
     /// A <SECTION> token (must be top level)
     Section,
@@ -31,16 +32,24 @@ pub enum TokenContext {
     AnyOf(&'static [TokenContext]),
 }
 
+/// A list of token argument types (up to 4).
 pub type TokenArgTypes = [Option<ArgType>; 4];
+/// Describes some characteristic of a token.
 pub struct TokenType {
+    /// The token's name, as it appears in RMS source code.
     pub name: &'static str,
+    /// The context where the token may appear.
     context: TokenContext,
+    /// The argument types for this token.
     arg_types: TokenArgTypes,
 }
 impl TokenType {
+    /// Get the type of the `n`th argument.
     pub fn arg_type(&self, n: u8) -> &Option<ArgType> {
         &self.arg_types[n as usize]
     }
+
+    /// Get the number of arguments required by this token type.
     pub fn arg_len(&self) -> u8 {
         match self.arg_types.iter().position(Option::is_none) {
             Some(index) => index as u8,
@@ -48,28 +57,35 @@ impl TokenType {
         }
     }
 
+    /// Get the context for this type, describing where it can appear.
     pub fn context(&self) -> &TokenContext {
         &self.context
     }
 }
 
+/// A map holding token types, indexed by their name.
 type TokenMap = HashMap<String, TokenType>;
 
+/// Utility for initialising a TokenMap, without having to repeat the token names all the time.
 struct TokenMapBuilder(TokenMap);
 impl TokenMapBuilder {
+    /// Initialise a TokenMap builder.
     fn new() -> Self {
         TokenMapBuilder(TokenMap::new())
     }
 
+    /// Add a new token type to the map.
     fn insert(&mut self, t: TokenType) -> () {
         self.0.insert(t.name.into(), t);
     }
 
+    /// Finish the TokenMap.
     fn build(self) -> TokenMap {
         self.0
     }
 }
 
+/// Terser syntax for creating token types.
 macro_rules! token {
     ( $name:expr, $context:expr ) => {
         TokenType {
@@ -109,6 +125,7 @@ macro_rules! token {
 }
 
 lazy_static! {
+    /// All known tokens.
     pub static ref TOKENS: HashMap<String, TokenType> = {
         let mut m = TokenMapBuilder::new();
         m.insert(token!("#define", TokenContext::Flow, [Word]));

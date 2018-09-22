@@ -12,6 +12,7 @@ use checker::Checker;
 pub use wordize::Pos;
 pub use checker::{Severity, Suggestion, Note, Range, Warning};
 
+/// Check a random map script for errors or other issues.
 pub fn check(source: &str) -> Vec<Warning> {
     let words = Wordize::new(include_str!("random_map.def"))
         .chain(Wordize::new(source));
