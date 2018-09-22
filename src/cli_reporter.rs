@@ -22,7 +22,7 @@ fn format_message(warn: &Warning) -> String {
     format!("{} {}", match warn.severity() {
         Severity::Warning => Yellow.bold().paint("WARN"),
         Severity::Error => Red.bold().paint("ERROR"),
-    }, warn.message())
+    }, Style::new().bold().paint(warn.message()))
 }
 
 fn format_suggestion(suggestion: &Suggestion) -> String {
