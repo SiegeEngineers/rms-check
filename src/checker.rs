@@ -364,8 +364,11 @@ impl<'a> Checker<'a> {
         }
 
         if token.value == "#include_drs" {
-            return Some(token.warning("#include_drs can only be used by builtin maps".into())
-                .suggest(Suggestion::from(token, "Move the included file to the Random/ folder and #include it normally".into())));
+            return Some(token.error("#include_drs can only be used by builtin maps".into()));
+        }
+        if token.value == "#include" {
+            return Some(token.error("#include can only be used by builtin maps".into())
+                .suggest(Suggestion::from(token, "If you're trying to make a map pack, use a map pack generator instead.".into())));
         }
 
         if token.value.starts_with('<') && token.value.ends_with('>') && !TOKENS.contains_key(token.value) {
