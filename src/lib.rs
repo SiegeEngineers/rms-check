@@ -10,7 +10,7 @@ use wordize::Wordize;
 use checker::Checker;
 
 pub use wordize::Pos;
-pub use checker::{Severity, Suggestion, Warning};
+pub use checker::{Severity, Suggestion, Note, Range, Warning};
 
 pub fn check(source: &str) -> Vec<Warning> {
     let words = Wordize::new(include_str!("random_map.def"))

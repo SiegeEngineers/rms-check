@@ -58,6 +58,29 @@ impl Suggestion {
     }
 }
 
+pub struct Range(
+    /// The first character in the source code that this range applies to.
+    pub Pos,
+    /// The last character in the source code that this note applies to.
+    pub Pos,
+);
+
+pub struct Note {
+    /// An optional range that this note applies to.
+    range: Option<Range>,
+    /// Human-readable text.
+    message: String,
+}
+
+impl Note {
+    pub fn range(&self) -> &Option<Range> {
+        &self.range
+    }
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
 /// A warning.
 pub struct Warning {
     /// Warning severity.
@@ -68,6 +91,8 @@ pub struct Warning {
     end: Pos,
     /// Human-readable warning text.
     message: String,
+    /// Additional notes, hints, context, etc.
+    notes: Vec<Note>,
     /// A change suggestion: when present, the problem can be fixed by replacing the
     /// range of text this warning applies to by the string in this suggestion.
     suggestions: Vec<Suggestion>,
@@ -87,7 +112,10 @@ impl Warning {
         &self.message
     }
     pub fn has_suggestions(&self) -> bool {
-        self.suggestions.len() > 0
+        !self.suggestions.is_empty()
+    }
+    pub fn notes(&self) -> &Vec<Note> {
+        &self.notes
     }
     pub fn suggestions(&self) -> &Vec<Suggestion> {
         &self.suggestions
@@ -100,6 +128,7 @@ impl Warning {
             start,
             end,
             message,
+            notes: vec![],
             suggestions: vec![],
         }
     }
@@ -111,6 +140,7 @@ impl Warning {
             start,
             end,
             message,
+            notes: vec![],
             suggestions: vec![],
         }
     }
@@ -118,6 +148,24 @@ impl Warning {
     /// Define a replacement suggestion for this warning.
     fn suggest(mut self, suggestion: Suggestion) -> Self {
         self.suggestions.push(suggestion);
+        self
+    }
+
+    /// Add a note.
+    fn note(mut self, message: &str) -> Self {
+        self.notes.push(Note {
+            range: None,
+            message: message.into(),
+        });
+        self
+    }
+
+    /// Add a note referencing a snippet of code.
+    fn note_at(mut self, range: Range, message: &str) -> Self {
+        self.notes.push(Note {
+            range: Some(range),
+            message: message.into(),
+        });
         self
     }
 }
@@ -160,7 +208,7 @@ pub struct Checker<'a> {
     current_token: Option<&'static TokenType>,
     token_arg_index: u8,
     expect: Expect<'a>,
-    current_section: Option<&'static str>,
+    current_section: Option<(Word<'a>, &'static str)>,
     seen_consts: HashSet<String>,
     seen_defines: HashSet<String>,
 }
@@ -222,7 +270,8 @@ impl<'a> Checker<'a> {
                     token.value.parse::<i32>()
                         .err()
                         .map(|_| {
-                            let warn = token.warning(format!("Expected a number, but got {}", token.value));
+                            let TokenType { name, .. } = self.current_token.unwrap();
+                            let warn = token.warning(format!("Expected a number argument to {}, but got {}", name, token.value));
                             if token.value.starts_with("(") {
                                 let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
                                 warn.suggest(
@@ -293,9 +342,17 @@ impl<'a> Checker<'a> {
         }
 
         if let Some(current_token) = self.current_token {
-            if let TokenContext::Command(Some(section)) = current_token.context() {
-                if Some(*section) != self.current_section {
-                    return Some(token.error(format!("Command is invalid in section {}, it can only appear in {}", self.current_section.unwrap_or("<NONE>"), section)));
+            if let TokenContext::Command(Some(expected_section)) = current_token.context() {
+                match self.current_section {
+                    Some((section_token, ref current_section)) => {
+                        if current_section != expected_section {
+                            return Some(token.error(format!("Command is invalid in section {}, it can only appear in {}", current_section, expected_section))
+                                        .note_at(Range(section_token.start, section_token.end), "Section started here"));
+                        }
+                    },
+                    None => {
+                        return Some(token.error(format!("Command can only appear in section {}, but no section has been started.", expected_section)));
+                    }
                 }
             }
 
@@ -383,7 +440,7 @@ impl<'a> Checker<'a> {
             self.token_arg_index = 0;
 
             if let TokenContext::Section = token_type.context() {
-                self.current_section = Some(token_type.name);
+                self.current_section = Some((token.clone(), token_type.name));
             }
         }
 
