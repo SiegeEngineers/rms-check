@@ -253,10 +253,6 @@ impl<'a> Checker<'a> {
 
     /// Check an incoming token.
     fn lint_token(&mut self, token: &Word<'a>) -> Option<Warning> {
-        if token.value == "*/" && !self.is_comment {
-            return Some(token.error("Unexpected closing `*/`".into()))
-        }
-
         // "/**" does not work to open a comment
         if token.value.len() > 2 && token.value.starts_with("/*") {
             let warning = token.error("Incorrect comment: there must be a space after the opening /*".into());
@@ -287,10 +283,6 @@ impl<'a> Checker<'a> {
                 }));
         }
 
-        if self.if_depth == 0 && token.value == "endif" {
-            return Some(token.warning("Unexpected `endif`–no open if".into()));
-        }
-
         if token.value == "#include_drs" {
             return Some(token.warning("#include_drs can only be used by builtin maps".into())
                 .suggest(Suggestion {
@@ -303,17 +295,6 @@ impl<'a> Checker<'a> {
 
         if token.value.starts_with('<') && token.value.ends_with('>') && !TOKENS.contains_key(token.value) {
             return Some(token.error(format!("Invalid section {}", token.value)));
-        }
-
-        if let Expect::UnfinishedRnd(pos, val) = self.expect {
-            self.expect = Expect::None;
-            let replacement = is_valid_rnd(&format!("{} {}", val, token.value)).1;
-            return Some(Warning::error(pos, token.end, "Incorrect rnd() call".into()).suggest(Suggestion {
-                start: pos,
-                end: token.end,
-                message: "rnd() must not contain spaces".into(),
-                replacement,
-            }));
         }
 
         if let Some(current_token) = self.current_token {
@@ -346,6 +327,7 @@ impl<'a> Checker<'a> {
         }
 
         let lint_warning = self.lint_token(token);
+        let mut parse_error = None;
 
         match self.expect {
             Expect::ConstName => {
@@ -356,12 +338,26 @@ impl<'a> Checker<'a> {
                 self.seen_defines.insert(token.value.into());
                 self.expect = Expect::None;
             },
+            Expect::UnfinishedRnd(pos, val) => {
+                let replacement = is_valid_rnd(&format!("{} {}", val, token.value)).1;
+                parse_error = Some(Warning::error(pos, token.end, "Incorrect rnd() call".into()).suggest(Suggestion {
+                    start: pos,
+                    end: token.end,
+                    message: "rnd() must not contain spaces".into(),
+                    replacement,
+                }));
+                self.expect = Expect::None;
+            },
             _ => (),
         }
 
         match token.value {
             "/*" => self.is_comment = true,
-            "*/" => self.is_comment = false,
+            "*/" => if !self.is_comment {
+                parse_error = Some(token.error("Unexpected closing `*/`".into()));
+            } else {
+                self.is_comment = false
+            },
             _ => (),
         }
 
@@ -374,6 +370,8 @@ impl<'a> Checker<'a> {
             "endif" => {
                 if self.if_depth > 0 {
                     self.if_depth -= 1;
+                } else {
+                    parse_error = Some(token.error("Unexpected `endif`–no open if".into()));
                 }
             },
             "#const" => self.expect = Expect::ConstName,
@@ -394,6 +392,6 @@ impl<'a> Checker<'a> {
             }
         }
 
-        lint_warning
+        parse_error.or(lint_warning)
     }
 }
