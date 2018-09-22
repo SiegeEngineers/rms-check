@@ -23,22 +23,51 @@ impl Pos {
     }
 }
 
-/// Iterator over words in a string, with their start and end positions.
-pub struct Wordize<'a> {
-    pos: Pos,
-    source: &'a str,
-    chars: CharIndices<'a>,
+/// A range with a start and end position.
+#[derive(Clone, Copy)]
+pub struct Range(
+    /// The start position.
+    pub Pos,
+    /// The end position.
+    pub Pos,
+);
+
+impl Range {
+    /// Get the start position of this range.
+    pub fn start(&self) -> Pos {
+        self.0
+    }
+    /// Get the end position of this range.
+    pub fn end(&self) -> Pos {
+        self.1
+    }
 }
 
 /// Represents a word.
 #[derive(Clone, Copy)]
 pub struct Word<'a> {
-    /// Position of the first character in the source code.
-    pub start: Pos,
-    /// Position just past the last character.
-    pub end: Pos,
+    /// Position of this word in the source code.
+    pub range: Range,
     /// The characters in this word.
     pub value: &'a str,
+}
+
+impl<'a> Word<'a> {
+    /// Get the position of the first character in this word.
+    pub fn start(&self) -> Pos {
+        self.range.start()
+    }
+    /// Get the position of the character just past this word.
+    pub fn end(&self) -> Pos {
+        self.range.end()
+    }
+}
+
+/// Iterator over words in a string, with their start and end positions.
+pub struct Wordize<'a> {
+    pos: Pos,
+    source: &'a str,
+    chars: CharIndices<'a>,
 }
 
 impl<'a> Wordize<'a> {
@@ -95,8 +124,7 @@ impl<'a> Iterator for Wordize<'a> {
 
             let value = &self.source[start.index()..end.index()];
             Some(Word {
-                start,
-                end,
+                range: Range(start, end),
                 value,
             })
         } else {

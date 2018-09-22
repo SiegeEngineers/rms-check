@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use wordize::{Pos, Word};
+use wordize::{Pos, Range, Word};
 use tokens::{ArgType, TokenType, TokenContext, TOKENS};
 
 /// Describes the next expected token.
@@ -31,10 +31,8 @@ pub enum Severity {
 
 /// A suggestion that may fix a warning.
 pub struct Suggestion {
-    /// The start position in the source code that this suggestion would replace.
-    start: Pos,
-    /// The end position in the source code that this suggestion would replace.
-    end: Pos,
+    /// The piece of source code that this suggestion would replace.
+    range: Range,
     /// Human-readable suggestion message.
     message: String,
     /// A replacement string that could fix the problem.
@@ -43,12 +41,12 @@ pub struct Suggestion {
 
 impl Suggestion {
     /// Get the starting position this suggestion applies to.
-    pub fn start(&self) -> &Pos {
-        &self.start
+    pub fn start(&self) -> Pos {
+        self.range.start()
     }
     /// Get the end position this suggestion applies to.
-    pub fn end(&self) -> &Pos {
-        &self.end
+    pub fn end(&self) -> Pos {
+        self.range.end()
     }
     /// Get the suggestion message.
     pub fn message(&self) -> &str {
@@ -61,11 +59,11 @@ impl Suggestion {
 
     /// Create a suggestion.
     fn new(start: Pos, end: Pos, message: String) -> Self {
-        Suggestion { start, end, message, replacement: None }
+        Suggestion { range: Range(start, end), message, replacement: None }
     }
     /// Create a suggestion applying to a specific token.
     fn from(token: &Word, message: String) -> Self {
-        Suggestion { start: token.start, end: token.end, message, replacement: None }
+        Suggestion { range: token.range, message, replacement: None }
     }
     /// Specify a possible fix for the problem.
     fn replace(mut self, replacement: String) -> Self {
@@ -73,14 +71,6 @@ impl Suggestion {
         self
     }
 }
-
-/// A range with a start and end position.
-pub struct Range(
-    /// The first character in the source code that this range applies to.
-    pub Pos,
-    /// The last character in the source code that this note applies to.
-    pub Pos,
-);
 
 pub struct Note {
     /// An optional range that this note applies to.
@@ -104,10 +94,8 @@ impl Note {
 pub struct Warning {
     /// Warning severity.
     severity: Severity,
-    /// The first character in the source code that this warning applies to.
-    start: Pos,
-    /// The last character in the source code that this warning applies to.
-    end: Pos,
+    /// The part of the source code that this warning applies to.
+    range: Range,
     /// Human-readable warning text.
     message: String,
     /// Additional notes, hints, context, etc.
@@ -122,13 +110,17 @@ impl Warning {
     pub fn severity(&self) -> Severity {
         self.severity
     }
+    /// Get the range this warning applies to.
+    pub fn range(&self) -> &Range {
+        &self.range
+    }
     /// Get the starting position this warning applies to.
-    pub fn start(&self) -> &Pos {
-        &self.start
+    pub fn start(&self) -> Pos {
+        self.range.start()
     }
     /// Get the end position this warning applies to.
-    pub fn end(&self) -> &Pos {
-        &self.end
+    pub fn end(&self) -> Pos {
+        self.range.end()
     }
     /// Get the human-readable error message.
     pub fn message(&self) -> &str {
@@ -151,8 +143,7 @@ impl Warning {
     fn warning(start: Pos, end: Pos, message: String) -> Self {
         Warning {
             severity: Severity::Warning,
-            start,
-            end,
+            range: Range(start, end),
             message,
             notes: vec![],
             suggestions: vec![],
@@ -163,8 +154,7 @@ impl Warning {
     fn error(start: Pos, end: Pos, message: String) -> Self {
         Warning {
             severity: Severity::Error,
-            start,
-            end,
+            range: Range(start, end),
             message,
             notes: vec![],
             suggestions: vec![],
@@ -199,11 +189,11 @@ impl Warning {
 impl<'a> Word<'a> {
     /// Create a warning applying to this token.
     pub fn warning(&self, message: String) -> Warning {
-        Warning::warning(self.start, self.end, message)
+        Warning::warning(self.start(), self.end(), message)
     }
     /// Create an error applying to this token.
     pub fn error(&self, message: String) -> Warning {
-        Warning::error(self.start, self.end, message)
+        Warning::error(self.start(), self.end(), message)
     }
 }
 
@@ -332,7 +322,7 @@ impl<'a> Checker<'a> {
                         (token.value.starts_with("rnd(") && token.value.ends_with(',')) ||
                         // probably "rnd (\d+,\d+)"
                         (token.value == "rnd") {
-                        self.expect = Expect::UnfinishedRnd(token.start, token.value);
+                        self.expect = Expect::UnfinishedRnd(token.start(), token.value);
                         None
                     } else {
                         Some(warn)
@@ -388,7 +378,7 @@ impl<'a> Checker<'a> {
                     Some((section_token, ref current_section)) => {
                         if current_section != expected_section {
                             return Some(token.error(format!("Command is invalid in section {}, it can only appear in {}", current_section, expected_section))
-                                        .note_at(Range(section_token.start, section_token.end), "Section started here"));
+                                        .note_at(section_token.range, "Section started here"));
                         }
                     },
                     None => {
@@ -433,8 +423,8 @@ impl<'a> Checker<'a> {
                 self.expect = Expect::None;
             },
             Expect::UnfinishedRnd(pos, val) => {
-                let suggestion = Suggestion::new(pos, token.end, "rnd() must not contain spaces".into());
-                parse_error = Some(Warning::error(pos, token.end, "Incorrect rnd() call".into()).suggest(
+                let suggestion = Suggestion::new(pos, token.end(), "rnd() must not contain spaces".into());
+                parse_error = Some(Warning::error(pos, token.end(), "Incorrect rnd() call".into()).suggest(
                     match is_valid_rnd(&format!("{} {}", val, token.value)).1 {
                         Some(replacement) => suggestion.replace(replacement),
                         None => suggestion,

@@ -8,16 +8,14 @@ fn indent(source: &str, indent: &str) -> String {
         .collect::<String>()
 }
 
-fn slice_lines<'a>(source: &'a str, start: u32, end: u32) -> impl Iterator<Item = (u32, &'a str)> {
+fn slice_lines<'a>(source: &'a str, range: &Range, context: u32) -> impl Iterator<Item = (u32, &'a str)> {
+    let start = range.0.line().saturating_sub(context);
+    let end = range.1.line() + context;
     source.lines()
         .take(end as usize + 1)
         .skip(start as usize)
         .enumerate()
         .map(move |(offs, line)| (start + offs as u32, line))
-}
-
-fn slice_lines_range<'a>(source: &'a str, range: &Range, context: u32) -> impl Iterator<Item = (u32, &'a str)> {
-    slice_lines(source, range.0.line().saturating_sub(context), range.1.line() + context)
 }
 
 fn format_message(warn: &Warning) -> String {
@@ -40,7 +38,7 @@ fn format_note(source: &str, note: &Note) -> String {
     let mut string = format!("  {} {}", Style::new().bold().paint("note:"), note.message());
 
     if let Some(ref range) = note.range() {
-        for (n, line) in slice_lines_range(source, range, 0) {
+        for (n, line) in slice_lines(source, range, 0) {
             string.push_str(&format!("\n  {} | {}", n, line));
         }
     }
@@ -53,7 +51,7 @@ pub fn report(source: &str, warnings: Vec<Warning>) -> () {
         let offending_line = warn.start().line();
 
         println!("\n{}", format_message(&warn));
-        for (n, line) in slice_lines_range(&source, &Range(*warn.start(), *warn.end()), 1) {
+        for (n, line) in slice_lines(&source, warn.range(), 1) {
             println!("{} | {}", n, line);
             if n == offending_line {
                 let cstart = warn.start().column();
