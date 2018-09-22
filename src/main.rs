@@ -59,10 +59,10 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
         return Ok(());
     }
 
-    for i in 0..warnings.len() {
+    for warn in &warnings {
         // use warnings[i] instead of an iterator so the lifetime of
         // new_value is long enough.
-        for suggestion in warnings[i].suggestions() {
+        for suggestion in warn.suggestions() {
             if let Some(ref new_value) = suggestion.replacement() {
                 eprintln!("autofix {}:{} → {}:{} to {}", suggestion.start().line(), suggestion.start().column(), suggestion.end().line(), suggestion.end().column(), new_value);
                 splicer.splice(suggestion.start().index(), suggestion.end().index(), new_value);
