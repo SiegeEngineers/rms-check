@@ -45,6 +45,17 @@ impl Suggestion {
     pub fn replacement(&self) -> &Option<String> {
         &self.replacement
     }
+
+    fn new(start: Pos, end: Pos, message: String) -> Self {
+        Suggestion { start, end, message, replacement: None }
+    }
+    fn from(token: &Word, message: String) -> Self {
+        Suggestion { start: token.start, end: token.end, message, replacement: None }
+    }
+    fn replace(mut self, replacement: String) -> Self {
+        self.replacement = Some(replacement);
+        self
+    }
 }
 
 /// A warning.
@@ -214,12 +225,10 @@ impl<'a> Checker<'a> {
                             let warn = token.warning(format!("Expected a number, but got {}", token.value));
                             if token.value.starts_with("(") {
                                 let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
-                                warn.suggest(Suggestion {
-                                    start: token.start,
-                                    end: token.end,
-                                    message: "Did you forget the `rnd`?".into(),
-                                    replacement: replacement.or_else(|| Some(format!("rnd{}", token.value))),
-                                })
+                                warn.suggest(
+                                    Suggestion::from(token, "Did you forget the `rnd`?".into())
+                                    .replace(replacement.unwrap_or_else(|| format!("rnd{}", token.value)))
+                                )
                             } else {
                                 warn
                             }
@@ -258,39 +267,25 @@ impl<'a> Checker<'a> {
             let warning = token.error("Incorrect comment: there must be a space after the opening /*".into());
             let (message, replacement) = if token.value.ends_with("*/") {
                 ("Add spaces at the start and end of the comment".into(),
-                 Some(format!("/* {} */", &token.value[2..token.value.len() - 2])))
+                 format!("/* {} */", &token.value[2..token.value.len() - 2]))
             } else {
                 ("Add a space after the /*".into(),
-                 Some(format!("/* {}", &token.value[2..])))
+                 format!("/* {}", &token.value[2..]))
             };
-            return Some(warning.suggest(Suggestion {
-                start: token.start,
-                end: token.end,
-                message,
-                replacement,
-            }));
+            return Some(warning.suggest(Suggestion::from(token, message).replace(replacement)));
         }
 
         // "**/" was probably meant to be a closing comment, but only <whitespace>*/ actually closes
         // comments.
         if token.value.len() > 2 && token.value.ends_with("*/") {
             return Some(token.warning("Possibly unclosed comment, */ must be preceded by whitespace".into())
-                .suggest(Suggestion {
-                    start: token.start,
-                    end: token.end,
-                    message: "Add a space before the */".into(),
-                    replacement: Some(format!("{} */", &token.value[2..token.value.len() - 2])),
-                }));
+                .suggest(Suggestion::from(token, "Add a space before the */".into())
+                    .replace(format!("{} */", &token.value[2..token.value.len() - 2]))));
         }
 
         if token.value == "#include_drs" {
             return Some(token.warning("#include_drs can only be used by builtin maps".into())
-                .suggest(Suggestion {
-                    start: token.start,
-                    end: token.end,
-                    message: "Move the included file to the Random/ folder and #include it normally".into(),
-                    replacement: None,
-                }));
+                .suggest(Suggestion::from(token, "Move the included file to the Random/ folder and #include it normally".into())));
         }
 
         if token.value.starts_with('<') && token.value.ends_with('>') && !TOKENS.contains_key(token.value) {
@@ -339,13 +334,13 @@ impl<'a> Checker<'a> {
                 self.expect = Expect::None;
             },
             Expect::UnfinishedRnd(pos, val) => {
-                let replacement = is_valid_rnd(&format!("{} {}", val, token.value)).1;
-                parse_error = Some(Warning::error(pos, token.end, "Incorrect rnd() call".into()).suggest(Suggestion {
-                    start: pos,
-                    end: token.end,
-                    message: "rnd() must not contain spaces".into(),
-                    replacement,
-                }));
+                let suggestion = Suggestion::new(pos, token.end, "rnd() must not contain spaces".into());
+                parse_error = Some(Warning::error(pos, token.end, "Incorrect rnd() call".into()).suggest(
+                    match is_valid_rnd(&format!("{} {}", val, token.value)).1 {
+                        Some(replacement) => suggestion.replace(replacement),
+                        None => suggestion,
+                    }
+                ));
                 self.expect = Expect::None;
             },
             _ => (),
