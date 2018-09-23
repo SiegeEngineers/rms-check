@@ -72,14 +72,14 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
 
     if dry {
         let temp = format!("{}.tmp", args.file);
-        write_to_file(&temp, &splicer.finish())?;
+        write_to_file(&temp, &splicer.to_string())?;
         let result = cli_check(Cli { file: temp.clone(), ..args });
         remove_file(&temp)?;
         result
     } else {
         let backup = format!("{}.bak", args.file);
         write_to_file(&backup, &source)?;
-        write_to_file(&args.file, &splicer.finish())?;
+        write_to_file(&args.file, &splicer.to_string())?;
         remove_file(&backup)?;
         cli_check(args)
     }
