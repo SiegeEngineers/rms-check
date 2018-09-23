@@ -11,7 +11,7 @@ use wordize::Wordize;
 use checker::Checker;
 
 pub use wordize::{Pos, Range};
-pub use checker::{Severity, Suggestion, Note, Warning};
+pub use checker::{Severity, AutoFixReplacement, Suggestion, Note, Warning};
 
 /// Check a random map script for errors or other issues.
 pub fn check(source: &str) -> Vec<Warning> {

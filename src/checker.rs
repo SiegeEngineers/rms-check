@@ -31,6 +31,21 @@ pub enum Severity {
     Error,
 }
 
+pub enum AutoFixReplacement {
+    None,
+    Safe(String),
+    Unsafe(String),
+}
+
+impl AutoFixReplacement {
+    pub fn is_fixable(&self) -> bool {
+        match self {
+            AutoFixReplacement::None => false,
+            _ => true,
+        }
+    }
+}
+
 /// A suggestion that may fix a warning.
 pub struct Suggestion {
     /// The piece of source code that this suggestion would replace.
@@ -38,7 +53,7 @@ pub struct Suggestion {
     /// Human-readable suggestion message.
     message: String,
     /// A replacement string that could fix the problem.
-    replacement: Option<String>,
+    replacement: AutoFixReplacement,
 }
 
 impl Suggestion {
@@ -55,21 +70,27 @@ impl Suggestion {
         &self.message
     }
     /// Get the replacement string that could fix the problem.
-    pub fn replacement(&self) -> &Option<String> {
+    pub fn replacement(&self) -> &AutoFixReplacement {
         &self.replacement
     }
 
     /// Create a suggestion.
     fn new(start: Pos, end: Pos, message: String) -> Self {
-        Suggestion { range: Range(start, end), message, replacement: None }
+        Suggestion { range: Range(start, end), message, replacement: AutoFixReplacement::None }
     }
     /// Create a suggestion applying to a specific token.
     fn from(token: &Word, message: String) -> Self {
-        Suggestion { range: token.range, message, replacement: None }
+        Suggestion { range: token.range, message, replacement: AutoFixReplacement::None }
     }
     /// Specify a possible fix for the problem.
     fn replace(mut self, replacement: String) -> Self {
-        self.replacement = Some(replacement);
+        self.replacement = AutoFixReplacement::Safe(replacement);
+        self
+    }
+    /// Specify a possible fix for the problem, but one that may not be correct and requires some
+    /// manual intervention.
+    fn replace_unsafe(mut self, replacement: String) -> Self {
+        self.replacement = AutoFixReplacement::Unsafe(replacement);
         self
     }
 }
@@ -289,7 +310,8 @@ impl<'a> Checker<'a> {
         if !self.seen_defines.contains(token.value) {
             let warn = token.warning(format!("Token `{}` is never defined, this condition will always fail", token.value));
             Some(if let Some(similar) = meant(token.value, self.seen_defines.iter()) {
-                warn.suggest(Suggestion::from(token, format!("Did you mean `{}`?", similar)))
+                warn.suggest(Suggestion::from(token, format!("Did you mean `{}`?", similar))
+                                 .replace_unsafe(similar.to_string()))
             } else {
                 warn
             })
@@ -308,7 +330,8 @@ impl<'a> Checker<'a> {
             } else {
                 let warn = token.warning(format!("Token `{}` is never defined", token.value));
                 Some(if let Some(similar) = meant(token.value, self.seen_consts.iter()) {
-                    warn.suggest(Suggestion::from(token, format!("Did you mean `{}`?", similar)))
+                    warn.suggest(Suggestion::from(token, format!("Did you mean `{}`?", similar))
+                                 .replace_unsafe(similar.to_string()))
                 } else {
                     warn
                 })

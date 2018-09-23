@@ -2,6 +2,8 @@
 
 Syntax checking for Age of Empires random map scripts in Node and the browser, using WebAssembly
 
+Based on the [rms-check](https://github.com/goto-bus-stop/rms-check) Rust library.
+
 [Install](#install) - [Usage](#usage) - [License: Apache-2.0](#license)
 
 [![npm][npm-image]][npm-url]
@@ -17,7 +19,7 @@ Syntax checking for Age of Empires random map scripts in Node and the browser, u
 
 ## Install
 
-```
+```bash
 npm install rms-check
 ```
 

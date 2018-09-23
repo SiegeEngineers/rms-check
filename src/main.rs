@@ -13,7 +13,7 @@ mod cli_reporter;
 
 use std::fs::{File, remove_file};
 use std::io::Read;
-use rms_check::check;
+use rms_check::{check, AutoFixReplacement};
 use quicli::prelude::*;
 use cli_reporter::report as cli_report;
 use multisplice::Multisplice;
@@ -26,6 +26,9 @@ struct Cli {
     /// Auto-fix some problems, but don't actually write.
     #[structopt(long = "fix-dry-run")]
     fix_dry_run: bool,
+    /// Run unsafe autofixes. These may break your map!
+    #[structopt(long = "fix-unsafe")]
+    fix_unsafe: bool,
     /// The file to check.
     file: String,
 }
@@ -63,9 +66,16 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
         // use warnings[i] instead of an iterator so the lifetime of
         // new_value is long enough.
         for suggestion in warn.suggestions() {
-            if let Some(ref new_value) = suggestion.replacement() {
-                eprintln!("autofix {}:{} → {}:{} to {}", suggestion.start().line(), suggestion.start().column(), suggestion.end().line(), suggestion.end().column(), new_value);
-                splicer.splice(suggestion.start().index(), suggestion.end().index(), new_value);
+            match suggestion.replacement() {
+                AutoFixReplacement::Safe(ref new_value) => {
+                    eprintln!("autofix {}:{} → {}:{} to {}", suggestion.start().line(), suggestion.start().column(), suggestion.end().line(), suggestion.end().column(), new_value);
+                    splicer.splice(suggestion.start().index(), suggestion.end().index(), new_value);
+                },
+                AutoFixReplacement::Unsafe(ref new_value) if args.fix_unsafe => {
+                    eprintln!("UNSAFE autofix {}:{} → {}:{} to {}", suggestion.start().line(), suggestion.start().column(), suggestion.end().line(), suggestion.end().column(), new_value);
+                    splicer.splice(suggestion.start().index(), suggestion.end().index(), new_value);
+                },
+                _ => (),
             }
         }
     }

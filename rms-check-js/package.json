@@ -32,6 +32,6 @@
     "test": "standard && node test | tap-spec"
   },
   "dependencies": {
-    "rms-check-wasm": "file:../rms-check/crates/rms-check-wasm/pkg"
+    "rms-check-wasm": "file:../crates/rms-check-wasm/pkg"
   }
 }

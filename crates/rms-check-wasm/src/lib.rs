@@ -6,7 +6,7 @@ extern crate rms_check;
 
 use wasm_bindgen::prelude::*;
 use rms_check::check as check_internal;
-use rms_check::{Pos, Severity, Suggestion, Warning};
+use rms_check::{Pos, Severity, AutoFixReplacement, Suggestion, Warning};
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Serialize)]
@@ -27,11 +27,18 @@ impl From<Pos> for WasmPos {
 
 #[wasm_bindgen]
 #[derive(Clone, Serialize)]
+struct WasmAutoFixReplacement {
+    safe: bool,
+    value: String,
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Serialize)]
 struct WasmSuggestion {
     start: WasmPos,
     end: WasmPos,
     message: String,
-    replacement: Option<String>,
+    replacement: Option<WasmAutoFixReplacement>,
 }
 impl<'a> From<&'a Suggestion> for WasmSuggestion {
     fn from(suggestion: &Suggestion) -> Self {
@@ -39,7 +46,17 @@ impl<'a> From<&'a Suggestion> for WasmSuggestion {
             start: suggestion.start().into(),
             end: suggestion.end().into(),
             message: suggestion.message().into(),
-            replacement: suggestion.replacement().clone(),
+            replacement: match suggestion.replacement() {
+                AutoFixReplacement::None => None,
+                AutoFixReplacement::Safe(value) => Some(WasmAutoFixReplacement {
+                    safe: true,
+                    value: value.clone(),
+                }),
+                AutoFixReplacement::Unsafe(value) => Some(WasmAutoFixReplacement {
+                    safe: false,
+                    value: value.clone(),
+                }),
+            },
         }
     }
 }

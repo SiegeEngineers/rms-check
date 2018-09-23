@@ -1,6 +1,6 @@
 use ansi_term::Style;
 use ansi_term::Colour::{Blue, Red, Yellow, Cyan};
-use rms_check::{Severity, Suggestion, Note, Range, Warning};
+use rms_check::{Severity, AutoFixReplacement, Suggestion, Note, Range, Warning};
 
 fn indent(source: &str, indent: &str) -> String {
     source.lines()
@@ -27,9 +27,15 @@ fn format_message(warn: &Warning) -> String {
 
 fn format_suggestion(suggestion: &Suggestion) -> String {
     let mut string = format!("{} {}", Cyan.paint("SUGGESTION"), suggestion.message());
-    if let Some(ref new_text) = suggestion.replacement() {
-        string.push_str("\n");
-        string.push_str(new_text);
+    match suggestion.replacement() {
+        AutoFixReplacement::Safe(ref new_text) => {
+            string.push_str("\n");
+            string.push_str(new_text);
+        },
+        AutoFixReplacement::Unsafe(ref new_text) => {
+            string.push_str(&format!("{}\n{}", Style::new().bold().paint(" (UNSAFE)"), new_text));
+        },
+        _ => (),
     }
     string
 }
@@ -59,7 +65,7 @@ pub fn report(source: &str, warnings: Vec<Warning>) -> () {
             Severity::Error => num_errors += 1,
             Severity::Warning => num_warnings += 1,
         }
-        if warn.suggestions().iter().any(|s| s.replacement().is_some()) {
+        if warn.suggestions().iter().any(|s| s.replacement().is_fixable()) {
             match warn.severity() {
                 Severity::Error => fixable_errors += 1,
                 Severity::Warning => fixable_warnings += 1,
