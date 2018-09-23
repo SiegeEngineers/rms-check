@@ -40,6 +40,12 @@ pub enum AutoFixReplacement {
 impl AutoFixReplacement {
     pub fn is_fixable(&self) -> bool {
         match self {
+            AutoFixReplacement::Safe(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_fixable_unsafe(&self) -> bool {
+        match self {
             AutoFixReplacement::None => false,
             _ => true,
         }
