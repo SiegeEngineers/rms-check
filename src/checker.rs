@@ -465,6 +465,13 @@ impl<'a> Checker<'a> {
             }
         }
 
+        if self.current_token.is_none() {
+            if !TOKENS.contains_key(token.value) && TOKENS.contains_key(&token.value.to_lowercase()) {
+                return Some(token.error(format!("Unknown attribute `{}`", token.value))
+                   .suggest(Suggestion::from(token, "Attributes must be all lowercase".into()).replace(token.value.to_lowercase())));
+            }
+        }
+
         None
     }
 
