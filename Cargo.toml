@@ -7,8 +7,8 @@ description = "Detect common problems with AoE Random Map Scripts"
 repository = "https://github.com/goto-bus-stop/rms-check.git"
 
 [dependencies]
-ansi_term = "^0.9.0"
+ansi_term = "^0.11.0"
 lazy_static = "^1.1.0"
 multisplice = { git = "https://github.com/goto-bus-stop/multisplice-rs.git" }
 quicli = "^0.3.0"
-strsim = "^0.7.0"
+strsim = "^0.8.0"
