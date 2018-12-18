@@ -8,6 +8,7 @@ repository = "https://github.com/goto-bus-stop/rms-check.git"
 
 [dependencies]
 ansi_term = "^0.11.0"
+either = "^1.5.0"
 lazy_static = "^1.1.0"
 multisplice = { git = "https://github.com/goto-bus-stop/multisplice-rs.git" }
 quicli = "^0.3.0"

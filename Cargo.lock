@@ -326,6 +326,7 @@ name = "rms-check"
 version = "0.1.0"
 dependencies = [
  "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "either 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "multisplice 0.1.0 (git+https://github.com/goto-bus-stop/multisplice-rs.git)",
  "quicli 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",

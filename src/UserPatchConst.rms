@@ -1,0 +1,288 @@
+/*--------------------------------------*/
+/* Define Effect Constants              */
+/*--------------------------------------*/
+#const SET_ATTRIBUTE   0	/* Type: Attribute Const */
+#const ADD_ATTRIBUTE   4	/* Type: Attribute Const */
+#const MUL_ATTRIBUTE   5	/* Type: Attribute Const */
+#const MOD_RESOURCE    1	/* Type: ATTR_SET or ATTR_ADD */
+#const MUL_RESOURCE    6	/* Type: ATTR_DISABLE */
+#const SET_TECH_COST 100	/* Type: ResourceAmount const */
+#const ADD_TECH_COST 101	/* Type: ResourceAmount const */
+#const MOD_TECH_TIME 103	/* Type: ATTR_SET or ATTR_ADD */
+#const ENABLE_OBJECT   2	/* Type: ATTR_DISABLE or ATTR_ENABLE, Value: 0 */
+#const UPGRADE_UNIT    3	/* Type: UnitId, Value: 0 */
+#const DISABLE_TECH  102	/* Type: ATTR_DISABLE, Value: TechId */
+#const ENABLE_TECH     7	/* Type: ATTR_DISABLE or ATTR_ENABLE or ATTR_FORCE */
+#const MODIFY_TECH     8	/* Type: ModifyTech const */
+#const SET_PLAYER_DATA 9	/* Type: ATTR_SET */
+
+#const GAIA_SET_ATTRIBUTE    -1
+#const GAIA_ADD_ATTRIBUTE    -5
+#const GAIA_MUL_ATTRIBUTE    -6
+#const GAIA_MOD_RESOURCE     -2
+#const GAIA_MUL_RESOURCE     -7
+#const GAIA_SET_TECH_COST  -101
+#const GAIA_ADD_TECH_COST  -102
+#const GAIA_MOD_TECH_TIME  -104
+#const GAIA_ENABLE_OBJECT    -3
+#const GAIA_UPGRADE_UNIT     -4
+#const GAIA_DISABLE_TECH   -103
+#const GAIA_ENABLE_TECH      -8
+#const GAIA_MODIFY_TECH      -9
+#const GAIA_SET_PLAYER_DATA -10
+
+/*
+effect_amount SET_ATTRIBUTE VILLAGER_CLASS ATTR_HITPOINTS 20
+effect_percent ADD_ATTRIBUTE VILLAGER_CLASS ATTR_MOVE_SPEED 30
+effect_amount MUL_ATTRIBUTE VILLAGER_CLASS ATTR_HITPOINTS 2
+effect_amount MOD_RESOURCE AMOUNT_STARTING_FOOD ATTR_ADD 20
+effect_amount MUL_RESOURCE AMOUNT_STARTING_FOOD ATTR_DISABLE 5
+effect_amount SET_TECH_COST RI_LOOM AMOUNT_GOLD 10
+effect_amount ADD_TECH_COST RI_LOOM AMOUNT_GOLD 20
+effect_amount MOD_TECH_TIME RI_LOOM ATTR_SET 60
+effect_amount ENABLE_OBJECT TRANSPORT_SHIP ATTR_ENABLE 0
+effect_amount UPGRADE_UNIT WOLF OUTLAW 0
+effect_amount DISABLE_TECH RI_LOOM ATTR_DISABLE 22
+effect_amount ENABLE_TECH RI_LOOM ATTR_ENABLE 22
+effect_amount MODIFY_TECH RI_LOOM ATTR_SET_TIME 60
+effect_amount SET_PLAYER_DATA DATA_CIV_NAME_ID ATTR_SET 10230
+*/
+
+/*--------------------------------------*/
+/* Define Effect Type Constants         */
+/*--------------------------------------*/
+#const ATTR_DISABLE 0
+#const ATTR_ENABLE 1
+#const ATTR_FORCE 2
+#const ATTR_SET 0
+#const ATTR_ADD 1
+
+/*--------------------------------------*/
+/* Define ModifyTech Constants          */
+/*--------------------------------------*/
+#const ATTR_SET_TIME -1
+#const ATTR_ADD_TIME -2
+#const ATTR_SET_FOOD_COST 0
+#const ATTR_SET_WOOD_COST 1
+#const ATTR_SET_STONE_COST 2
+#const ATTR_SET_GOLD_COST 3
+#const ATTR_ADD_FOOD_COST 16384
+#const ATTR_ADD_WOOD_COST 16385
+#const ATTR_ADD_STONE_COST 16386
+#const ATTR_ADD_GOLD_COST 16387
+
+/*--------------------------------------*/
+/* Define Attribute Constants           */
+/*--------------------------------------*/
+#const ATTR_HITPOINTS 0
+#const ATTR_LINE_OF_SIGHT 1
+#const ATTR_GARRISON_CAPACITY 2
+#const ATTR_RADIUS_1 3
+#const ATTR_RADIUS_2 4
+#const ATTR_MOVE_SPEED 5
+#const ATTR_ROTATE_SPEED 6
+#const ATTR_ARMOR 8			/* armor type + value (see A.G.E.) */
+#const ATTR_ATTACK 9			/* attack type + value (see A.G.E.) */
+#const ATTR_RELOAD_TIME 10
+#const ATTR_ACCURACY_PERCENT 11
+#const ATTR_MAX_RANGE 12
+#const ATTR_WORK_RATE 13
+#const ATTR_RESOURCE_CARRY 14
+#const ATTR_BASE_ARMOR 15
+#const ATTR_PROJECTILE_ID 16
+#const ATTR_UPGRADE_GRAPHIC 17
+#const ATTR_PROJECTILE_INTELLIGENCE 19
+#const ATTR_MIN_RANGE 20
+#const ATTR_STORAGE_VALUE 21		/* population support, tree wood amount, etc. */
+#const ATTR_BLAST_RADIUS 22
+#const ATTR_SEARCH_RADIUS 23
+#const ATTR_BOARDING_RELOAD 80
+#const ATTR_RESOURCE_COST 100
+#const ATTR_CREATION_TIME 101
+#const ATTR_GARRISON_ARROWS 102
+#const ATTR_FOOD_COST 103
+#const ATTR_WOOD_COST 104
+#const ATTR_GOLD_COST 105
+#const ATTR_STONE_COST 106
+#const ATTR_MAX_DUP_MISSILES 107
+#const ATTR_HEALING_RATE 108
+
+/* New: Category 80+ */
+#const ATTR_GARRISON_TYPE 30
+#const ATTR_DATA_FLAGS 31
+
+/* New: Category 70+ */
+#const ATTR_HERO_STATUS 40		/* ADD_ATTRIBUTE append flags */
+#const ATTR_ATTACK_DELAY 41		/* ADD_ATTRIBUTE enabled */
+#const ATTR_TRAIN_LOCATION 42
+#const ATTR_TRAIN_BUTTON 43
+#const ATTR_BLAST_LEVEL 44
+#const ATTR_HERO_HEAL_TIME 45		/* ADD_ATTRIBUTE enabled */
+#const ATTR_SHOWN_ATTACK 46		/* ADD_ATTRIBUTE enabled */
+#const ATTR_SHOWN_RANGE 47		/* ADD_ATTRIBUTE enabled */
+#const ATTR_SHOWN_MELEE_ARMOR 48	/* ADD_ATTRIBUTE enabled */
+#const ATTR_SHOWN_PIERCE_ARMOR 49	/* ADD_ATTRIBUTE enabled */
+
+/* New: Category 10+ */
+#const ATTR_NAME_ID 50
+#const ATTR_CREATE_SDESC_ID 51
+#const ATTR_CREATE_LDESC_ID 52		/* unused (becomes ATTR_CREATE_SDESC_ID + 20000) */
+#const ATTR_TERRAIN_ID 53
+#const ATTR_TRAITS 54			/* ADD_ATTRIBUTE append flags */
+#const ATTR_CIV_ID 55
+#const ATTR_PIECE 56
+#const ATTR_DEAD_ID 57
+
+/*--------------------------------------*/
+/* Define ResourceAmount Constants      */
+/*--------------------------------------*/
+#const AMOUNT_FOOD 0
+#const AMOUNT_WOOD 1
+#const AMOUNT_STONE 2
+#const AMOUNT_GOLD 3
+#const AMOUNT_STARTING_FOOD 91
+#const AMOUNT_STARTING_WOOD 92
+#const AMOUNT_STARTING_STONE 93
+#const AMOUNT_STARTING_GOLD 94
+#const AMOUNT_POPULATION_CAP 4
+#const AMOUNT_POPULATION 11
+#const AMOUNT_CONVERT_PRIEST 27
+#const AMOUNT_CONVERT_BUILDING 28
+#const AMOUNT_TOWN_CENTER_UNAVAILABLE 48
+#const AMOUNT_BUILDING_TRICKLE_FOOD 205
+#const AMOUNT_BUILDING_TRICKLE_WOOD 206
+#const AMOUNT_BUILDING_TRICKLE_STONE 207
+#const AMOUNT_BUILDING_TRICKLE_GOLD 208
+#const AMOUNT_REVEAL_ENEMY 209
+#const AMOUNT_REVEAL_CLASS1 210
+#const AMOUNT_REVEAL_CLASS2 211
+
+/*--------------------------------------*/
+/* Define PlayerData Constants          */
+/*--------------------------------------*/
+#const DATA_CIV_NAME_ID 0
+#const DATA_MODE_FLAGS 1
+
+/* DATA_MODE_FLAGS: use GAIA_SET_PLAYER_DATA
+     01: enable treason (flares guard unit type if no king exists)
+     02: disable spies (button only, disable tech 408 to block research) */
+
+/*--------------------------------------*/
+/* Define AssignTarget Constants        */
+/*--------------------------------------*/
+#const AT_PLAYER 0
+#const AT_COLOR 1
+#const AT_TEAM 2
+
+/*--------------------------------------*/
+/* Define Building Constants            */
+/*--------------------------------------*/
+#const TOWN_CENTER_FOUNDATION 621
+#const PALISADE_WALL 72
+#const STONE_WALL 117
+#const FORTIFIED_WALL 155
+
+/*--------------------------------------*/
+/* Define Upgrade Constants             */
+/*--------------------------------------*/
+#const TOWN_CENTER_F 71
+#const TOWN_CENTER_C 141
+#const TOWN_CENTER_I 142
+#const TOWN_CENTER_FOUNDATION_F 617
+#const TOWN_CENTER_FOUNDATION_C 484
+#const TOWN_CENTER_FOUNDATION_I 597
+#const HOUSE_F 463
+#const HOUSE_C 464
+#const HOUSE_I 465
+#const MONASTERY_F 30
+#const MONASTERY_C 31
+#const MONASTERY_I 32
+#const BARRACKS_F 498
+#const BARRACKS_C 132
+#const BARRACKS_I 20
+#const ARCHERY_RANGE_C 10
+#const ARCHERY_RANGE_I 14
+#const STABLE_C 86
+#const STABLE_I 153
+#const MARKET_C 116
+#const MARKET_I 137
+#const MILL_F 129
+#const MILL_C 130
+#const MILL_I 131
+#const LUMBER_CAMP_F 563
+#const LUMBER_CAMP_C 564
+#const LUMBER_CAMP_I 565
+#const MINING_CAMP_F 585
+#const MINING_CAMP_C 586
+#const MINING_CAMP_I 587
+#const DOCK_F 133
+#const DOCK_C 47
+#const DOCK_I 51
+#const BLACKSMITH_F 105
+#const BLACKSMITH_C 18
+#const BLACKSMITH_I 19
+#const UNIVERSITY_I 210
+
+/*--------------------------------------*/
+/* Define Villager Constants            */
+/*--------------------------------------*/
+#const VILLAGER_BASE_M 83
+#const VILLAGER_BASE_F 293
+#const VILLAGER_FARMER_M 259
+#const VILLAGER_FARMER_F 214
+#const VILLAGER_SHEPHERD_M 592
+#const VILLAGER_SHEPHERD_F 590
+#const VILLAGER_FORAGER_M 120
+#const VILLAGER_FORAGER_F 354
+#const VILLAGER_HUNTER_M 122
+#const VILLAGER_HUNTER_F 216
+#const VILLAGER_FISHER_M 56
+#const VILLAGER_FISHER_F 57
+#const VILLAGER_WOOD_M 123
+#const VILLAGER_WOOD_F 218
+#const VILLAGER_GOLD_M 579
+#const VILLAGER_GOLD_F 581
+#const VILLAGER_STONE_M 124
+#const VILLAGER_STONE_F 220
+#const VILLAGER_BUILDER_M 118
+#const VILLAGER_BUILDER_F 212
+#const VILLAGER_REPAIRER_M 156
+#const VILLAGER_REPAIRER_F 222
+
+/*--------------------------------------*/
+/* Define Class Constants               */
+/*--------------------------------------*/
+#const VILLAGER_CLASS 904
+#const BUILDING_CLASS 903
+#const OCEAN_FISH_CLASS 905
+#const SHORE_FISH_CLASS 933
+#const FARM_CLASS 949
+#const TREE_CLASS 915
+#const TOWER_CLASS 952
+#const WALL_CLASS 927
+#const GATE_CLASS 939
+#const KING_CLASS 959
+#const LIVESTOCK_CLASS 958
+#const INFANTRY_CLASS 906
+#const ARCHERY_CLASS 900
+#const ARCHERY_CANNON_CLASS 944
+#const CAVALRY_CLASS 912
+#const CAVALRY_ARCHER_CLASS 936
+#const CAVALRY_CANNON_CLASS 923
+#const MONASTERY_CLASS 918
+#const SIEGE_WEAPON_CLASS 913
+#const SCORPION_CLASS 955
+#const PACKED_TREBUCHET_CLASS 951
+#const UNPACKED_TREBUCHET_CLASS 954
+#const PETARD_CLASS 935
+#const WARSHIP_CLASS 922
+
+/*--------------------------------------*/
+/* Define Extra Constants               */
+/*--------------------------------------*/
+#const REAL_TERRAIN -1
+#const ELITE_UNIQUE_UNIT -2
+#const UNIQUE_UNIT -1
+#const MONK_RELIC 286
+#const OUTLAW 158
+#const RI_LOOM 22

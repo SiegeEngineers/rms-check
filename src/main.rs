@@ -13,7 +13,7 @@ mod cli_reporter;
 
 use std::fs::{File, remove_file};
 use std::io::Read;
-use rms_check::{check, AutoFixReplacement};
+use rms_check::{check, Compatibility, AutoFixReplacement};
 use quicli::prelude::*;
 use cli_reporter::report as cli_report;
 use multisplice::Multisplice;
@@ -38,7 +38,7 @@ fn cli_check(args: Cli) -> Result<()> {
     let mut bytes = vec![];
     file.read_to_end(&mut bytes)?;
     let source = String::from_utf8_lossy(&bytes);
-    let warnings = check(&source);
+    let warnings = check(&source, Compatibility::UserPatch15);
     let has_warnings = !warnings.is_empty();
 
     cli_report(&source, warnings);
@@ -54,7 +54,7 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
     let mut bytes = vec![];
     input_file.read_to_end(&mut bytes)?;
     let source = String::from_utf8_lossy(&bytes);
-    let warnings = check(&source);
+    let warnings = check(&source, Compatibility::UserPatch15);
     let mut splicer = Multisplice::new(&source);
 
     if warnings.is_empty() {
