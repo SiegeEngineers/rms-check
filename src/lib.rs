@@ -15,7 +15,7 @@ use checker::Checker;
 use codespan::{CodeMap, FileMap, FileName, ByteIndex, LineIndex, ColumnIndex, ByteOffset};
 use wordize::Wordize;
 
-pub use checker::{Severity, AutoFixReplacement, Suggestion, Note, Warning};
+pub use checker::{Severity, AutoFixReplacement, Suggestion, Warning};
 pub enum Compatibility {
     Conquerors,
     UserPatch15,
@@ -28,13 +28,19 @@ pub struct RMSCheck {
     filemaps: Vec<Arc<FileMap>>,
 }
 
-impl RMSCheck {
-    pub fn new() -> Self {
-        let check = RMSCheck {
+impl Default for RMSCheck {
+    fn default() -> RMSCheck {
+        RMSCheck {
             compatibility: Compatibility::Conquerors,
             codemap: CodeMap::new(),
             filemaps: vec![],
-        };
+        }
+    }
+}
+
+impl RMSCheck {
+    pub fn new() -> Self {
+        let check = RMSCheck::default();
         check.add_source(
             "random_map.def",
             include_str!("random_map.def")

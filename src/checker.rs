@@ -98,29 +98,9 @@ impl Suggestion {
     }
 }
 
-pub struct Note {
-    /// An optional range that this note applies to.
-    span: Option<ByteSpan>,
-    /// Human-readable text.
-    message: String,
-}
-
-impl Note {
-    /// Get the range of source code that this note applies to.
-    pub fn span(&self) -> &Option<ByteSpan> {
-        &self.span
-    }
-    /// Get the note text.
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-}
-
 /// A warning.
 pub struct Warning {
     diagnostic: Diagnostic,
-    /// Additional notes, hints, context, etc.
-    notes: Vec<Note>,
     /// A change suggestion: when present, the problem can be fixed by replacing the
     /// range of text this warning applies to by the string in this suggestion.
     suggestions: Vec<Suggestion>,
@@ -141,10 +121,6 @@ impl Warning {
     pub fn message(&self) -> &str {
         &self.diagnostic.message
     }
-    /// Get any notes that may help clarify the problem or find a solution.
-    pub fn notes(&self) -> &Vec<Note> {
-        &self.notes
-    }
     /// Check whether any suggestions could be made.
     pub fn has_suggestions(&self) -> bool {
         !self.suggestions.is_empty()
@@ -160,7 +136,6 @@ impl Warning {
         Warning {
             diagnostic: Diagnostic::new_warning(message)
                 .with_label(Label::new_primary(span)),
-            notes: vec![],
             suggestions: vec![],
         }
     }
@@ -170,7 +145,6 @@ impl Warning {
         Warning {
             diagnostic: Diagnostic::new_error(message)
                 .with_label(Label::new_primary(span)),
-            notes: vec![],
             suggestions: vec![],
         }
     }
@@ -196,7 +170,6 @@ impl<'a> Word<'a> {
         Warning {
             diagnostic: Diagnostic::new_warning(message)
                 .with_label(Label::new_primary(self.span)),
-            notes: vec![],
             suggestions: vec![],
         }
     }
@@ -205,7 +178,6 @@ impl<'a> Word<'a> {
         Warning {
             diagnostic: Diagnostic::new_error(message)
                 .with_label(Label::new_primary(self.span)),
-            notes: vec![],
             suggestions: vec![],
         }
     }
@@ -223,7 +195,7 @@ fn is_numeric(s: &str) -> bool {
 ///   0. whether the string was valid
 ///   1. an optional valid replacement value
 fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
-    if s.starts_with("rnd(") && s.ends_with(')') && s[4..s.len() - 1].split(",").all(is_numeric) {
+    if s.starts_with("rnd(") && s.ends_with(')') && s[4..s.len() - 1].split(',').all(is_numeric) {
         return (true, None)
     } else if s.chars().any(char::is_whitespace) {
         let no_ws = s.chars().filter(|c| !char::is_whitespace(*c)).collect::<String>();
@@ -350,7 +322,7 @@ impl<'a> Checker<'a> {
             .map(|_| {
                 let TokenType { name, .. } = self.current_token.unwrap();
                 let warn = token.error(format!("Expected a number argument to {}, but got {}", name, token.value));
-                if token.value.starts_with("(") {
+                if token.value.starts_with('(') {
                     let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
                     warn.suggest(
                         Suggestion::from(token, "Did you forget the `rnd`?".into())
@@ -378,7 +350,7 @@ impl<'a> Checker<'a> {
     }
 
     /// Check if a token is the correct argument type.
-    fn check_arg_type(&mut self, arg_type: &ArgType, token: &Word<'a>) -> Option<Warning> {
+    fn check_arg_type(&mut self, arg_type: ArgType, token: &Word<'a>) -> Option<Warning> {
         match arg_type {
             ArgType::Number => self.check_number(token),
             ArgType::Word => {
@@ -452,7 +424,7 @@ impl<'a> Checker<'a> {
             let current_arg_type = current_token.arg_type(self.token_arg_index);
             match current_arg_type {
                 Some(arg_type) => {
-                    if let Some(warning) = self.check_arg_type(arg_type, &token) {
+                    if let Some(warning) = self.check_arg_type(*arg_type, &token) {
                         return Some(warning);
                     }
                 },
@@ -460,11 +432,9 @@ impl<'a> Checker<'a> {
             }
         }
 
-        if self.current_token.is_none() {
-            if !TOKENS.contains_key(token.value) && TOKENS.contains_key(&token.value.to_lowercase()) {
-                return Some(token.error(format!("Unknown attribute `{}`", token.value))
-                   .suggest(Suggestion::from(token, "Attributes must be all lowercase".into()).replace(token.value.to_lowercase())));
-            }
+        if self.current_token.is_none() && !TOKENS.contains_key(token.value) && TOKENS.contains_key(&token.value.to_lowercase()) {
+            return Some(token.error(format!("Unknown attribute `{}`", token.value))
+                        .suggest(Suggestion::from(token, "Attributes must be all lowercase".into()).replace(token.value.to_lowercase())));
         }
 
         None
@@ -633,7 +603,7 @@ impl<'a> Checker<'a> {
             self.token_arg_index = 0;
 
             if let TokenContext::Section = token_type.context() {
-                self.current_section = Some((token.clone(), token_type.name));
+                self.current_section = Some((*token, token_type.name));
             }
         }
 

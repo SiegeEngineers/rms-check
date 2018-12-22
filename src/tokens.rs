@@ -75,7 +75,7 @@ impl TokenMapBuilder {
     }
 
     /// Add a new token type to the map.
-    fn insert(&mut self, t: TokenType) -> () {
+    fn insert(&mut self, t: TokenType) {
         self.0.insert(t.name.into(), t);
     }
 

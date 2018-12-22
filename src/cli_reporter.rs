@@ -6,16 +6,13 @@ use rms_check::{Severity, AutoFixReplacement, Suggestion, Warning};
 
 fn format_suggestion(suggestion: &Suggestion) -> String {
     let mut string = format!("{}: {}", Cyan.paint("suggestion"), suggestion.message());
-    match suggestion.replacement() {
-        AutoFixReplacement::Unsafe(_) => {
-            string.push_str(&format!("{}", Style::new().bold().paint(" (UNSAFE)")));
-        },
-        _ => (),
+    if let AutoFixReplacement::Unsafe(_) = suggestion.replacement() {
+        string.push_str(&format!("{}", Style::new().bold().paint(" (UNSAFE)")));
     }
     string
 }
 
-pub fn report(codemap: &CodeMap, warnings: Vec<Warning>) -> () {
+pub fn report(codemap: &CodeMap, warnings: Vec<Warning>) {
     let mut num_warnings = 0;
     let mut num_errors = 0;
     let mut fixable_warnings = 0;
