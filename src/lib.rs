@@ -10,7 +10,7 @@ mod checker;
 
 use std::io::Result;
 use std::sync::Arc;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use checker::Checker;
 use codespan::{CodeMap, FileMap, FileName, ByteIndex, LineIndex, ColumnIndex, ByteOffset};
 use wordize::Wordize;
@@ -22,21 +22,27 @@ pub enum Compatibility {
 }
 
 pub struct RMSCheck {
+    #[allow(unused)]
+    compatibility: Compatibility,
     codemap: CodeMap,
     filemaps: Vec<Arc<FileMap>>,
 }
 
 impl RMSCheck {
     pub fn new() -> Self {
-        let mut codemap = CodeMap::new();
         let check = RMSCheck {
-            codemap,
+            compatibility: Compatibility::Conquerors,
+            codemap: CodeMap::new(),
             filemaps: vec![],
         };
         check.add_source(
             "random_map.def",
             include_str!("random_map.def")
         )
+    }
+
+    pub fn compatibility(self, compatibility: Compatibility) -> Self {
+        Self { compatibility, ..self }
     }
 
     pub fn add_source(mut self, name: &str, source: &str) -> Self {
@@ -82,6 +88,7 @@ impl RMSCheck {
 /// Check a random map script for errors or other issues.
 pub fn check(source: &str, compatibility: Compatibility) -> Vec<Warning> {
     let checker = RMSCheck::new()
+        .compatibility(compatibility)
         .add_source("source.rms", source);
 
     checker.check()

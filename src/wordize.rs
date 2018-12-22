@@ -24,7 +24,6 @@ impl<'a> Word<'a> {
 
 /// Iterator over words in a string, with their start and end positions.
 pub struct Wordize<'a> {
-    pos: ByteIndex,
     file_map: &'a FileMap,
     chars: CharIndices<'a>,
 }
@@ -33,7 +32,6 @@ impl<'a> Wordize<'a> {
     /// Create an iterator over the `source` string's words.
     pub fn new(file_map: &'a FileMap) -> Self {
         Wordize {
-            pos: file_map.span().start(),
             file_map,
             chars: file_map.src().char_indices(),
         }

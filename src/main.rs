@@ -17,7 +17,6 @@ mod cli_reporter;
 use std::fs::{File, remove_file};
 use std::io::Read;
 use std::path::PathBuf;
-use codespan::CodeMap;
 use rms_check::{RMSCheck, AutoFixReplacement};
 use quicli::prelude::*;
 use cli_reporter::report as cli_report;
@@ -39,7 +38,7 @@ struct Cli {
 }
 
 fn cli_check(args: Cli) -> Result<()> {
-    let mut checker = RMSCheck::new()
+    let checker = RMSCheck::new()
         .add_file(args.file.into())?;
     let warnings = checker.check();
     let has_warnings = !warnings.is_empty();
@@ -58,14 +57,14 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
     input_file.read_to_end(&mut bytes)?;
     let source = String::from_utf8_lossy(&bytes);
 
-    let mut checker = RMSCheck::new()
+    let checker = RMSCheck::new()
         .add_file(PathBuf::from(&args.file))?;
     let warnings = checker.check();
     let has_warnings = !warnings.is_empty();
 
     let mut splicer = Multisplice::new(&source);
 
-    if warnings.is_empty() {
+    if !has_warnings {
         // All good!
         return Ok(());
     }

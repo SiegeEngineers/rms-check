@@ -155,6 +155,7 @@ impl Warning {
     }
 
     /// Create a new warning with severity "Warning".
+    #[allow(unused)]
     fn warning(span: ByteSpan, message: String) -> Self {
         Warning {
             diagnostic: Diagnostic::new_warning(message)
@@ -180,21 +181,11 @@ impl Warning {
         self
     }
 
-    /// Add a note.
-    fn note(mut self, message: &str) -> Self {
-        self.notes.push(Note {
-            span: None,
-            message: message.into(),
-        });
-        self
-    }
-
     /// Add a note referencing a snippet of code.
-    fn note_at(mut self, range: ByteSpan, message: &str) -> Self {
-        self.notes.push(Note {
-            span: Some(range),
-            message: message.into(),
-        });
+    fn note_at(mut self, span: ByteSpan, message: &str) -> Self {
+        self.diagnostic = self.diagnostic.with_label(
+            Label::new_secondary(span).with_message(message)
+        );
         self
     }
 }
