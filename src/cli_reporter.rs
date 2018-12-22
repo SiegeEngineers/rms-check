@@ -1,6 +1,8 @@
 use ansi_term::Style;
-use ansi_term::Colour::{Blue, Red, Yellow, Cyan};
-use rms_check::{Severity, AutoFixReplacement, Suggestion, Note, Range, Warning};
+use ansi_term::Colour::{Blue, Red, Yellow, Cyan, White};
+use codespan::CodeMap;
+use termcolor::{StandardStream, ColorChoice, WriteColor};
+use rms_check::{Severity, AutoFixReplacement, Suggestion, Note, Warning};
 
 fn indent(source: &str, indent: &str) -> String {
     source.lines()
@@ -8,20 +10,13 @@ fn indent(source: &str, indent: &str) -> String {
         .collect::<String>()
 }
 
-fn slice_lines<'a>(source: &'a str, range: &Range, context: u32) -> impl Iterator<Item = (u32, &'a str)> {
-    let start = range.0.line().saturating_sub(context);
-    let end = range.1.line() + context;
-    source.lines()
-        .take(end as usize + 1)
-        .skip(start as usize)
-        .enumerate()
-        .map(move |(offs, line)| (start + offs as u32, line))
-}
-
 fn format_message(warn: &Warning) -> String {
     format!("{} {}", match warn.severity() {
         Severity::Warning => Yellow.bold().paint("WARN"),
         Severity::Error => Red.bold().paint("ERROR"),
+        Severity::Bug => Red.bold().paint("BUG"),
+        Severity::Help => White.bold().paint("NOTE"),
+        Severity::Note => Blue.bold().paint("NOTE"),
     }, Style::new().bold().paint(warn.message()))
 }
 
@@ -40,6 +35,7 @@ fn format_suggestion(suggestion: &Suggestion) -> String {
     string
 }
 
+/*
 fn format_note(source: &str, note: &Note) -> String {
     let mut string = format!("  {} {}", Style::new().bold().paint("note:"), note.message());
 
@@ -51,24 +47,35 @@ fn format_note(source: &str, note: &Note) -> String {
 
     string
 }
+*/
 
-pub fn report(source: &str, warnings: Vec<Warning>) -> () {
+pub fn report(codemap: &CodeMap, warnings: Vec<Warning>) -> () {
     let mut num_warnings = 0;
     let mut num_errors = 0;
     let mut fixable_warnings = 0;
     let mut fixable_errors = 0;
 
+    let mut stream = StandardStream::stdout(ColorChoice::Auto);
     for warn in warnings {
-        let offending_line = warn.start().line();
+        codespan_reporting::emit(
+            &mut stream,
+            codemap,
+            warn.diagnostic());
 
         match warn.severity() {
             Severity::Error => num_errors += 1,
             Severity::Warning => num_warnings += 1,
+            _ => (),
         }
+
+        /*
+        let offending_line = warn.start().line();
+
         if warn.suggestions().iter().any(|s| s.replacement().is_fixable()) {
             match warn.severity() {
                 Severity::Error => fixable_errors += 1,
                 Severity::Warning => fixable_warnings += 1,
+                _ => (),
             }
         }
 
@@ -97,6 +104,7 @@ pub fn report(source: &str, warnings: Vec<Warning>) -> () {
         for suggestion in warn.suggestions() {
             println!("\n{}", indent(&format_suggestion(&suggestion), "    "));
         }
+        */
     }
 
     println!();

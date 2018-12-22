@@ -1,82 +1,41 @@
 use std::iter::Iterator;
 use std::str::CharIndices;
-
-/// Source code position.
-#[derive(Clone, Copy)]
-pub struct Pos(usize, u32, u32);
-impl Pos {
-    /// Get the current character index.
-    pub fn index(&self) -> usize { self.0 }
-    /// Get the current line.
-    pub fn line(&self) -> u32 { self.1 }
-    /// Get the current column.
-    pub fn column(&self) -> u32 { self.2 }
-
-    /// Advance by a line.
-    fn next_line(&mut self) -> () {
-        self.1 += 1;
-        self.2 = 0;
-    }
-    /// Advance by a column.
-    fn next_column(&mut self) -> () {
-        self.2 += 1;
-    }
-}
-
-/// A range with a start and end position.
-#[derive(Clone, Copy)]
-pub struct Range(
-    /// The start position.
-    pub Pos,
-    /// The end position.
-    pub Pos,
-);
-
-impl Range {
-    /// Get the start position of this range.
-    pub fn start(&self) -> Pos {
-        self.0
-    }
-    /// Get the end position of this range.
-    pub fn end(&self) -> Pos {
-        self.1
-    }
-}
+use codespan::{FileMap, ByteIndex, ByteSpan, ByteOffset};
 
 /// Represents a word.
 #[derive(Clone, Copy)]
 pub struct Word<'a> {
     /// Position of this word in the source code.
-    pub range: Range,
+    pub span: ByteSpan,
     /// The characters in this word.
     pub value: &'a str,
 }
 
 impl<'a> Word<'a> {
     /// Get the position of the first character in this word.
-    pub fn start(&self) -> Pos {
-        self.range.start()
+    pub fn start(&self) -> ByteIndex {
+        self.span.start()
     }
     /// Get the position of the character just past this word.
-    pub fn end(&self) -> Pos {
-        self.range.end()
+    pub fn end(&self) -> ByteIndex {
+        self.span.end()
     }
 }
 
 /// Iterator over words in a string, with their start and end positions.
 pub struct Wordize<'a> {
-    pos: Pos,
-    source: &'a str,
+    pos: ByteIndex,
+    file_map: &'a FileMap,
     chars: CharIndices<'a>,
 }
 
 impl<'a> Wordize<'a> {
     /// Create an iterator over the `source` string's words.
-    pub fn new(source: &'a str) -> Self {
+    pub fn new(file_map: &'a FileMap) -> Self {
         Wordize {
-            pos: Pos(0, 0, 0),
-            source,
-            chars: source.char_indices(),
+            pos: file_map.span().start(),
+            file_map,
+            chars: file_map.src().char_indices(),
         }
     }
 }
@@ -86,45 +45,35 @@ impl<'a> Iterator for Wordize<'a> {
 
     /// Get the next word.
     fn next(&mut self) -> Option<Self::Item> {
-        let mut start = Pos(0, 0, 0);
-        let mut end = Pos(0, 0, 0);
+        let mut start = ByteIndex::none();
+        let mut end = ByteIndex::none();
         let mut saw_word = false;
         while let Some((index, c)) = self.chars.next() {
+            let offset = ByteOffset(index as i64);
             if !saw_word {
-                if c == '\n' {
-                    self.pos.next_line();
-                    continue;
-                }
                 if !char::is_whitespace(c) {
                     saw_word = true;
-                    start = Pos(index, self.pos.line(), self.pos.column());
+                    start = self.file_map.span().start() + offset;
                 }
-                self.pos.next_column();
                 continue;
             }
 
             if char::is_whitespace(c) {
-                end = Pos(index, self.pos.line(), self.pos.column());
-                if c == '\n' {
-                    self.pos.next_line();
-                } else {
-                    self.pos.next_column();
-                }
+                end = self.file_map.span().start() + offset;
                 break;
             }
-
-            self.pos.next_column();
         }
 
         if saw_word {
             // HACK to detect the final token
-            if end.index() == 0 {
-                end = Pos(self.source.len(), self.pos.line(), self.pos.column());
+            if end == ByteIndex::none() {
+                end = self.file_map.span().end();
             }
 
-            let value = &self.source[start.index()..end.index()];
+            let span = ByteSpan::new(start, end);
+            let value = self.file_map.src_slice(span).unwrap();
             Some(Word {
-                range: Range(start, end),
+                span,
                 value,
             })
         } else {

@@ -5,15 +5,20 @@
 //! ```
 
 extern crate ansi_term;
+extern crate codespan;
+extern crate codespan_reporting;
 extern crate multisplice;
-extern crate rms_check;
 #[macro_use] extern crate quicli;
+extern crate rms_check;
+extern crate termcolor;
 
 mod cli_reporter;
 
 use std::fs::{File, remove_file};
 use std::io::Read;
-use rms_check::{check, Compatibility, AutoFixReplacement};
+use std::path::PathBuf;
+use codespan::CodeMap;
+use rms_check::{RMSCheck, AutoFixReplacement};
 use quicli::prelude::*;
 use cli_reporter::report as cli_report;
 use multisplice::Multisplice;
@@ -34,14 +39,12 @@ struct Cli {
 }
 
 fn cli_check(args: Cli) -> Result<()> {
-    let mut file = File::open(args.file)?;
-    let mut bytes = vec![];
-    file.read_to_end(&mut bytes)?;
-    let source = String::from_utf8_lossy(&bytes);
-    let warnings = check(&source, Compatibility::UserPatch15);
+    let mut checker = RMSCheck::new()
+        .add_file(args.file.into())?;
+    let warnings = checker.check();
     let has_warnings = !warnings.is_empty();
 
-    cli_report(&source, warnings);
+    cli_report(&checker.codemap(), warnings);
 
     if has_warnings {
         bail!("There were warnings");
@@ -54,7 +57,12 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
     let mut bytes = vec![];
     input_file.read_to_end(&mut bytes)?;
     let source = String::from_utf8_lossy(&bytes);
-    let warnings = check(&source, Compatibility::UserPatch15);
+
+    let mut checker = RMSCheck::new()
+        .add_file(PathBuf::from(&args.file))?;
+    let warnings = checker.check();
+    let has_warnings = !warnings.is_empty();
+
     let mut splicer = Multisplice::new(&source);
 
     if warnings.is_empty() {
@@ -68,12 +76,20 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
         for suggestion in warn.suggestions() {
             match suggestion.replacement() {
                 AutoFixReplacement::Safe(ref new_value) => {
-                    eprintln!("autofix {}:{} → {}:{} to {}", suggestion.start().line(), suggestion.start().column(), suggestion.end().line(), suggestion.end().column(), new_value);
-                    splicer.splice(suggestion.start().index(), suggestion.end().index(), new_value);
+                    let start = checker.resolve_position(suggestion.start()).unwrap();
+                    let end = checker.resolve_position(suggestion.end()).unwrap();
+                    eprintln!("autofix {}:{} → {}:{} to {}", start.0.number(), start.1.number(), end.0.number(), end.1.number(), new_value);
+                    let start = checker.resolve_offset(suggestion.start()).unwrap();
+                    let end = checker.resolve_offset(suggestion.end()).unwrap();
+                    splicer.splice(start.to_usize(), end.to_usize(), new_value);
                 },
                 AutoFixReplacement::Unsafe(ref new_value) if args.fix_unsafe => {
-                    eprintln!("UNSAFE autofix {}:{} → {}:{} to {}", suggestion.start().line(), suggestion.start().column(), suggestion.end().line(), suggestion.end().column(), new_value);
-                    splicer.splice(suggestion.start().index(), suggestion.end().index(), new_value);
+                    let start = checker.resolve_position(suggestion.start()).unwrap();
+                    let end = checker.resolve_position(suggestion.end()).unwrap();
+                    eprintln!("UNSAFE autofix {}:{} → {}:{} to {}", start.0.number(), start.1.number(), end.0.number(), end.1.number(), new_value);
+                    let start = checker.resolve_offset(suggestion.start()).unwrap();
+                    let end = checker.resolve_offset(suggestion.end()).unwrap();
+                    splicer.splice(start.to_usize(), end.to_usize(), new_value);
                 },
                 _ => (),
             }

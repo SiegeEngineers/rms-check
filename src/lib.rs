@@ -1,5 +1,6 @@
 extern crate ansi_term;
-extern crate either;
+extern crate codespan;
+extern crate codespan_reporting;
 #[macro_use] extern crate lazy_static;
 extern crate strsim;
 
@@ -7,28 +8,81 @@ mod tokens;
 mod wordize;
 mod checker;
 
-use wordize::Wordize;
+use std::io::Result;
+use std::sync::Arc;
+use std::path::{Path, PathBuf};
 use checker::Checker;
-use either::Either;
+use codespan::{CodeMap, FileMap, FileName, ByteIndex, LineIndex, ColumnIndex, ByteOffset};
+use wordize::Wordize;
 
-pub use wordize::{Pos, Range};
 pub use checker::{Severity, AutoFixReplacement, Suggestion, Note, Warning};
 pub enum Compatibility {
     Conquerors,
     UserPatch15,
 }
 
+pub struct RMSCheck {
+    codemap: CodeMap,
+    filemaps: Vec<Arc<FileMap>>,
+}
+
+impl RMSCheck {
+    pub fn new() -> Self {
+        let mut codemap = CodeMap::new();
+        let check = RMSCheck {
+            codemap,
+            filemaps: vec![],
+        };
+        check.add_source(
+            "random_map.def",
+            include_str!("random_map.def")
+        )
+    }
+
+    pub fn add_source(mut self, name: &str, source: &str) -> Self {
+        let map = self.codemap.add_filemap(FileName::Virtual(name.to_string().into()), source.to_string());
+        self.filemaps.push(map);
+        self
+    }
+
+    pub fn add_file(mut self, path: PathBuf) -> Result<Self> {
+        let map = self.codemap.add_filemap_from_disk(path)?;
+        self.filemaps.push(map);
+        Ok(self)
+    }
+
+    pub fn codemap(&self) -> &CodeMap {
+        &self.codemap
+    }
+
+    pub fn resolve_position(&self, index: ByteIndex) -> Option<(LineIndex, ColumnIndex)> {
+        let file = self.codemap.find_file(index);
+        file.and_then(|f| f.location(index).ok())
+    }
+
+    pub fn resolve_offset(&self, index: ByteIndex) -> Option<ByteOffset> {
+        let file = self.codemap.find_file(index);
+        file.and_then(|f| {
+            f.location(index).ok().and_then(|(l, c)|
+                f.offset(l, c).ok()
+            )
+        })
+    }
+
+    pub fn check(&self) -> Vec<Warning> {
+        let words = self.filemaps.iter()
+            .map(|map| Wordize::new(&map))
+            .flatten();
+
+        let mut checker = Checker::new();
+        words.filter_map(|w| checker.write_token(&w)).collect()
+    }
+}
+
 /// Check a random map script for errors or other issues.
 pub fn check(source: &str, compatibility: Compatibility) -> Vec<Warning> {
-    let words = Wordize::new(include_str!("random_map.def"));
-    let words = match compatibility {
-        Compatibility::UserPatch15 => Either::Left(
-            words.chain(Wordize::new(include_str!("UserPatchConst.rms")))),
-        _ => Either::Right(
-            words),
-    };
-    let words = words.chain(Wordize::new(source));
+    let checker = RMSCheck::new()
+        .add_source("source.rms", source);
 
-    let mut checker = Checker::new();
-    words.filter_map(|w| checker.write_token(&w)).collect()
+    checker.check()
 }

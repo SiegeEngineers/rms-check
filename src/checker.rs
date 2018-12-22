@@ -1,7 +1,13 @@
 use std::collections::HashSet;
 use strsim::levenshtein;
 
-use wordize::{Pos, Range, Word};
+use codespan::{ByteSpan, ByteIndex};
+pub use codespan_reporting::{
+    Diagnostic,
+    Severity,
+    Label,
+};
+use wordize::Word;
 use tokens::{ArgType, TokenType, TokenContext, TOKENS};
 
 /// Describes the next expected token.
@@ -14,21 +20,12 @@ enum Expect<'a> {
     /// A #const name.
     ConstName,
     /// The second part of an incorrectly formatted `rnd(A,B)` call.
-    UnfinishedRnd(Pos, &'a str),
+    UnfinishedRnd(ByteIndex, &'a str),
 }
 impl<'a> Default for Expect<'a> {
     fn default() -> Self {
         Expect::None
     }
-}
-
-/// Warning severity.
-#[derive(Clone, Copy)]
-pub enum Severity {
-    /// This needs attention but may not be incorrect.
-    Warning,
-    /// This is 100% incorrect.
-    Error,
 }
 
 pub enum AutoFixReplacement {
@@ -55,7 +52,7 @@ impl AutoFixReplacement {
 /// A suggestion that may fix a warning.
 pub struct Suggestion {
     /// The piece of source code that this suggestion would replace.
-    range: Range,
+    span: ByteSpan,
     /// Human-readable suggestion message.
     message: String,
     /// A replacement string that could fix the problem.
@@ -64,12 +61,12 @@ pub struct Suggestion {
 
 impl Suggestion {
     /// Get the starting position this suggestion applies to.
-    pub fn start(&self) -> Pos {
-        self.range.start()
+    pub fn start(&self) -> ByteIndex {
+        self.span.start()
     }
     /// Get the end position this suggestion applies to.
-    pub fn end(&self) -> Pos {
-        self.range.end()
+    pub fn end(&self) -> ByteIndex {
+        self.span.end()
     }
     /// Get the suggestion message.
     pub fn message(&self) -> &str {
@@ -81,12 +78,12 @@ impl Suggestion {
     }
 
     /// Create a suggestion.
-    fn new(start: Pos, end: Pos, message: String) -> Self {
-        Suggestion { range: Range(start, end), message, replacement: AutoFixReplacement::None }
+    fn new(start: ByteIndex, end: ByteIndex, message: String) -> Self {
+        Suggestion { span: ByteSpan::new(start, end), message, replacement: AutoFixReplacement::None }
     }
     /// Create a suggestion applying to a specific token.
     fn from(token: &Word, message: String) -> Self {
-        Suggestion { range: token.range, message, replacement: AutoFixReplacement::None }
+        Suggestion { span: token.span, message, replacement: AutoFixReplacement::None }
     }
     /// Specify a possible fix for the problem.
     fn replace(mut self, replacement: String) -> Self {
@@ -103,15 +100,15 @@ impl Suggestion {
 
 pub struct Note {
     /// An optional range that this note applies to.
-    range: Option<Range>,
+    span: Option<ByteSpan>,
     /// Human-readable text.
     message: String,
 }
 
 impl Note {
     /// Get the range of source code that this note applies to.
-    pub fn range(&self) -> &Option<Range> {
-        &self.range
+    pub fn span(&self) -> &Option<ByteSpan> {
+        &self.span
     }
     /// Get the note text.
     pub fn message(&self) -> &str {
@@ -121,12 +118,7 @@ impl Note {
 
 /// A warning.
 pub struct Warning {
-    /// Warning severity.
-    severity: Severity,
-    /// The part of the source code that this warning applies to.
-    range: Range,
-    /// Human-readable warning text.
-    message: String,
+    diagnostic: Diagnostic,
     /// Additional notes, hints, context, etc.
     notes: Vec<Note>,
     /// A change suggestion: when present, the problem can be fixed by replacing the
@@ -135,25 +127,19 @@ pub struct Warning {
 }
 
 impl Warning {
+    pub fn diagnostic(&self) -> &Diagnostic {
+        &self.diagnostic
+    }
     /// Get the severity of this warning.
     pub fn severity(&self) -> Severity {
-        self.severity
+        self.diagnostic.severity
     }
-    /// Get the range this warning applies to.
-    pub fn range(&self) -> &Range {
-        &self.range
-    }
-    /// Get the starting position this warning applies to.
-    pub fn start(&self) -> Pos {
-        self.range.start()
-    }
-    /// Get the end position this warning applies to.
-    pub fn end(&self) -> Pos {
-        self.range.end()
+    pub fn labels(&self) -> &Vec<Label> {
+        &self.diagnostic.labels
     }
     /// Get the human-readable error message.
     pub fn message(&self) -> &str {
-        &self.message
+        &self.diagnostic.message
     }
     /// Get any notes that may help clarify the problem or find a solution.
     pub fn notes(&self) -> &Vec<Note> {
@@ -169,22 +155,20 @@ impl Warning {
     }
 
     /// Create a new warning with severity "Warning".
-    fn warning(start: Pos, end: Pos, message: String) -> Self {
+    fn warning(span: ByteSpan, message: String) -> Self {
         Warning {
-            severity: Severity::Warning,
-            range: Range(start, end),
-            message,
+            diagnostic: Diagnostic::new_warning(message)
+                .with_label(Label::new_primary(span)),
             notes: vec![],
             suggestions: vec![],
         }
     }
 
     /// Create a new warning with severity "Error".
-    fn error(start: Pos, end: Pos, message: String) -> Self {
+    fn error(span: ByteSpan, message: String) -> Self {
         Warning {
-            severity: Severity::Error,
-            range: Range(start, end),
-            message,
+            diagnostic: Diagnostic::new_error(message)
+                .with_label(Label::new_primary(span)),
             notes: vec![],
             suggestions: vec![],
         }
@@ -199,16 +183,16 @@ impl Warning {
     /// Add a note.
     fn note(mut self, message: &str) -> Self {
         self.notes.push(Note {
-            range: None,
+            span: None,
             message: message.into(),
         });
         self
     }
 
     /// Add a note referencing a snippet of code.
-    fn note_at(mut self, range: Range, message: &str) -> Self {
+    fn note_at(mut self, range: ByteSpan, message: &str) -> Self {
         self.notes.push(Note {
-            range: Some(range),
+            span: Some(range),
             message: message.into(),
         });
         self
@@ -218,11 +202,21 @@ impl Warning {
 impl<'a> Word<'a> {
     /// Create a warning applying to this token.
     pub fn warning(&self, message: String) -> Warning {
-        Warning::warning(self.start(), self.end(), message)
+        Warning {
+            diagnostic: Diagnostic::new_warning(message)
+                .with_label(Label::new_primary(self.span)),
+            notes: vec![],
+            suggestions: vec![],
+        }
     }
     /// Create an error applying to this token.
     pub fn error(&self, message: String) -> Warning {
-        Warning::error(self.start(), self.end(), message)
+        Warning {
+            diagnostic: Diagnostic::new_error(message)
+                .with_label(Label::new_primary(self.span)),
+            notes: vec![],
+            suggestions: vec![],
+        }
     }
 }
 
@@ -445,7 +439,7 @@ impl<'a> Checker<'a> {
                     Some((section_token, ref current_section)) => {
                         if current_section != expected_section {
                             return Some(token.error(format!("Command is invalid in section {}, it can only appear in {}", current_section, expected_section))
-                                        .note_at(section_token.range, "Section started here"));
+                                        .note_at(section_token.span, "Section started here"));
                         }
                     },
                     None => {
@@ -498,7 +492,7 @@ impl<'a> Checker<'a> {
             },
             Expect::UnfinishedRnd(pos, val) => {
                 let suggestion = Suggestion::new(pos, token.end(), "rnd() must not contain spaces".into());
-                parse_error = Some(Warning::error(pos, token.end(), "Incorrect rnd() call".into()).suggest(
+                parse_error = Some(Warning::error(ByteSpan::new(pos, token.end()), "Incorrect rnd() call".into()).suggest(
                     match is_valid_rnd(&format!("{} {}", val, token.value)).1 {
                         Some(replacement) => suggestion.replace(replacement),
                         None => suggestion,
