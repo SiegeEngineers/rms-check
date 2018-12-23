@@ -3,7 +3,7 @@ use std::str::CharIndices;
 use codespan::{FileMap, ByteIndex, ByteSpan, ByteOffset};
 
 /// Represents a word.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Word<'a> {
     /// Position of this word in the source code.
     pub span: ByteSpan,
@@ -77,5 +77,73 @@ impl<'a> Iterator for Wordize<'a> {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use wordize::Wordize;
+    use codespan::{FileMap, FileName, LineIndex, ColumnIndex};
+
+    #[test]
+    fn split_words() {
+        let filemap = FileMap::new(FileName::Virtual("words.txt".into()), "simple test words".to_string());
+        let mut wordize = Wordize::new(&filemap);
+        let word = wordize.next().unwrap();
+        assert_eq!(word.value, "simple");
+        assert_eq!(
+            filemap.location(word.span.start()).unwrap(),
+            (LineIndex(0), ColumnIndex(0))
+        );
+        assert_eq!(
+            filemap.location(word.span.end()).unwrap(),
+            (LineIndex(0), ColumnIndex(6))
+        );
+        let word = wordize.next().unwrap();
+        assert_eq!(word.value, "test");
+        assert_eq!(
+            filemap.location(word.span.start()).unwrap(),
+            (LineIndex(0), ColumnIndex(7))
+        );
+        assert_eq!(
+            filemap.location(word.span.end()).unwrap(),
+            (LineIndex(0), ColumnIndex(11))
+        );
+        let word = wordize.next().unwrap();
+        assert_eq!(word.value, "words");
+        assert_eq!(
+            filemap.location(word.span.start()).unwrap(),
+            (LineIndex(0), ColumnIndex(12))
+        );
+        assert_eq!(
+            filemap.location(word.span.end()).unwrap(),
+            (LineIndex(0), ColumnIndex(17))
+        );
+    }
+
+    #[test]
+    fn split_words_with_chars() {
+        let filemap = FileMap::new(FileName::Virtual("words.txt".into()), "n/*ot \n \t  a*/comment".to_string());
+        let mut wordize = Wordize::new(&filemap);
+        let word = wordize.next().unwrap();
+        assert_eq!(word.value, "n/*ot");
+        assert_eq!(
+            filemap.location(word.span.start()).unwrap(),
+            (LineIndex(0), ColumnIndex(0))
+        );
+        assert_eq!(
+            filemap.location(word.span.end()).unwrap(),
+            (LineIndex(0), ColumnIndex(5))
+        );
+        let word = wordize.next().unwrap();
+        assert_eq!(word.value, "a*/comment");
+        assert_eq!(
+            filemap.location(word.span.start()).unwrap(),
+            (LineIndex(1), ColumnIndex(4))
+        );
+        assert_eq!(
+            filemap.location(word.span.end()).unwrap(),
+            (LineIndex(1), ColumnIndex(14))
+        );
     }
 }
