@@ -279,10 +279,10 @@ pub struct ParseState<'a> {
 }
 
 impl<'a> ParseState<'a> {
-    pub fn define(&mut self, name: &str) {
+    pub fn define(&mut self, name: impl ToString) {
         self.seen_defines.insert(name.to_string());
     }
-    pub fn define_const(&mut self, name: &str) {
+    pub fn define_const(&mut self, name: impl ToString) {
         self.seen_consts.insert(name.to_string());
     }
     pub fn has_define(&self, name: &str) -> bool {
@@ -484,11 +484,11 @@ impl<'a> Checker<'a> {
 
         match self.state.expect {
             Expect::ConstName => {
-                self.state.define_const(token.value.into());
+                self.state.define_const(token.value);
                 self.state.expect(Expect::None);
             },
             Expect::DefineName => {
-                self.state.define(token.value.into());
+                self.state.define(token.value);
                 self.state.expect(Expect::None);
             },
             Expect::UnfinishedRnd(pos, val) => {
