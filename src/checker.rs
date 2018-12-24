@@ -251,6 +251,7 @@ enum Nesting {
 
 trait Lint {
     fn name(&self) -> &'static str;
+    fn run_inside_comments(&self) -> bool { false }
     fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning>;
 }
 
@@ -326,6 +327,25 @@ impl Lint for UnknownAttributeLint {
     }
 }
 
+struct DeadBranchCommentLint {
+}
+impl Lint for DeadBranchCommentLint {
+    fn name(&self) -> &'static str { "dead-comment" }
+    fn run_inside_comments(&self) -> bool { true }
+    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
+        if token.value != "/*" { return None; }
+
+        state.nesting.iter()
+            .find_map(|n| if let Nesting::StartRandom(loc) = n {
+                Some(token.warning("Using comments inside `start_random` groups is potentially dangerous.".to_string())
+                    .note_at(*loc, "`start_random` opened here")
+                    .suggest(Suggestion::from(token, "Only #define constants in the `start_random` group, and then use `if` branches for the actual code.".to_string())))
+            } else {
+                None
+            })
+    }
+}
+
 #[derive(Default)]
 pub struct ParseState<'a> {
     /// Whether we're currently inside a comment.
@@ -397,6 +417,7 @@ impl<'a> Checker<'a> {
             // buggy
             // .with_lint(Box::new(UnknownAttributeLint {}))
             .with_lint(Box::new(AttributeCaseLint {}))
+            .with_lint(Box::new(DeadBranchCommentLint {}))
     }
 
     pub fn with_lint(mut self, lint: Box<dyn Lint>) -> Self {
@@ -504,9 +525,13 @@ impl<'a> Checker<'a> {
     /// Check an incoming token.
     fn lint_token(&mut self, token: &Word<'a>) -> Option<Warning> {
         let warning = {
+            let is_comment = self.state.is_comment;
             let mut state = &mut self.state;
             self.lints
                 .iter_mut()
+                .filter(|(_, lint)| {
+                    !is_comment || lint.run_inside_comments()
+                })
                 .find_map(|(name, lint)| {
                     lint.lint_token(&mut state, token)
                         .map(|warning| warning.lint(&name))
@@ -548,21 +573,6 @@ impl<'a> Checker<'a> {
                     }
                 },
                 None => return Some(token.error(format!("Too many arguments ({}) to command `{}`", self.state.token_arg_index + 1, current_token.name))),
-            }
-        }
-
-        if token.value == "/*" {
-            let nest_err = self.state.nesting.iter()
-                .find_map(|n| if let Nesting::StartRandom(loc) = n {
-                    Some(token.warning("Using comments inside `start_random` groups is potentially dangerous.".to_string())
-                        .note_at(*loc, "`start_random` opened here")
-                        .suggest(Suggestion::from(token, "Only #define constants in the `start_random` group, and then use `if` branches for the actual code.".to_string())))
-                } else {
-                    None
-                });
-
-            if nest_err.is_some() {
-                return nest_err;
             }
         }
 
@@ -610,12 +620,7 @@ impl<'a> Checker<'a> {
             self.state.is_comment = true;
         }
 
-        let lint_warning = if self.state.is_comment {
-            // TODO allow lints to opt in to running inside comments
-            None
-        } else {
-            self.lint_token(token)
-        };
+        let lint_warning = self.lint_token(token);
 
         if token.value.ends_with("*/") {
             if !self.state.is_comment {
