@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use strsim::levenshtein;
 
 use codespan::{ByteSpan, ByteIndex};
@@ -175,6 +175,11 @@ impl Warning {
         );
         self
     }
+
+    fn lint(mut self, lint: &str) -> Self {
+        self.diagnostic = self.diagnostic.with_code(lint);
+        self
+    }
 }
 
 impl<'a> Word<'a> {
@@ -244,9 +249,38 @@ enum Nesting {
     Brace(ByteSpan),
 }
 
+trait Lint {
+    fn name(&self) -> &'static str;
+    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning>;
+}
+
+struct IncorrectSectionLint {}
+impl Lint for IncorrectSectionLint {
+    fn name(&self) -> &'static str {
+        "incorrect-section"
+    }
+    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
+        if let Some(current_token) = state.current_token {
+            if let TokenContext::Command(Some(expected_section)) = current_token.context() {
+                match state.current_section {
+                    Some((section_token, ref current_section)) => {
+                        if current_section != expected_section {
+                            return Some(token.error(format!("Command is invalid in section {}, it can only appear in {}", current_section, expected_section))
+                                        .note_at(section_token.span, "Section started here"));
+                        }
+                    },
+                    None => {
+                        return Some(token.error(format!("Command can only appear in section {}, but no section has been started.", expected_section)));
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
 #[derive(Default)]
-pub struct Checker<'a> {
-    compatibility: Compatibility,
+pub struct ParseState<'a> {
     /// Whether we're currently inside a comment.
     is_comment: bool,
     /// The amount of nested statements we entered, like `if`, `start_random`.
@@ -265,6 +299,31 @@ pub struct Checker<'a> {
     seen_defines: HashSet<String>,
 }
 
+impl<'a> ParseState<'a> {
+    pub fn define(&mut self, name: &str) {
+        self.seen_defines.insert(name.to_string());
+    }
+    pub fn define_const(&mut self, name: &str) {
+        self.seen_consts.insert(name.to_string());
+    }
+    pub fn has_define(&self, name: &str) -> bool {
+        self.seen_defines.contains(name)
+    }
+    pub fn has_const(&self, name: &str) -> bool {
+        self.seen_consts.contains(name)
+    }
+    pub fn expect(&mut self, expect: Expect<'a>) {
+        self.expect = expect;
+    }
+}
+
+#[derive(Default)]
+pub struct Checker<'a> {
+    compatibility: Compatibility,
+    lints: HashMap<String, Box<dyn Lint>>,
+    state: ParseState<'a>,
+}
+
 /// Builtin #define or #const names.
 const BUILTIN_NAMES: [&str; 8] = [
     "TINY_MAP",
@@ -281,15 +340,17 @@ const BUILTIN_NAMES: [&str; 8] = [
 impl<'a> Checker<'a> {
     /// Create an RMS syntax checker.
     pub fn new() -> Self {
-        let mut seen_defines = HashSet::new();
+        let mut checker = Checker::default();
         for name in BUILTIN_NAMES.iter() {
-            seen_defines.insert((*name).into());
+            checker.state.define(name);
         }
+        checker
+            .with_lint(Box::new(IncorrectSectionLint {}))
+    }
 
-        Checker {
-            seen_defines,
-            ..Default::default()
-        }
+    pub fn with_lint(mut self, lint: Box<dyn Lint>) -> Self {
+        self.lints.insert(lint.name().to_string(), lint);
+        self
     }
 
     pub fn compatibility(self, compatibility: Compatibility) -> Self {
@@ -298,9 +359,9 @@ impl<'a> Checker<'a> {
 
     /// Check if a constant was ever defined using #define.
     fn check_ever_defined(&self, token: &Word) -> Option<Warning> {
-        if !self.seen_defines.contains(token.value) {
+        if !self.state.has_define(token.value) {
             let warn = token.warning(format!("Token `{}` is never defined, this condition will always fail", token.value));
-            Some(if let Some(similar) = meant(token.value, self.seen_defines.iter()) {
+            Some(if let Some(similar) = meant(token.value, self.state.seen_defines.iter()) {
                 warn.suggest(Suggestion::from(token, format!("Did you mean `{}`?", similar))
                                  .replace_unsafe(similar.to_string()))
             } else {
@@ -314,13 +375,13 @@ impl<'a> Checker<'a> {
     /// Check if a constant was ever defined with a value (using #const)
     fn check_defined_with_value(&self, token: &Word) -> Option<Warning> {
         // 1. Check if this may or may not be defined—else warn
-        if !self.seen_consts.contains(token.value) {
-            if self.seen_defines.contains(token.value) {
+        if !self.state.has_const(token.value) {
+            if self.state.has_define(token.value) {
                 // 2. Check if this has a value (is defined using #const)—else warn
                 Some(token.warning(format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
             } else {
                 let warn = token.warning(format!("Token `{}` is never defined", token.value));
-                Some(if let Some(similar) = meant(token.value, self.seen_consts.iter()) {
+                Some(if let Some(similar) = meant(token.value, self.state.seen_consts.iter()) {
                     warn.suggest(Suggestion::from(token, format!("Did you mean `{}`?", similar))
                                  .replace_unsafe(similar.to_string()))
                 } else {
@@ -338,7 +399,7 @@ impl<'a> Checker<'a> {
         // or a number (12, -35),
         token.value.parse::<i32>().err()
             .map(|_| {
-                let TokenType { name, .. } = self.current_token.unwrap();
+                let TokenType { name, .. } = self.state.current_token.unwrap();
                 let warn = token.error(format!("Expected a number argument to {}, but got {}", name, token.value));
                 if token.value.starts_with('(') {
                     let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
@@ -359,7 +420,7 @@ impl<'a> Checker<'a> {
                     (token.value.starts_with("rnd(") && token.value.ends_with(',')) ||
                     // probably "rnd (\d+,\d+)"
                     (token.value == "rnd") {
-                    self.expect = Expect::UnfinishedRnd(token.start(), token.value);
+                    self.state.expect(Expect::UnfinishedRnd(token.start(), token.value));
                     None
                 } else {
                     Some(warn)
@@ -391,6 +452,17 @@ impl<'a> Checker<'a> {
 
     /// Check an incoming token.
     fn lint_token(&mut self, token: &Word<'a>) -> Option<Warning> {
+        let warning = {
+            let mut state = &mut self.state;
+            self.lints
+                .iter_mut()
+                .find_map(|(name, lint)| {
+                    lint.lint_token(&mut state, token)
+                        .map(|warning| warning.lint(&name))
+                })
+        };
+        if warning.is_some() { return warning; }
+
         // "/**" does not work to open a comment
         if token.value.len() > 2 && token.value.starts_with("/*") {
             let warning = token.error("Incorrect comment: there must be a space after the opening /*".into());
@@ -424,39 +496,25 @@ impl<'a> Checker<'a> {
             return Some(token.error(format!("Invalid section {}", token.value)));
         }
 
-        if let Some(current_token) = self.current_token {
-            if let TokenContext::Command(Some(expected_section)) = current_token.context() {
-                match self.current_section {
-                    Some((section_token, ref current_section)) => {
-                        if current_section != expected_section {
-                            return Some(token.error(format!("Command is invalid in section {}, it can only appear in {}", current_section, expected_section))
-                                        .note_at(section_token.span, "Section started here"));
-                        }
-                    },
-                    None => {
-                        return Some(token.error(format!("Command can only appear in section {}, but no section has been started.", expected_section)));
-                    }
-                }
-            }
-
-            let current_arg_type = current_token.arg_type(self.token_arg_index);
+        if let Some(current_token) = self.state.current_token {
+            let current_arg_type = current_token.arg_type(self.state.token_arg_index);
             match current_arg_type {
                 Some(arg_type) => {
                     if let Some(warning) = self.check_arg_type(*arg_type, &token) {
                         return Some(warning);
                     }
                 },
-                None => return Some(token.error(format!("Too many arguments ({}) to command `{}`", self.token_arg_index + 1, current_token.name))),
+                None => return Some(token.error(format!("Too many arguments ({}) to command `{}`", self.state.token_arg_index + 1, current_token.name))),
             }
         }
 
-        if self.current_token.is_none() && !TOKENS.contains_key(token.value) && TOKENS.contains_key(&token.value.to_lowercase()) {
+        if self.state.current_token.is_none() && !TOKENS.contains_key(token.value) && TOKENS.contains_key(&token.value.to_lowercase()) {
             return Some(token.error(format!("Unknown attribute `{}`", token.value))
                         .suggest(Suggestion::from(token, "Attributes must be all lowercase".into()).replace(token.value.to_lowercase())));
         }
 
         if token.value == "/*" {
-            let nest_err = self.nesting.iter()
+            let nest_err = self.state.nesting.iter()
                 .find_map(|n| if let Nesting::StartRandom(loc) = n {
                     Some(token.warning("Using comments inside `start_random` groups is potentially dangerous.".to_string())
                         .note_at(*loc, "`start_random` opened here")
@@ -476,23 +534,23 @@ impl<'a> Checker<'a> {
     /// Parse and lint the next token.
     pub fn write_token(&mut self, token: &Word<'a>) -> Option<Warning> {
         // Clear current token if we're past the end of its arguments list.
-        if let Some(current_token) = self.current_token {
-            if self.token_arg_index >= current_token.arg_len() {
-                self.current_token = None;
-                self.token_arg_index = 0;
+        if let Some(current_token) = self.state.current_token {
+            if self.state.token_arg_index >= current_token.arg_len() {
+                self.state.current_token = None;
+                self.state.token_arg_index = 0;
             }
         }
 
         let mut parse_error = None;
 
-        match self.expect {
+        match self.state.expect {
             Expect::ConstName => {
-                self.seen_consts.insert(token.value.into());
-                self.expect = Expect::None;
+                self.state.define_const(token.value.into());
+                self.state.expect(Expect::None);
             },
             Expect::DefineName => {
-                self.seen_defines.insert(token.value.into());
-                self.expect = Expect::None;
+                self.state.define(token.value.into());
+                self.state.expect(Expect::None);
             },
             Expect::UnfinishedRnd(pos, val) => {
                 let suggestion = Suggestion::new(pos, token.end(), "rnd() must not contain spaces".into());
@@ -502,7 +560,7 @@ impl<'a> Checker<'a> {
                         None => suggestion,
                     }
                 ));
-                self.expect = Expect::None;
+                self.state.expect(Expect::None);
             },
             _ => (),
         }
@@ -513,18 +571,18 @@ impl<'a> Checker<'a> {
             // Technically incorrect but the user most likely attempted to open a comment here,
             // so _not_ treating it as one would give lots of useless errors.
             // Instead we only mark this token as an incorrect comment.
-            self.is_comment = true;
+            self.state.is_comment = true;
         } else if token.value.ends_with("*/") {
-            if !self.is_comment {
+            if !self.state.is_comment {
                 parse_error = Some(token.error("Unexpected closing `*/`".into()));
             } else {
-                self.is_comment = false;
+                self.state.is_comment = false;
             }
         }
 
         // TODO check whether this should happen
         // Before UP1.5 a parser bug could cause things inside comments to be parsed
-        if self.is_comment {
+        if self.state.is_comment {
             return parse_error.or(lint_warning);
         }
 
@@ -541,10 +599,10 @@ impl<'a> Checker<'a> {
             }
         }
         match token.value {
-            "{" => self.nesting.push(Nesting::Brace(token.span)),
+            "{" => self.state.nesting.push(Nesting::Brace(token.span)),
             "}" => {
                 let mut is_ok = false;
-                match self.nesting.last() {
+                match self.state.nesting.last() {
                     Some(Nesting::Brace(_)) => {
                         is_ok = true;
                     },
@@ -552,12 +610,12 @@ impl<'a> Checker<'a> {
                         parse_error = Some(unbalanced_error("}", token, nest));
                     },
                 }
-                if is_ok { self.nesting.pop(); }
+                if is_ok { self.state.nesting.pop(); }
             },
-            "if" => self.nesting.push(Nesting::If(token.span)),
+            "if" => self.state.nesting.push(Nesting::If(token.span)),
             "elseif" => {
                 let mut is_ok = false;
-                match self.nesting.last() {
+                match self.state.nesting.last() {
                     Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
                         is_ok = true;
                     },
@@ -565,12 +623,12 @@ impl<'a> Checker<'a> {
                         parse_error = Some(unbalanced_error("elseif", token, nest));
                     }
                 }
-                if is_ok { self.nesting.pop(); }
-                self.nesting.push(Nesting::ElseIf(token.span));
+                if is_ok { self.state.nesting.pop(); }
+                self.state.nesting.push(Nesting::ElseIf(token.span));
             },
             "else" => {
                 let mut is_ok = false;
-                match self.nesting.last() {
+                match self.state.nesting.last() {
                     Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
                         is_ok = true;
                     },
@@ -578,12 +636,12 @@ impl<'a> Checker<'a> {
                         parse_error = Some(unbalanced_error("else", token, nest));
                     },
                 }
-                if is_ok { self.nesting.pop(); }
-                self.nesting.push(Nesting::Else(token.span));
+                if is_ok { self.state.nesting.pop(); }
+                self.state.nesting.push(Nesting::Else(token.span));
             },
             "endif" => {
                 let mut is_ok = false;
-                match self.nesting.last() {
+                match self.state.nesting.last() {
                     Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
                         is_ok = true;
                     },
@@ -591,33 +649,33 @@ impl<'a> Checker<'a> {
                         parse_error = Some(unbalanced_error("endif", token, nest));
                     },
                 }
-                if is_ok { self.nesting.pop(); }
+                if is_ok { self.state.nesting.pop(); }
             },
-            "start_random" => self.nesting.push(Nesting::StartRandom(token.span)),
+            "start_random" => self.state.nesting.push(Nesting::StartRandom(token.span)),
             "percent_chance" => {
-                let is_sibling_branch = match self.nesting.last() {
+                let is_sibling_branch = match self.state.nesting.last() {
                     Some(Nesting::PercentChance(_)) => true,
                     _ => false,
                 };
-                if is_sibling_branch { self.nesting.pop(); }
+                if is_sibling_branch { self.state.nesting.pop(); }
 
-                match self.nesting.last() {
+                match self.state.nesting.last() {
                     Some(Nesting::StartRandom(_)) => {},
                     nest => {
                         parse_error = Some(unbalanced_error("percent_chance", token, nest));
                     },
                 }
 
-                self.nesting.push(Nesting::PercentChance(token.span));
+                self.state.nesting.push(Nesting::PercentChance(token.span));
             },
             "end_random" => {
-                let needs_double_close = if let Some(Nesting::PercentChance(_)) = self.nesting.last() {
+                let needs_double_close = if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
                     true
                 } else { false };
-                if needs_double_close { self.nesting.pop(); }
+                if needs_double_close { self.state.nesting.pop(); }
 
                 let mut is_ok = false;
-                match self.nesting.last() {
+                match self.state.nesting.last() {
                     Some(Nesting::StartRandom(_)) => {
                         is_ok = true;
                     },
@@ -625,23 +683,23 @@ impl<'a> Checker<'a> {
                         parse_error = Some(unbalanced_error("end_random", token, nest));
                     },
                 }
-                if is_ok { self.nesting.pop(); }
+                if is_ok { self.state.nesting.pop(); }
             },
-            "#const" => self.expect = Expect::ConstName,
-            "#define" => self.expect = Expect::DefineName,
+            "#const" => self.state.expect(Expect::ConstName),
+            "#define" => self.state.expect(Expect::DefineName),
             _ => (),
         }
 
-        if self.current_token.is_some() {
-            self.token_arg_index += 1;
+        if self.state.current_token.is_some() {
+            self.state.token_arg_index += 1;
         }
 
         if let Some(ref token_type) = TOKENS.get(token.value) {
-            self.current_token = Some(token_type);
-            self.token_arg_index = 0;
+            self.state.current_token = Some(token_type);
+            self.state.token_arg_index = 0;
 
             if let TokenContext::Section = token_type.context() {
-                self.current_section = Some((*token, token_type.name));
+                self.state.current_section = Some((*token, token_type.name));
             }
         }
 
