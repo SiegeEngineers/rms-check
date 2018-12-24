@@ -295,6 +295,37 @@ impl Lint for IncludeLint {
     }
 }
 
+struct AttributeCaseLint {
+}
+impl AttributeCaseLint {
+    fn is_wrong_case(&self, value: &str) -> bool {
+        !TOKENS.contains_key(value) && TOKENS.contains_key(&value.to_lowercase())
+    }
+}
+impl Lint for AttributeCaseLint {
+    fn name(&self) -> &'static str { "attribute-case" }
+    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
+        if state.current_token.is_none() && self.is_wrong_case(token.value) {
+            return Some(token.error(format!("Unknown attribute `{}`", token.value))
+                        .suggest(Suggestion::from(token, "Attributes must be all lowercase".into()).replace(token.value.to_lowercase())));
+        }
+        None
+    }
+}
+
+#[allow(unused)]
+struct UnknownAttributeLint {
+}
+impl Lint for UnknownAttributeLint {
+    fn name(&self) -> &'static str { "unknown-attribute" }
+    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
+        if state.current_token.is_none() && !TOKENS.contains_key(&token.value.to_lowercase()) {
+            return Some(token.error(format!("Unknown attribute `{}`", token.value)));
+        }
+        None
+    }
+}
+
 #[derive(Default)]
 pub struct ParseState<'a> {
     /// Whether we're currently inside a comment.
@@ -363,6 +394,9 @@ impl<'a> Checker<'a> {
         checker
             .with_lint(Box::new(IncorrectSectionLint {}))
             .with_lint(Box::new(IncludeLint {}))
+            // buggy
+            // .with_lint(Box::new(UnknownAttributeLint {}))
+            .with_lint(Box::new(AttributeCaseLint {}))
     }
 
     pub fn with_lint(mut self, lint: Box<dyn Lint>) -> Self {
@@ -517,11 +551,6 @@ impl<'a> Checker<'a> {
             }
         }
 
-        if self.state.current_token.is_none() && !TOKENS.contains_key(token.value) && TOKENS.contains_key(&token.value.to_lowercase()) {
-            return Some(token.error(format!("Unknown attribute `{}`", token.value))
-                        .suggest(Suggestion::from(token, "Attributes must be all lowercase".into()).replace(token.value.to_lowercase())));
-        }
-
         if token.value == "/*" {
             let nest_err = self.state.nesting.iter()
                 .find_map(|n| if let Nesting::StartRandom(loc) = n {
@@ -574,14 +603,21 @@ impl<'a> Checker<'a> {
             _ => (),
         }
 
-        let lint_warning = self.lint_token(token);
-
         if token.value.starts_with("/*") {
             // Technically incorrect but the user most likely attempted to open a comment here,
             // so _not_ treating it as one would give lots of useless errors.
             // Instead we only mark this token as an incorrect comment.
             self.state.is_comment = true;
-        } else if token.value.ends_with("*/") {
+        }
+
+        let lint_warning = if self.state.is_comment {
+            // TODO allow lints to opt in to running inside comments
+            None
+        } else {
+            self.lint_token(token)
+        };
+
+        if token.value.ends_with("*/") {
             if !self.state.is_comment {
                 parse_error = Some(token.error("Unexpected closing `*/`".into()));
             } else {
