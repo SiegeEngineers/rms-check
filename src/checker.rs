@@ -389,7 +389,7 @@ impl<'a> Checker<'a> {
         // "**/" was probably meant to be a closing comment, but only <whitespace>*/ actually closes
         // comments.
         if token.value.len() > 2 && token.value.ends_with("*/") {
-            return Some(token.warning("Possibly unclosed comment, */ must be preceded by whitespace".into())
+            return Some(token.error("Possibly unclosed comment, */ must be preceded by whitespace".into())
                 .suggest(Suggestion::from(token, "Add a space before the */".into())
                     .replace(format!("{} */", &token.value[2..token.value.len() - 2]))));
         }
