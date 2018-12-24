@@ -539,27 +539,6 @@ impl<'a> Checker<'a> {
         };
         if warning.is_some() { return warning; }
 
-        // "/**" does not work to open a comment
-        if token.value.len() > 2 && token.value.starts_with("/*") {
-            let warning = token.error("Incorrect comment: there must be a space after the opening /*".into());
-            let (message, replacement) = if token.value.ends_with("*/") {
-                ("Add spaces at the start and end of the comment".into(),
-                 format!("/* {} */", &token.value[2..token.value.len() - 2]))
-            } else {
-                ("Add a space after the /*".into(),
-                 format!("/* {}", &token.value[2..]))
-            };
-            return Some(warning.suggest(Suggestion::from(token, message).replace(replacement)));
-        }
-
-        // "**/" was probably meant to be a closing comment, but only <whitespace>*/ actually closes
-        // comments.
-        if token.value.len() > 2 && token.value.ends_with("*/") {
-            return Some(token.error("Possibly unclosed comment, */ must be preceded by whitespace".into())
-                .suggest(Suggestion::from(token, "Add a space before the */".into())
-                    .replace(format!("{} */", &token.value[2..token.value.len() - 2]))));
-        }
-
         if token.value.starts_with('<') && token.value.ends_with('>') && !TOKENS.contains_key(token.value) {
             return Some(token.error(format!("Invalid section {}", token.value)));
         }
@@ -618,6 +597,17 @@ impl<'a> Checker<'a> {
             // so _not_ treating it as one would give lots of useless errors.
             // Instead we only mark this token as an incorrect comment.
             self.state.is_comment = true;
+            if token.value.len() > 2 {
+                let warning = token.error("Incorrect comment: there must be a space after the opening /*".into());
+                let (message, replacement) = if token.value.ends_with("*/") {
+                    ("Add spaces at the start and end of the comment".into(),
+                     format!("/* {} */", &token.value[2..token.value.len() - 2]))
+                } else {
+                    ("Add a space after the /*".into(),
+                     format!("/* {}", &token.value[2..]))
+                };
+                parse_error = Some(warning.suggest(Suggestion::from(token, message).replace(replacement)));
+            }
         }
 
         let lint_warning = self.lint_token(token);
@@ -627,6 +617,13 @@ impl<'a> Checker<'a> {
                 parse_error = Some(token.error("Unexpected closing `*/`".into()));
             } else {
                 self.state.is_comment = false;
+                // "**/" was probably meant to be a closing comment, but only <whitespace>*/ actually closes
+                // comments.
+                if token.value.len() > 2 && parse_error.is_none() {
+                    parse_error = Some(token.error("Possibly unclosed comment, */ must be preceded by whitespace".into())
+                        .suggest(Suggestion::from(token, "Add a space before the */".into())
+                            .replace(format!("{} */", &token.value[2..token.value.len() - 2]))));
+                }
             }
         }
 
