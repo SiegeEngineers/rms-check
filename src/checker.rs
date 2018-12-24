@@ -455,6 +455,21 @@ impl<'a> Checker<'a> {
                         .suggest(Suggestion::from(token, "Attributes must be all lowercase".into()).replace(token.value.to_lowercase())));
         }
 
+        if token.value == "/*" {
+            let nest_err = self.nesting.iter()
+                .find_map(|n| if let Nesting::StartRandom(loc) = n {
+                    Some(token.warning("Using comments inside `start_random` groups is potentially dangerous.".to_string())
+                        .note_at(*loc, "`start_random` opened here")
+                        .suggest(Suggestion::from(token, "Only #define constants in the `start_random` group, and then use `if` branches for the actual code.".to_string())))
+                } else {
+                    None
+                });
+
+            if nest_err.is_some() {
+                return nest_err;
+            }
+        }
+
         None
     }
 
@@ -499,14 +514,16 @@ impl<'a> Checker<'a> {
             "*/" => if !self.is_comment {
                 parse_error = Some(token.error("Unexpected closing `*/`".into()));
             } else {
-                self.is_comment = false
+                self.is_comment = false;
             },
             _ => (),
         }
 
         // TODO check whether this should happen
         // Before UP1.5 a parser bug could cause things inside comments to be parsed
-        if self.is_comment { return None }
+        if self.is_comment {
+            return parse_error.or(lint_warning);
+        }
 
         fn unbalanced_error(name: &str, token: &Word, nest: Option<&Nesting>) -> Warning {
             let msg = format!("Unbalanced `{}`", name);
