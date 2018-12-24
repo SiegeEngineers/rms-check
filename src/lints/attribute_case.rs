@@ -20,8 +20,10 @@ impl Lint for AttributeCaseLint {
     fn name(&self) -> &'static str { "attribute-case" }
     fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
         if state.current_token.is_none() && self.is_wrong_case(token.value) {
-            return Some(token.error(format!("Unknown attribute `{}`", token.value))
-                        .suggest(Suggestion::from(token, "Attributes must be all lowercase".into()).replace(token.value.to_lowercase())));
+            let suggestion = Suggestion::from(token, "Attributes must be all lowercase")
+                .replace(token.value.to_lowercase());
+            let message = format!("Unknown attribute `{}`", token.value);
+            return Some(token.error(message).suggest(suggestion));
         }
         None
     }

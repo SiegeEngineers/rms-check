@@ -92,22 +92,24 @@ impl Suggestion {
     }
 
     /// Create a suggestion.
-    pub fn new(start: ByteIndex, end: ByteIndex, message: String) -> Self {
+    pub fn new(start: ByteIndex, end: ByteIndex, message: impl ToString) -> Self {
+        let message = message.to_string();
         Suggestion { span: ByteSpan::new(start, end), message, replacement: AutoFixReplacement::None }
     }
     /// Create a suggestion applying to a specific token.
-    pub fn from(token: &Word, message: String) -> Self {
+    pub fn from(token: &Word, message: impl ToString) -> Self {
+        let message = message.to_string();
         Suggestion { span: token.span, message, replacement: AutoFixReplacement::None }
     }
     /// Specify a possible fix for the problem.
-    pub fn replace(mut self, replacement: String) -> Self {
-        self.replacement = AutoFixReplacement::Safe(replacement);
+    pub fn replace(mut self, replacement: impl ToString) -> Self {
+        self.replacement = AutoFixReplacement::Safe(replacement.to_string());
         self
     }
     /// Specify a possible fix for the problem, but one that may not be correct and requires some
     /// manual intervention.
-    pub fn replace_unsafe(mut self, replacement: String) -> Self {
-        self.replacement = AutoFixReplacement::Unsafe(replacement);
+    pub fn replace_unsafe(mut self, replacement: impl ToString) -> Self {
+        self.replacement = AutoFixReplacement::Unsafe(replacement.to_string());
         self
     }
 }
@@ -146,18 +148,18 @@ impl Warning {
 
     /// Create a new warning with severity "Warning".
     #[allow(unused)]
-    pub fn warning(span: ByteSpan, message: String) -> Self {
+    pub fn warning<S: AsRef<str>>(span: ByteSpan, message: S) -> Self {
         Warning {
-            diagnostic: Diagnostic::new_warning(message)
+            diagnostic: Diagnostic::new_warning(message.as_ref().to_string())
                 .with_label(Label::new_primary(span)),
             suggestions: vec![],
         }
     }
 
     /// Create a new warning with severity "Error".
-    pub fn error(span: ByteSpan, message: String) -> Self {
+    pub fn error<S: AsRef<str>>(span: ByteSpan, message: S) -> Self {
         Warning {
-            diagnostic: Diagnostic::new_error(message)
+            diagnostic: Diagnostic::new_error(message.as_ref().to_string())
                 .with_label(Label::new_primary(span)),
             suggestions: vec![],
         }
@@ -185,17 +187,17 @@ impl Warning {
 
 impl<'a> Word<'a> {
     /// Create a warning applying to this token.
-    pub fn warning(&self, message: String) -> Warning {
+    pub fn warning<S: AsRef<str>>(&self, message: S) -> Warning {
         Warning {
-            diagnostic: Diagnostic::new_warning(message)
+            diagnostic: Diagnostic::new_warning(message.as_ref().to_string())
                 .with_label(Label::new_primary(self.span)),
             suggestions: vec![],
         }
     }
     /// Create an error applying to this token.
-    pub fn error(&self, message: String) -> Warning {
+    pub fn error<S: AsRef<str>>(&self, message: S) -> Warning {
         Warning {
-            diagnostic: Diagnostic::new_error(message)
+            diagnostic: Diagnostic::new_error(message.as_ref().to_string())
                 .with_label(Label::new_primary(self.span)),
             suggestions: vec![],
         }
@@ -386,7 +388,7 @@ impl<'a> Checker<'a> {
                 if token.value.starts_with('(') {
                     let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
                     warn.suggest(
-                        Suggestion::from(token, "Did you forget the `rnd`?".into())
+                        Suggestion::from(token, "Did you forget the `rnd`?")
                         .replace(replacement.unwrap_or_else(|| format!("rnd{}", token.value)))
                     )
                 } else {
@@ -419,8 +421,8 @@ impl<'a> Checker<'a> {
                     .ok()
                     .map(|_| token.warning(format!("Expected a word, but got a number {}. This uses the number as the constant *name*, so it may not do what you expect.", token.value)))
                     .or_else(|| if token.value.chars().any(char::is_lowercase) {
-                        Some(token.warning("Using lowercase for constant names may cause confusion with attribute or command names.".into())
-                             .suggest(Suggestion::from(token, "Use uppercase for constants.".into())
+                        Some(token.warning("Using lowercase for constant names may cause confusion with attribute or command names.")
+                             .suggest(Suggestion::from(token, "Use uppercase for constants.")
                                       .replace(token.value.to_uppercase())))
                     } else {
                         None
@@ -490,8 +492,8 @@ impl<'a> Checker<'a> {
                 self.state.expect(Expect::None);
             },
             Expect::UnfinishedRnd(pos, val) => {
-                let suggestion = Suggestion::new(pos, token.end(), "rnd() must not contain spaces".into());
-                parse_error = Some(Warning::error(ByteSpan::new(pos, token.end()), "Incorrect rnd() call".into()).suggest(
+                let suggestion = Suggestion::new(pos, token.end(), "rnd() must not contain spaces");
+                parse_error = Some(Warning::error(ByteSpan::new(pos, token.end()), "Incorrect rnd() call").suggest(
                     match is_valid_rnd(&format!("{} {}", val, token.value)).1 {
                         Some(replacement) => suggestion.replace(replacement),
                         None => suggestion,
@@ -508,12 +510,12 @@ impl<'a> Checker<'a> {
             // Instead we only mark this token as an incorrect comment.
             self.state.is_comment = true;
             if token.value.len() > 2 {
-                let warning = token.error("Incorrect comment: there must be a space after the opening /*".into());
+                let warning = token.error("Incorrect comment: there must be a space after the opening /*");
                 let (message, replacement) = if token.value.ends_with("*/") {
-                    ("Add spaces at the start and end of the comment".into(),
+                    ("Add spaces at the start and end of the comment",
                      format!("/* {} */", &token.value[2..token.value.len() - 2]))
                 } else {
-                    ("Add a space after the /*".into(),
+                    ("Add a space after the /*",
                      format!("/* {}", &token.value[2..]))
                 };
                 parse_error = Some(warning.suggest(Suggestion::from(token, message).replace(replacement)));
@@ -524,14 +526,14 @@ impl<'a> Checker<'a> {
 
         if token.value.ends_with("*/") {
             if !self.state.is_comment {
-                parse_error = Some(token.error("Unexpected closing `*/`".into()));
+                parse_error = Some(token.error("Unexpected closing `*/`"));
             } else {
                 self.state.is_comment = false;
                 // "**/" was probably meant to be a closing comment, but only <whitespace>*/ actually closes
                 // comments.
                 if token.value.len() > 2 && parse_error.is_none() {
-                    parse_error = Some(token.error("Possibly unclosed comment, */ must be preceded by whitespace".into())
-                        .suggest(Suggestion::from(token, "Add a space before the */".into())
+                    parse_error = Some(token.error("Possibly unclosed comment, */ must be preceded by whitespace")
+                        .suggest(Suggestion::from(token, "Add a space before the */")
                             .replace(format!("{} */", &token.value[2..token.value.len() - 2]))));
                 }
             }

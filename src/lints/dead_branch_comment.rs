@@ -17,9 +17,10 @@ impl Lint for DeadBranchCommentLint {
 
         state.nesting.iter()
             .find_map(|n| if let Nesting::StartRandom(loc) = n {
-                Some(token.warning("Using comments inside `start_random` groups is potentially dangerous.".to_string())
+                let suggestion = Suggestion::from(token, "Only #define constants in the `start_random` group, and then use `if` branches for the actual code.");
+                Some(token.warning("Using comments inside `start_random` groups is potentially dangerous.")
                     .note_at(*loc, "`start_random` opened here")
-                    .suggest(Suggestion::from(token, "Only #define constants in the `start_random` group, and then use `if` branches for the actual code.".to_string())))
+                    .suggest(suggestion))
             } else {
                 None
             })
