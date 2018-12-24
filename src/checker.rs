@@ -279,6 +279,22 @@ impl Lint for IncorrectSectionLint {
     }
 }
 
+struct IncludeLint {
+}
+impl Lint for IncludeLint {
+    fn name(&self) -> &'static str { "include" }
+    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
+        match token.value {
+            "#include_drs" => Some(
+                token.error("#include_drs can only be used by builtin maps".into())),
+            "#include" => Some(
+                token.error("#include can only be used by builtin maps".into())
+                     .suggest(Suggestion::from(token, "If you're trying to make a map pack, use a map pack generator instead.".into()))),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct ParseState<'a> {
     /// Whether we're currently inside a comment.
@@ -346,6 +362,7 @@ impl<'a> Checker<'a> {
         }
         checker
             .with_lint(Box::new(IncorrectSectionLint {}))
+            .with_lint(Box::new(IncludeLint {}))
     }
 
     pub fn with_lint(mut self, lint: Box<dyn Lint>) -> Self {
@@ -482,14 +499,6 @@ impl<'a> Checker<'a> {
             return Some(token.error("Possibly unclosed comment, */ must be preceded by whitespace".into())
                 .suggest(Suggestion::from(token, "Add a space before the */".into())
                     .replace(format!("{} */", &token.value[2..token.value.len() - 2]))));
-        }
-
-        if token.value == "#include_drs" {
-            return Some(token.error("#include_drs can only be used by builtin maps".into()));
-        }
-        if token.value == "#include" {
-            return Some(token.error("#include can only be used by builtin maps".into())
-                .suggest(Suggestion::from(token, "If you're trying to make a map pack, use a map pack generator instead.".into())));
         }
 
         if token.value.starts_with('<') && token.value.ends_with('>') && !TOKENS.contains_key(token.value) {
