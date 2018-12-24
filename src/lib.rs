@@ -15,11 +15,7 @@ use checker::Checker;
 use codespan::{CodeMap, FileMap, FileName, ByteIndex, LineIndex, ColumnIndex, ByteOffset};
 use wordize::Wordize;
 
-pub use checker::{Severity, AutoFixReplacement, Suggestion, Warning};
-pub enum Compatibility {
-    Conquerors,
-    UserPatch15,
-}
+pub use checker::{Compatibility, Severity, AutoFixReplacement, Suggestion, Warning};
 
 pub struct RMSCheck {
     #[allow(unused)]
@@ -86,7 +82,8 @@ impl RMSCheck {
             .map(|map| Wordize::new(&map))
             .flatten();
 
-        let mut checker = Checker::new();
+        let mut checker = Checker::new()
+            .compatibility(self.compatibility);
         words.filter_map(|w| checker.write_token(&w)).collect()
     }
 }

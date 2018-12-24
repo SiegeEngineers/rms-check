@@ -10,6 +10,19 @@ pub use codespan_reporting::{
 use wordize::Word;
 use tokens::{ArgType, TokenType, TokenContext, TOKENS};
 
+#[derive(Clone, Copy)]
+pub enum Compatibility {
+    Conquerors,
+    UserPatch15,
+    All,
+}
+
+impl Default for Compatibility {
+    fn default() -> Compatibility {
+        Compatibility::Conquerors
+    }
+}
+
 /// Describes the next expected token.
 #[derive(Clone, Copy)]
 enum Expect<'a> {
@@ -233,6 +246,7 @@ enum Nesting {
 
 #[derive(Default)]
 pub struct Checker<'a> {
+    compatibility: Compatibility,
     /// Whether we're currently inside a comment.
     is_comment: bool,
     /// The amount of nested statements we entered, like `if`, `start_random`.
@@ -276,6 +290,10 @@ impl<'a> Checker<'a> {
             seen_defines,
             ..Default::default()
         }
+    }
+
+    pub fn compatibility(self, compatibility: Compatibility) -> Self {
+        Checker { compatibility, ..self }
     }
 
     /// Check if a constant was ever defined using #define.
