@@ -509,14 +509,17 @@ impl<'a> Checker<'a> {
 
         let lint_warning = self.lint_token(token);
 
-        match token.value {
-            "/*" => self.is_comment = true,
-            "*/" => if !self.is_comment {
+        if token.value.starts_with("/*") {
+            // Technically incorrect but the user most likely attempted to open a comment here,
+            // so _not_ treating it as one would give lots of useless errors.
+            // Instead we only mark this token as an incorrect comment.
+            self.is_comment = true;
+        } else if token.value.ends_with("*/") {
+            if !self.is_comment {
                 parse_error = Some(token.error("Unexpected closing `*/`".into()));
             } else {
                 self.is_comment = false;
-            },
-            _ => (),
+            }
         }
 
         // TODO check whether this should happen
