@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use strsim::levenshtein;
+use lints;
 
 use codespan::{ByteSpan, ByteIndex};
 pub use codespan_reporting::{
@@ -25,7 +26,7 @@ impl Default for Compatibility {
 
 /// Describes the next expected token.
 #[derive(Clone, Copy)]
-enum Expect<'a> {
+pub enum Expect<'a> {
     /// No expectations!
     None,
     /// A #define name.
@@ -91,21 +92,21 @@ impl Suggestion {
     }
 
     /// Create a suggestion.
-    fn new(start: ByteIndex, end: ByteIndex, message: String) -> Self {
+    pub fn new(start: ByteIndex, end: ByteIndex, message: String) -> Self {
         Suggestion { span: ByteSpan::new(start, end), message, replacement: AutoFixReplacement::None }
     }
     /// Create a suggestion applying to a specific token.
-    fn from(token: &Word, message: String) -> Self {
+    pub fn from(token: &Word, message: String) -> Self {
         Suggestion { span: token.span, message, replacement: AutoFixReplacement::None }
     }
     /// Specify a possible fix for the problem.
-    fn replace(mut self, replacement: String) -> Self {
+    pub fn replace(mut self, replacement: String) -> Self {
         self.replacement = AutoFixReplacement::Safe(replacement);
         self
     }
     /// Specify a possible fix for the problem, but one that may not be correct and requires some
     /// manual intervention.
-    fn replace_unsafe(mut self, replacement: String) -> Self {
+    pub fn replace_unsafe(mut self, replacement: String) -> Self {
         self.replacement = AutoFixReplacement::Unsafe(replacement);
         self
     }
@@ -145,7 +146,7 @@ impl Warning {
 
     /// Create a new warning with severity "Warning".
     #[allow(unused)]
-    fn warning(span: ByteSpan, message: String) -> Self {
+    pub fn warning(span: ByteSpan, message: String) -> Self {
         Warning {
             diagnostic: Diagnostic::new_warning(message)
                 .with_label(Label::new_primary(span)),
@@ -154,7 +155,7 @@ impl Warning {
     }
 
     /// Create a new warning with severity "Error".
-    fn error(span: ByteSpan, message: String) -> Self {
+    pub fn error(span: ByteSpan, message: String) -> Self {
         Warning {
             diagnostic: Diagnostic::new_error(message)
                 .with_label(Label::new_primary(span)),
@@ -163,13 +164,13 @@ impl Warning {
     }
 
     /// Define a replacement suggestion for this warning.
-    fn suggest(mut self, suggestion: Suggestion) -> Self {
+    pub fn suggest(mut self, suggestion: Suggestion) -> Self {
         self.suggestions.push(suggestion);
         self
     }
 
     /// Add a note referencing a snippet of code.
-    fn note_at(mut self, span: ByteSpan, message: &str) -> Self {
+    pub fn note_at(mut self, span: ByteSpan, message: &str) -> Self {
         self.diagnostic = self.diagnostic.with_label(
             Label::new_secondary(span).with_message(message)
         );
@@ -240,7 +241,7 @@ fn meant<'a>(actual: &str, possible: impl Iterator<Item = &'a String>) -> Option
 }
 
 #[derive(Debug)]
-enum Nesting {
+pub enum Nesting {
     If(ByteSpan),
     ElseIf(ByteSpan),
     Else(ByteSpan),
@@ -249,121 +250,30 @@ enum Nesting {
     Brace(ByteSpan),
 }
 
-trait Lint {
+pub trait Lint {
     fn name(&self) -> &'static str;
     fn run_inside_comments(&self) -> bool { false }
     fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning>;
 }
 
-struct IncorrectSectionLint {}
-impl Lint for IncorrectSectionLint {
-    fn name(&self) -> &'static str {
-        "incorrect-section"
-    }
-    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
-        if let Some(current_token) = state.current_token {
-            if let TokenContext::Command(Some(expected_section)) = current_token.context() {
-                match state.current_section {
-                    Some((section_token, ref current_section)) => {
-                        if current_section != expected_section {
-                            return Some(token.error(format!("Command is invalid in section {}, it can only appear in {}", current_section, expected_section))
-                                        .note_at(section_token.span, "Section started here"));
-                        }
-                    },
-                    None => {
-                        return Some(token.error(format!("Command can only appear in section {}, but no section has been started.", expected_section)));
-                    }
-                }
-            }
-        }
-        None
-    }
-}
-
-struct IncludeLint {
-}
-impl Lint for IncludeLint {
-    fn name(&self) -> &'static str { "include" }
-    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
-        match token.value {
-            "#include_drs" => Some(
-                token.error("#include_drs can only be used by builtin maps".into())),
-            "#include" => Some(
-                token.error("#include can only be used by builtin maps".into())
-                     .suggest(Suggestion::from(token, "If you're trying to make a map pack, use a map pack generator instead.".into()))),
-            _ => None,
-        }
-    }
-}
-
-struct AttributeCaseLint {
-}
-impl AttributeCaseLint {
-    fn is_wrong_case(&self, value: &str) -> bool {
-        !TOKENS.contains_key(value) && TOKENS.contains_key(&value.to_lowercase())
-    }
-}
-impl Lint for AttributeCaseLint {
-    fn name(&self) -> &'static str { "attribute-case" }
-    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
-        if state.current_token.is_none() && self.is_wrong_case(token.value) {
-            return Some(token.error(format!("Unknown attribute `{}`", token.value))
-                        .suggest(Suggestion::from(token, "Attributes must be all lowercase".into()).replace(token.value.to_lowercase())));
-        }
-        None
-    }
-}
-
-#[allow(unused)]
-struct UnknownAttributeLint {
-}
-impl Lint for UnknownAttributeLint {
-    fn name(&self) -> &'static str { "unknown-attribute" }
-    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
-        if state.current_token.is_none() && !TOKENS.contains_key(&token.value.to_lowercase()) {
-            return Some(token.error(format!("Unknown attribute `{}`", token.value)));
-        }
-        None
-    }
-}
-
-struct DeadBranchCommentLint {
-}
-impl Lint for DeadBranchCommentLint {
-    fn name(&self) -> &'static str { "dead-comment" }
-    fn run_inside_comments(&self) -> bool { true }
-    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
-        if token.value != "/*" { return None; }
-
-        state.nesting.iter()
-            .find_map(|n| if let Nesting::StartRandom(loc) = n {
-                Some(token.warning("Using comments inside `start_random` groups is potentially dangerous.".to_string())
-                    .note_at(*loc, "`start_random` opened here")
-                    .suggest(Suggestion::from(token, "Only #define constants in the `start_random` group, and then use `if` branches for the actual code.".to_string())))
-            } else {
-                None
-            })
-    }
-}
-
 #[derive(Default)]
 pub struct ParseState<'a> {
     /// Whether we're currently inside a comment.
-    is_comment: bool,
+    pub is_comment: bool,
     /// The amount of nested statements we entered, like `if`, `start_random`.
-    nesting: Vec<Nesting>,
+    pub nesting: Vec<Nesting>,
     /// The token type that we are currently reading arguments for.
-    current_token: Option<&'static TokenType>,
+    pub current_token: Option<&'static TokenType>,
     /// The amount of arguments we've read.
-    token_arg_index: u8,
+    pub token_arg_index: u8,
     /// The type of token we expect to see next.
-    expect: Expect<'a>,
+    pub expect: Expect<'a>,
     /// The current <SECTION>, as well as its opening token.
-    current_section: Option<(Word<'a>, &'static str)>,
+    pub current_section: Option<(Word<'a>, &'static str)>,
     /// List of #const definitions we've seen so far.
-    seen_consts: HashSet<String>,
+    pub seen_consts: HashSet<String>,
     /// List of #define definitions we've seen so far.
-    seen_defines: HashSet<String>,
+    pub seen_defines: HashSet<String>,
 }
 
 impl<'a> ParseState<'a> {
@@ -412,12 +322,12 @@ impl<'a> Checker<'a> {
             checker.state.define(name);
         }
         checker
-            .with_lint(Box::new(IncorrectSectionLint {}))
-            .with_lint(Box::new(IncludeLint {}))
+            .with_lint(Box::new(lints::IncorrectSectionLint {}))
+            .with_lint(Box::new(lints::IncludeLint {}))
             // buggy
-            // .with_lint(Box::new(UnknownAttributeLint {}))
-            .with_lint(Box::new(AttributeCaseLint {}))
-            .with_lint(Box::new(DeadBranchCommentLint {}))
+            // .with_lint(Box::new(lints::UnknownAttributeLint {}))
+            .with_lint(Box::new(lints::AttributeCaseLint {}))
+            .with_lint(Box::new(lints::DeadBranchCommentLint {}))
     }
 
     pub fn with_lint(mut self, lint: Box<dyn Lint>) -> Self {

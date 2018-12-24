@@ -7,6 +7,7 @@ extern crate strsim;
 mod tokens;
 mod wordize;
 mod checker;
+mod lints;
 
 use std::io::Result;
 use std::sync::Arc;
@@ -15,7 +16,24 @@ use checker::Checker;
 use codespan::{CodeMap, FileMap, FileName, ByteIndex, LineIndex, ColumnIndex, ByteOffset};
 use wordize::Wordize;
 
-pub use checker::{Compatibility, Severity, AutoFixReplacement, Suggestion, Warning};
+pub use wordize::Word;
+pub use checker::{
+    Compatibility,
+    Severity,
+    AutoFixReplacement,
+    Suggestion,
+    Warning,
+    Lint,
+    ParseState,
+    Nesting,
+    Expect,
+};
+pub use tokens::{
+    ArgType,
+    TokenType,
+    TokenContext,
+    TOKENS,
+};
 
 pub struct RMSCheck {
     #[allow(unused)]
