@@ -35,24 +35,56 @@ pub use tokens::{
     TOKENS,
 };
 
-pub struct RMSCheck {
-    #[allow(unused)]
-    compatibility: Compatibility,
+pub struct RMSCheckResult {
+    warnings: Vec<Warning>,
+    codemap: CodeMap,
+}
+
+impl RMSCheckResult {
+    pub fn codemap(&self) -> &CodeMap {
+        &self.codemap
+    }
+
+    pub fn has_warnings(&self) -> bool {
+        !self.warnings.is_empty()
+    }
+
+    pub fn resolve_position(&self, index: ByteIndex) -> Option<(LineIndex, ColumnIndex)> {
+        let file = self.codemap.find_file(index);
+        file.and_then(|f| f.location(index).ok())
+    }
+
+    pub fn resolve_offset(&self, index: ByteIndex) -> Option<ByteOffset> {
+        let file = self.codemap.find_file(index);
+        file.and_then(|f| {
+            f.location(index).ok().and_then(|(l, c)|
+                f.offset(l, c).ok()
+            )
+        })
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Warning> {
+        self.warnings.iter()
+    }
+}
+
+pub struct RMSCheck<'a> {
+    checker: Checker<'a>,
     codemap: CodeMap,
     filemaps: Vec<Arc<FileMap>>,
 }
 
-impl Default for RMSCheck {
-    fn default() -> RMSCheck {
+impl<'a> Default for RMSCheck<'a> {
+    fn default() -> RMSCheck<'a> {
         RMSCheck {
-            compatibility: Compatibility::Conquerors,
+            checker: Checker::new(),
             codemap: CodeMap::new(),
             filemaps: vec![],
         }
     }
 }
 
-impl RMSCheck {
+impl<'a> RMSCheck<'a> {
     pub fn new() -> Self {
         let check = RMSCheck::default();
         check.add_source(
@@ -62,7 +94,17 @@ impl RMSCheck {
     }
 
     pub fn compatibility(self, compatibility: Compatibility) -> Self {
-        Self { compatibility, ..self }
+        Self {
+            checker: self.checker.compatibility(compatibility),
+            ..self
+        }
+    }
+
+    pub fn with_lint(self, lint: Box<Lint>) -> Self {
+        Self {
+            checker: self.checker.with_lint(lint),
+            ..self
+        }
     }
 
     pub fn add_source(mut self, name: &str, source: &str) -> Self {
@@ -81,33 +123,23 @@ impl RMSCheck {
         &self.codemap
     }
 
-    pub fn resolve_position(&self, index: ByteIndex) -> Option<(LineIndex, ColumnIndex)> {
-        let file = self.codemap.find_file(index);
-        file.and_then(|f| f.location(index).ok())
-    }
-
-    pub fn resolve_offset(&self, index: ByteIndex) -> Option<ByteOffset> {
-        let file = self.codemap.find_file(index);
-        file.and_then(|f| {
-            f.location(index).ok().and_then(|(l, c)|
-                f.offset(l, c).ok()
-            )
-        })
-    }
-
-    pub fn check(&self) -> Vec<Warning> {
+    pub fn check(self) -> RMSCheckResult {
+        let mut checker = self.checker;
         let words = self.filemaps.iter()
             .map(|map| Wordize::new(&map))
             .flatten();
 
-        let mut checker = Checker::new()
-            .compatibility(self.compatibility);
-        words.filter_map(|w| checker.write_token(&w)).collect()
+        let warnings = words.filter_map(|w| checker.write_token(&w)).collect();
+
+        RMSCheckResult {
+            codemap: self.codemap,
+            warnings,
+        }
     }
 }
 
 /// Check a random map script for errors or other issues.
-pub fn check(source: &str, compatibility: Compatibility) -> Vec<Warning> {
+pub fn check(source: &str, compatibility: Compatibility) -> RMSCheckResult {
     let checker = RMSCheck::new()
         .compatibility(compatibility)
         .add_source("source.rms", source);

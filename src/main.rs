@@ -40,10 +40,10 @@ struct Cli {
 fn cli_check(args: Cli) -> Result<()> {
     let checker = RMSCheck::new()
         .add_file(args.file.into())?;
-    let warnings = checker.check();
-    let has_warnings = !warnings.is_empty();
+    let result = checker.check();
+    let has_warnings = result.has_warnings();
 
-    cli_report(&checker.codemap(), warnings);
+    cli_report(result);
 
     if has_warnings {
         bail!("There were warnings");
@@ -59,35 +59,32 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
 
     let checker = RMSCheck::new()
         .add_file(PathBuf::from(&args.file))?;
-    let warnings = checker.check();
-    let has_warnings = !warnings.is_empty();
+    let result = checker.check();
 
     let mut splicer = Multisplice::new(&source);
 
-    if !has_warnings {
+    if !result.has_warnings() {
         // All good!
         return Ok(());
     }
 
-    for warn in &warnings {
-        // use warnings[i] instead of an iterator so the lifetime of
-        // new_value is long enough.
+    for warn in result.iter() {
         for suggestion in warn.suggestions() {
             match suggestion.replacement() {
                 AutoFixReplacement::Safe(ref new_value) => {
-                    let start = checker.resolve_position(suggestion.start()).unwrap();
-                    let end = checker.resolve_position(suggestion.end()).unwrap();
+                    let start = result.resolve_position(suggestion.start()).unwrap();
+                    let end = result.resolve_position(suggestion.end()).unwrap();
                     eprintln!("autofix {}:{} → {}:{} to {}", start.0.number(), start.1.number(), end.0.number(), end.1.number(), new_value);
-                    let start = checker.resolve_offset(suggestion.start()).unwrap();
-                    let end = checker.resolve_offset(suggestion.end()).unwrap();
+                    let start = result.resolve_offset(suggestion.start()).unwrap();
+                    let end = result.resolve_offset(suggestion.end()).unwrap();
                     splicer.splice(start.to_usize(), end.to_usize(), new_value);
                 },
                 AutoFixReplacement::Unsafe(ref new_value) if args.fix_unsafe => {
-                    let start = checker.resolve_position(suggestion.start()).unwrap();
-                    let end = checker.resolve_position(suggestion.end()).unwrap();
+                    let start = result.resolve_position(suggestion.start()).unwrap();
+                    let end = result.resolve_position(suggestion.end()).unwrap();
                     eprintln!("UNSAFE autofix {}:{} → {}:{} to {}", start.0.number(), start.1.number(), end.0.number(), end.1.number(), new_value);
-                    let start = checker.resolve_offset(suggestion.start()).unwrap();
-                    let end = checker.resolve_offset(suggestion.end()).unwrap();
+                    let start = result.resolve_offset(suggestion.start()).unwrap();
+                    let end = result.resolve_offset(suggestion.end()).unwrap();
                     splicer.splice(start.to_usize(), end.to_usize(), new_value);
                 },
                 _ => (),

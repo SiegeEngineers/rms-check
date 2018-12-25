@@ -1,8 +1,7 @@
 use ansi_term::Style;
 use ansi_term::Colour::Cyan;
-use codespan::CodeMap;
 use termcolor::{StandardStream, ColorChoice};
-use rms_check::{Severity, AutoFixReplacement, Suggestion, Warning};
+use rms_check::{Severity, AutoFixReplacement, Suggestion, RMSCheckResult};
 
 fn format_suggestion(suggestion: &Suggestion) -> String {
     let mut string = format!("{}: {}", Cyan.paint("suggestion"), suggestion.message());
@@ -12,17 +11,17 @@ fn format_suggestion(suggestion: &Suggestion) -> String {
     string
 }
 
-pub fn report(codemap: &CodeMap, warnings: Vec<Warning>) {
+pub fn report(result: RMSCheckResult) {
     let mut num_warnings = 0;
     let mut num_errors = 0;
     let mut fixable_warnings = 0;
     let mut fixable_errors = 0;
 
     let mut stream = StandardStream::stdout(ColorChoice::Auto);
-    for warn in warnings {
+    for warn in result.iter() {
         codespan_reporting::emit(
             &mut stream,
-            codemap,
+            result.codemap(),
             warn.diagnostic()).unwrap();
 
         match warn.severity() {

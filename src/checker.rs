@@ -325,7 +325,7 @@ impl<'a> Checker<'a> {
         }
         checker
             .with_lint(Box::new(lints::IncorrectSectionLint {}))
-            .with_lint(Box::new(lints::IncludeLint {}))
+            .with_lint(Box::new(lints::IncludeLint::new()))
             // buggy
             // .with_lint(Box::new(lints::UnknownAttributeLint {}))
             .with_lint(Box::new(lints::AttributeCaseLint {}))
