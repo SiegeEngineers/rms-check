@@ -330,6 +330,7 @@ impl<'a> Checker<'a> {
             // .with_lint(Box::new(lints::UnknownAttributeLint {}))
             .with_lint(Box::new(lints::AttributeCaseLint {}))
             .with_lint(Box::new(lints::DeadBranchCommentLint {}))
+            .with_lint(Box::new(lints::CommentContentsLint::new()))
     }
 
     pub fn with_lint(mut self, lint: Box<dyn Lint>) -> Self {
