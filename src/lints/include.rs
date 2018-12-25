@@ -34,6 +34,7 @@ impl Lint for IncludeLint {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use codespan::{LineIndex, ColumnIndex};
     use super::super::super::{RMSCheck, Severity};
     use super::IncludeLint;
 
@@ -51,12 +52,14 @@ mod tests {
         assert_eq!(first.diagnostic().severity, Severity::Error);
         assert_eq!(first.diagnostic().code, Some("include".to_string()));
         assert_eq!(first.message(), "#include_drs can only be used by builtin maps");
-        // assert_eq!(first.diagnostic().start().0.number(), 1);
-        // assert_eq!(first.diagnostic().start().1.number(), 1);
+        let first_span = first.diagnostic().labels[0].span;
+        assert_eq!(result.resolve_position(first_span.start()).unwrap().0, LineIndex(0));
+        assert_eq!(result.resolve_position(first_span.start()).unwrap().1, ColumnIndex(0));
         assert_eq!(second.diagnostic().severity, Severity::Error);
         assert_eq!(second.diagnostic().code, Some("include".to_string()));
         assert_eq!(second.message(), "#include can only be used by builtin maps");
-        // assert_eq!(second.diagnostic().start().0.number(), 3);
-        // assert_eq!(second.diagnostic().start().1.number(), 1);
+        let second_span = second.diagnostic().labels[0].span;
+        assert_eq!(result.resolve_position(second_span.start()).unwrap().0, LineIndex(2));
+        assert_eq!(result.resolve_position(second_span.start()).unwrap().1, ColumnIndex(0));
     }
 }

@@ -76,21 +76,25 @@ pub struct RMSCheck<'a> {
 
 impl<'a> Default for RMSCheck<'a> {
     fn default() -> RMSCheck<'a> {
-        RMSCheck {
-            checker: Checker::new(),
-            codemap: CodeMap::new(),
-            filemaps: vec![],
-        }
+        RMSCheck::new()
+            .with_lint(Box::new(lints::IncorrectSectionLint {}))
+            .with_lint(Box::new(lints::IncludeLint::new()))
+            // buggy
+            // .with_lint(Box::new(lints::UnknownAttributeLint {}))
+            .with_lint(Box::new(lints::AttributeCaseLint {}))
+            .with_lint(Box::new(lints::DeadBranchCommentLint {}))
+            .with_lint(Box::new(lints::CommentContentsLint::new()))
     }
 }
 
 impl<'a> RMSCheck<'a> {
     pub fn new() -> Self {
-        let check = RMSCheck::default();
-        check.add_source(
-            "random_map.def",
-            include_str!("random_map.def")
-        )
+        let check = RMSCheck {
+            checker: Checker::new(),
+            codemap: CodeMap::new(),
+            filemaps: vec![],
+        };
+        check.add_source("random_map.def", include_str!("random_map.def"))
     }
 
     pub fn compatibility(self, compatibility: Compatibility) -> Self {

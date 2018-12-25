@@ -1,0 +1,11 @@
+/*
+ Comment!
+ some remark about ai_info_map_type */
+
+/*
+ Comment!
+ some remark about max_number_of_cliffs */
+start_random
+  percent_chance 50 #define X /* GRASS3 */
+  percent_chance 50 #define Y
+end_random

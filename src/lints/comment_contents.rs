@@ -58,3 +58,29 @@ impl Lint for CommentContentsLint {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use super::super::super::{RMSCheck, Severity};
+    use super::CommentContentsLint;
+
+    #[test]
+    fn comment_contents() {
+        let result = RMSCheck::new()
+            .with_lint(Box::new(CommentContentsLint::new()))
+            .add_file(PathBuf::from("./tests/rms/comment-contents.rms")).unwrap()
+            .check();
+
+        let mut warnings = result.iter();
+        let first = warnings.next().unwrap();
+        let second = warnings.next().unwrap();
+        assert!(warnings.next().is_none());
+        assert_eq!(first.diagnostic().severity, Severity::Warning);
+        assert_eq!(first.diagnostic().code, Some("comment-contents".to_string()));
+        assert_eq!(first.message(), "This close comment may be ignored because a previous command is expecting 0 more argument(s)");
+        assert_eq!(second.diagnostic().severity, Severity::Warning);
+        assert_eq!(second.diagnostic().code, Some("comment-contents".to_string()));
+        assert_eq!(second.message(), "Using constant names in comments can be dangerous, because the game may interpret them as other tokens instead.");
+    }
+}

@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use strsim::levenshtein;
-use lints;
 
 use codespan::{ByteSpan, ByteIndex};
 pub use codespan_reporting::{
@@ -324,13 +323,6 @@ impl<'a> Checker<'a> {
             checker.state.define(name);
         }
         checker
-            .with_lint(Box::new(lints::IncorrectSectionLint {}))
-            .with_lint(Box::new(lints::IncludeLint::new()))
-            // buggy
-            // .with_lint(Box::new(lints::UnknownAttributeLint {}))
-            .with_lint(Box::new(lints::AttributeCaseLint {}))
-            .with_lint(Box::new(lints::DeadBranchCommentLint {}))
-            .with_lint(Box::new(lints::CommentContentsLint::new()))
     }
 
     pub fn with_lint(mut self, lint: Box<dyn Lint>) -> Self {
