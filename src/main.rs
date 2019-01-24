@@ -38,7 +38,7 @@ struct Cli {
 }
 
 fn cli_check(args: Cli) -> Result<()> {
-    let checker = RMSCheck::new()
+    let checker = RMSCheck::default()
         .add_file(args.file.into())?;
     let result = checker.check();
     let has_warnings = result.has_warnings();
@@ -57,7 +57,7 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
     input_file.read_to_end(&mut bytes)?;
     let source = String::from_utf8_lossy(&bytes);
 
-    let checker = RMSCheck::new()
+    let checker = RMSCheck::default()
         .add_file(PathBuf::from(&args.file))?;
     let result = checker.check();
 

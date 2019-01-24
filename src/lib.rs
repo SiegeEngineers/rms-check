@@ -77,13 +77,13 @@ pub struct RMSCheck<'a> {
 impl<'a> Default for RMSCheck<'a> {
     fn default() -> RMSCheck<'a> {
         RMSCheck::new()
-            .with_lint(Box::new(lints::IncorrectSectionLint {}))
-            .with_lint(Box::new(lints::IncludeLint::new()))
-            // buggy
-            // .with_lint(Box::new(lints::UnknownAttributeLint {}))
             .with_lint(Box::new(lints::AttributeCaseLint {}))
-            .with_lint(Box::new(lints::DeadBranchCommentLint {}))
             .with_lint(Box::new(lints::CommentContentsLint::new()))
+            .with_lint(Box::new(lints::DeadBranchCommentLint {}))
+            .with_lint(Box::new(lints::IncludeLint::new()))
+            .with_lint(Box::new(lints::IncorrectSectionLint {}))
+            // .with_lint(Box::new(lints::UnknownAttributeLint {}))
+            // buggy
     }
 }
 
@@ -144,7 +144,7 @@ impl<'a> RMSCheck<'a> {
 
 /// Check a random map script for errors or other issues.
 pub fn check(source: &str, compatibility: Compatibility) -> RMSCheckResult {
-    let checker = RMSCheck::new()
+    let checker = RMSCheck::default()
         .compatibility(compatibility)
         .add_source("source.rms", source);
 
