@@ -1,0 +1,5 @@
+<PLAYER_SETUP>
+create_object SCOUT {
+}
+
+<LAND_GENERATION> random_placement

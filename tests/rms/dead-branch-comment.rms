@@ -1,0 +1,15 @@
+<PLAYER_SETUP>
+#define XYZ
+if XYZ
+  /* doing endif in a possibly dead branch */
+  random_placement
+endif
+<OBJECTS_GENERATION>
+start_random
+percent_chance 50
+  create_object SCOUT { set_place_for_every_player number_of_objects 1 }
+  /* doing end_random in a possibly dead branch */
+  create_object JOAN_OF_ARC { set_place_for_every_player number_of_objects 1 }
+percent_chance 50
+  create_object MAMELUKE { set_place_for_every_player number_of_objects 1 }
+end_random

@@ -1,0 +1,6 @@
+<OBJECTS_GENERATION>
+create_object SCOUT {
+  number_of_groups 10
+  number_of_Objects 10
+  number_of_whatevers 10
+}
