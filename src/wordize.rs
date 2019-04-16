@@ -82,7 +82,7 @@ impl<'a> Iterator for Wordize<'a> {
 
 #[cfg(test)]
 mod tests {
-    use wordize::Wordize;
+    use super::*;
     use codespan::{FileMap, FileName, LineIndex, ColumnIndex};
 
     #[test]

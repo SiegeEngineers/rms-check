@@ -5,6 +5,7 @@ authors = ["Renée Kooi <renee@kooi.me>"]
 license = "GPL-3.0"
 description = "Detect common problems with AoE Random Map Scripts"
 repository = "https://github.com/goto-bus-stop/rms-check.git"
+edition = "2018"
 
 [dependencies]
 ansi_term = "^0.11.0"

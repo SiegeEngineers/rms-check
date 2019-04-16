@@ -1,9 +1,3 @@
-extern crate ansi_term;
-extern crate codespan;
-extern crate codespan_reporting;
-#[macro_use] extern crate lazy_static;
-extern crate strsim;
-
 mod tokens;
 mod wordize;
 mod checker;
@@ -12,12 +6,12 @@ mod lints;
 use std::io::Result;
 use std::sync::Arc;
 use std::path::PathBuf;
-use checker::Checker;
 use codespan::{CodeMap, FileMap, FileName, ByteIndex, LineIndex, ColumnIndex, ByteOffset};
-use wordize::Wordize;
+use crate::checker::Checker;
+use crate::wordize::Wordize;
 
-pub use wordize::Word;
-pub use checker::{
+pub use crate::wordize::Word;
+pub use crate::checker::{
     Compatibility,
     Severity,
     AutoFixReplacement,
@@ -28,7 +22,7 @@ pub use checker::{
     Nesting,
     Expect,
 };
-pub use tokens::{
+pub use crate::tokens::{
     ArgType,
     TokenType,
     TokenContext,

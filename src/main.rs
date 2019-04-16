@@ -4,21 +4,13 @@
 //! rms-check "/path/to/aoc/Random/Everything_Random_v4.3.rms"
 //! ```
 
-extern crate ansi_term;
-extern crate codespan;
-extern crate codespan_reporting;
-extern crate multisplice;
-#[macro_use] extern crate quicli;
-extern crate rms_check;
-extern crate termcolor;
-
 mod cli_reporter;
 
 use std::fs::{File, remove_file};
 use std::io::Read;
 use std::path::PathBuf;
 use rms_check::{RMSCheck, AutoFixReplacement};
-use quicli::prelude::*;
+use quicli::{prelude::*, main};
 use cli_reporter::report as cli_report;
 use multisplice::Multisplice;
 

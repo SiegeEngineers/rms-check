@@ -7,8 +7,8 @@ pub use codespan_reporting::{
     Severity,
     Label,
 };
-use wordize::Word;
-use tokens::{ArgType, TokenType, TokenContext, TOKENS};
+use crate::tokens::{ArgType, TokenType, TokenContext, TOKENS};
+use crate::wordize::Word;
 
 #[derive(Clone, Copy)]
 pub enum Compatibility {

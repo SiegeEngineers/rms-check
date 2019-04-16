@@ -1,9 +1,3 @@
-#![feature(use_extern_macros)]
-extern crate wasm_bindgen;
-extern crate serde_json;
-#[macro_use] extern crate serde_derive;
-extern crate rms_check;
-
 use wasm_bindgen::prelude::*;
 use rms_check::check as check_internal;
 use rms_check::{Pos, Severity, AutoFixReplacement, Suggestion, Warning};
