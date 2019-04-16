@@ -9,7 +9,7 @@ mod cli_reporter;
 use std::fs::{File, remove_file};
 use std::io::Read;
 use std::path::PathBuf;
-use rms_check::{RMSCheck, AutoFixReplacement};
+use rms_check::{RMSCheck, Compatibility, AutoFixReplacement};
 use quicli::{prelude::*, main};
 use cli_reporter::report as cli_report;
 use multisplice::Multisplice;
@@ -27,10 +27,34 @@ struct Cli {
     fix_unsafe: bool,
     /// The file to check.
     file: String,
+
+    #[structopt(long = "aoc")]
+    aoc: bool,
+    #[structopt(long = "up14")]
+    userpatch14: bool,
+    #[structopt(long = "up15")]
+    userpatch15: bool,
+    #[structopt(long = "hd")]
+    hd_edition: bool,
+}
+
+fn compat(args: &Cli) -> Compatibility {
+    if args.hd_edition {
+        Compatibility::HDEdition
+    } else if args.userpatch14 {
+        Compatibility::UserPatch14
+    } else if args.userpatch15 {
+        Compatibility::UserPatch15
+    } else if args.aoc {
+        Compatibility::Conquerors
+    } else {
+        Compatibility::All
+    }
 }
 
 fn cli_check(args: Cli) -> Result<()> {
     let checker = RMSCheck::default()
+        .compatibility(compat(&args))
         .add_file(args.file.into())?;
     let result = checker.check();
     let has_warnings = result.has_warnings();
@@ -50,6 +74,7 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
     let source = String::from_utf8_lossy(&bytes);
 
     let checker = RMSCheck::default()
+        .compatibility(compat(&args))
         .add_file(PathBuf::from(&args.file))?;
     let result = checker.check();
 

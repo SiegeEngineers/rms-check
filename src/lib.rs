@@ -84,7 +84,7 @@ impl<'a> Default for RMSCheck<'a> {
 impl<'a> RMSCheck<'a> {
     pub fn new() -> Self {
         let check = RMSCheck {
-            checker: Checker::new(),
+            checker: Checker::default(),
             codemap: CodeMap::new(),
             filemaps: vec![],
         };
@@ -122,7 +122,7 @@ impl<'a> RMSCheck<'a> {
     }
 
     pub fn check(self) -> RMSCheckResult {
-        let mut checker = self.checker;
+        let mut checker = self.checker.build();
         let words = self.filemaps.iter()
             .map(|map| Wordize::new(&map))
             .flatten();

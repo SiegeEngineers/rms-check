@@ -10,10 +10,12 @@ pub use codespan_reporting::{
 use crate::tokens::{ArgType, TokenType, TokenContext, TOKENS};
 use crate::wordize::Word;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Compatibility {
     Conquerors,
+    UserPatch14,
     UserPatch15,
+    HDEdition,
     All,
 }
 
@@ -275,9 +277,14 @@ pub struct ParseState<'a> {
     pub seen_consts: HashSet<String>,
     /// List of #define definitions we've seen so far.
     pub seen_defines: HashSet<String>,
+    /// List of builtin optional definitions.
+    pub option_defines: HashSet<String>,
 }
 
 impl<'a> ParseState<'a> {
+    pub fn optional_define(&mut self, name: impl ToString) {
+        self.option_defines.insert(name.to_string());
+    }
     pub fn define(&mut self, name: impl ToString) {
         self.seen_defines.insert(name.to_string());
     }
@@ -286,6 +293,9 @@ impl<'a> ParseState<'a> {
     }
     pub fn has_define(&self, name: &str) -> bool {
         self.seen_defines.contains(name)
+    }
+    pub fn may_have_define(&self, name: &str) -> bool {
+        self.has_define(name) || self.option_defines.contains(name)
     }
     pub fn has_const(&self, name: &str) -> bool {
         self.seen_consts.contains(name)
@@ -303,7 +313,7 @@ pub struct Checker<'a> {
 }
 
 /// Builtin #define or #const names.
-const BUILTIN_NAMES: [&str; 8] = [
+const AOC_OPTION_DEFINES: [&str; 8] = [
     "TINY_MAP",
     "SMALL_MAP",
     "MEDIUM_MAP",
@@ -315,14 +325,39 @@ const BUILTIN_NAMES: [&str; 8] = [
     "DEATH_MATCH",
 ];
 
+const UP_OPTION_DEFINES: [&str; 17] = [
+    "FIXED_POSITIONS",
+    "1_PLAYER_GAME",
+    "2_PLAYER_GAME",
+    "3_PLAYER_GAME",
+    "4_PLAYER_GAME",
+    "5_PLAYER_GAME",
+    "6_PLAYER_GAME",
+    "7_PLAYER_GAME",
+    "8_PLAYER_GAME",
+    "1_TEAM_GAME",
+    "2_TEAM_GAME",
+    "3_TEAM_GAME",
+    "4_TEAM_GAME",
+    "5_TEAM_GAME",
+    "6_TEAM_GAME",
+    "7_TEAM_GAME",
+    "8_TEAM_GAME",
+];
+
 impl<'a> Checker<'a> {
-    /// Create an RMS syntax checker.
-    pub fn new() -> Self {
-        let mut checker = Checker::default();
-        for name in BUILTIN_NAMES.iter() {
-            checker.state.define(name);
+    pub fn build(mut self) -> Self {
+        if self.compatibility == Compatibility::UserPatch15 {
+            for name in UP_OPTION_DEFINES.iter() {
+                self.state.optional_define(name);
+            }
         }
-        checker
+
+        for name in AOC_OPTION_DEFINES.iter() {
+            self.state.optional_define(name);
+        }
+
+        self
     }
 
     pub fn with_lint(mut self, lint: Box<dyn Lint>) -> Self {
@@ -336,7 +371,7 @@ impl<'a> Checker<'a> {
 
     /// Check if a constant was ever defined using #define.
     fn check_ever_defined(&self, token: &Word) -> Option<Warning> {
-        if !self.state.has_define(token.value) {
+        if !self.state.may_have_define(token.value) {
             let warn = token.warning(format!("Token `{}` is never defined, this condition will always fail", token.value));
             Some(if let Some(similar) = meant(token.value, self.state.seen_defines.iter()) {
                 warn.suggest(Suggestion::from(token, format!("Did you mean `{}`?", similar))
