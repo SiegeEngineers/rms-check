@@ -1,13 +1,5 @@
+use super::super::{Lint, ParseState, Suggestion, TokenType, Warning, Word, TOKENS};
 use codespan::ByteSpan;
-use super::super::{
-    Lint,
-    ParseState,
-    Word,
-    Warning,
-    Suggestion,
-    TokenType,
-    TOKENS,
-};
 
 #[derive(Default)]
 pub struct CommentContentsLint {
@@ -21,30 +13,46 @@ impl CommentContentsLint {
 }
 
 impl Lint for CommentContentsLint {
-    fn name(&self) -> &'static str { "comment-contents" }
-    fn run_inside_comments(&self) -> bool { true }
+    fn name(&self) -> &'static str {
+        "comment-contents"
+    }
+    fn run_inside_comments(&self) -> bool {
+        true
+    }
     fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
-        if !state.is_comment { return None; }
+        if !state.is_comment {
+            return None;
+        }
 
-        self.current_command = self.current_command.and_then(|(s, t, args)|
+        self.current_command = self.current_command.and_then(|(s, t, args)| {
             if args > 0 {
                 Some((s, t, args - 1))
             } else {
                 None
-            });
+            }
+        });
         if let Some((span, tt, remaining)) = self.current_command {
             if token.value == "*/" {
-                let suggestion = Suggestion::new(span.start(), span.end(), "Add `backticks` around the command to make the parser ignore it")
-                    .replace(format!("`{}`", tt.name));
+                let suggestion = Suggestion::new(
+                    span.start(),
+                    span.end(),
+                    "Add `backticks` around the command to make the parser ignore it",
+                )
+                .replace(format!("`{}`", tt.name));
                 return Some(token.warning(format!("This close comment may be ignored because a previous command is expecting {} more argument(s)", remaining))
                             .note_at(span, "Command started here")
                             .suggest(suggestion));
             }
         }
 
-        if self.current_command.is_none() && (state.has_define(token.value) || state.has_const(token.value)) {
-            let suggestion = Suggestion::from(token, "Add `backticks` around the name to make the parser ignore it")
-                .replace(format!("`{}`", token.value));
+        if self.current_command.is_none()
+            && (state.has_define(token.value) || state.has_const(token.value))
+        {
+            let suggestion = Suggestion::from(
+                token,
+                "Add `backticks` around the name to make the parser ignore it",
+            )
+            .replace(format!("`{}`", token.value));
             return Some(token.warning("Using constant names in comments can be dangerous, because the game may interpret them as other tokens instead.")
                         .suggest(suggestion));
         }
@@ -61,15 +69,16 @@ impl Lint for CommentContentsLint {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use super::super::super::{RMSCheck, Severity};
     use super::CommentContentsLint;
+    use std::path::PathBuf;
 
     #[test]
     fn comment_contents() {
         let result = RMSCheck::new()
             .with_lint(Box::new(CommentContentsLint::new()))
-            .add_file(PathBuf::from("./tests/rms/comment-contents.rms")).unwrap()
+            .add_file(PathBuf::from("./tests/rms/comment-contents.rms"))
+            .unwrap()
             .check();
 
         let mut warnings = result.iter();
@@ -77,10 +86,16 @@ mod tests {
         let second = warnings.next().unwrap();
         assert!(warnings.next().is_none());
         assert_eq!(first.diagnostic().severity, Severity::Warning);
-        assert_eq!(first.diagnostic().code, Some("comment-contents".to_string()));
+        assert_eq!(
+            first.diagnostic().code,
+            Some("comment-contents".to_string())
+        );
         assert_eq!(first.message(), "This close comment may be ignored because a previous command is expecting 0 more argument(s)");
         assert_eq!(second.diagnostic().severity, Severity::Warning);
-        assert_eq!(second.diagnostic().code, Some("comment-contents".to_string()));
+        assert_eq!(
+            second.diagnostic().code,
+            Some("comment-contents".to_string())
+        );
         assert_eq!(second.message(), "Using constant names in comments can be dangerous, because the game may interpret them as other tokens instead.");
     }
 }

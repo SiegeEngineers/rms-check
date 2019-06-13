@@ -1,10 +1,4 @@
-use super::super::{
-    Lint,
-    ParseState,
-    Word,
-    TokenContext,
-    Warning,
-};
+use super::super::{Lint, ParseState, TokenContext, Warning, Word};
 
 pub struct IncorrectSectionLint {}
 impl Lint for IncorrectSectionLint {
@@ -20,7 +14,7 @@ impl Lint for IncorrectSectionLint {
                             return Some(token.error(format!("Command is invalid in section {}, it can only appear in {}", current_section, expected_section))
                                         .note_at(section_token.span, "Section started here"));
                         }
-                    },
+                    }
                     None => {
                         return Some(token.error(format!("Command can only appear in section {}, but no section has been started.", expected_section)));
                     }

@@ -1,7 +1,7 @@
-use ansi_term::Style;
 use ansi_term::Colour::Cyan;
-use termcolor::{StandardStream, ColorChoice};
-use rms_check::{Severity, AutoFixReplacement, Suggestion, RMSCheckResult};
+use ansi_term::Style;
+use rms_check::{AutoFixReplacement, RMSCheckResult, Severity, Suggestion};
+use termcolor::{ColorChoice, StandardStream};
 
 fn format_suggestion(suggestion: &Suggestion) -> String {
     let mut string = format!("{}: {}", Cyan.paint("suggestion"), suggestion.message());
@@ -19,10 +19,7 @@ pub fn report(result: RMSCheckResult) {
 
     let mut stream = StandardStream::stdout(ColorChoice::Auto);
     for warn in result.iter() {
-        codespan_reporting::emit(
-            &mut stream,
-            result.codemap(),
-            warn.diagnostic()).unwrap();
+        codespan_reporting::emit(&mut stream, result.codemap(), warn.diagnostic()).unwrap();
 
         match warn.severity() {
             Severity::Error => num_errors += 1,
@@ -30,7 +27,11 @@ pub fn report(result: RMSCheckResult) {
             _ => (),
         }
 
-        if warn.suggestions().iter().any(|s| s.replacement().is_fixable()) {
+        if warn
+            .suggestions()
+            .iter()
+            .any(|s| s.replacement().is_fixable())
+        {
             match warn.severity() {
                 Severity::Error => fixable_errors += 1,
                 Severity::Warning => fixable_warnings += 1,
@@ -47,6 +48,9 @@ pub fn report(result: RMSCheckResult) {
     println!();
     println!("{} errors, {} warnings found.", num_errors, num_warnings);
     if fixable_errors > 0 || fixable_warnings > 0 {
-        println!("{} errors, {} warnings fixable using --fix", fixable_errors, fixable_warnings);
+        println!(
+            "{} errors, {} warnings fixable using --fix",
+            fixable_errors, fixable_warnings
+        );
     }
 }

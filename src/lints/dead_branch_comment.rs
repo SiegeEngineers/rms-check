@@ -1,19 +1,17 @@
-use super::super::{
-    Lint,
-    ParseState,
-    Word,
-    Warning,
-    Suggestion,
-    Nesting,
-};
+use super::super::{Lint, Nesting, ParseState, Suggestion, Warning, Word};
 
-pub struct DeadBranchCommentLint {
-}
+pub struct DeadBranchCommentLint {}
 impl Lint for DeadBranchCommentLint {
-    fn name(&self) -> &'static str { "dead-comment" }
-    fn run_inside_comments(&self) -> bool { true }
+    fn name(&self) -> &'static str {
+        "dead-comment"
+    }
+    fn run_inside_comments(&self) -> bool {
+        true
+    }
     fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
-        if token.value != "/*" { return None; }
+        if token.value != "/*" {
+            return None;
+        }
 
         state.nesting.iter()
             .find_map(|n| if let Nesting::StartRandom(loc) = n {

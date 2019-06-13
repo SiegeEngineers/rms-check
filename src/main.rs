@@ -6,13 +6,13 @@
 
 mod cli_reporter;
 
-use std::fs::{File, remove_file};
-use std::io::Read;
-use std::path::PathBuf;
-use rms_check::{RMSCheck, Compatibility, AutoFixReplacement};
-use quicli::{prelude::*, main};
 use cli_reporter::report as cli_report;
 use multisplice::Multisplice;
+use quicli::{main, prelude::*};
+use rms_check::{AutoFixReplacement, Compatibility, RMSCheck};
+use std::fs::{remove_file, File};
+use std::io::Read;
+use std::path::PathBuf;
 
 #[derive(Debug, StructOpt)]
 struct Cli {
@@ -91,19 +91,33 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
                 AutoFixReplacement::Safe(ref new_value) => {
                     let start = result.resolve_position(suggestion.start()).unwrap();
                     let end = result.resolve_position(suggestion.end()).unwrap();
-                    eprintln!("autofix {}:{} → {}:{} to {}", start.0.number(), start.1.number(), end.0.number(), end.1.number(), new_value);
+                    eprintln!(
+                        "autofix {}:{} → {}:{} to {}",
+                        start.0.number(),
+                        start.1.number(),
+                        end.0.number(),
+                        end.1.number(),
+                        new_value
+                    );
                     let start = result.resolve_offset(suggestion.start()).unwrap();
                     let end = result.resolve_offset(suggestion.end()).unwrap();
                     splicer.splice(start.to_usize(), end.to_usize(), new_value);
-                },
+                }
                 AutoFixReplacement::Unsafe(ref new_value) if args.fix_unsafe => {
                     let start = result.resolve_position(suggestion.start()).unwrap();
                     let end = result.resolve_position(suggestion.end()).unwrap();
-                    eprintln!("UNSAFE autofix {}:{} → {}:{} to {}", start.0.number(), start.1.number(), end.0.number(), end.1.number(), new_value);
+                    eprintln!(
+                        "UNSAFE autofix {}:{} → {}:{} to {}",
+                        start.0.number(),
+                        start.1.number(),
+                        end.0.number(),
+                        end.1.number(),
+                        new_value
+                    );
                     let start = result.resolve_offset(suggestion.start()).unwrap();
                     let end = result.resolve_offset(suggestion.end()).unwrap();
                     splicer.splice(start.to_usize(), end.to_usize(), new_value);
-                },
+                }
                 _ => (),
             }
         }
@@ -112,7 +126,10 @@ fn cli_fix(args: Cli, dry: bool) -> Result<()> {
     if dry {
         let temp = format!("{}.tmp", args.file);
         write_to_file(&temp, &splicer.to_string())?;
-        let result = cli_check(Cli { file: temp.clone(), ..args });
+        let result = cli_check(Cli {
+            file: temp.clone(),
+            ..args
+        });
         remove_file(&temp)?;
         result
     } else {

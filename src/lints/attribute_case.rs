@@ -1,14 +1,6 @@
-use super::super::{
-    Lint,
-    ParseState,
-    Word,
-    Warning,
-    Suggestion,
-    TOKENS,
-};
+use super::super::{Lint, ParseState, Suggestion, Warning, Word, TOKENS};
 
-pub struct AttributeCaseLint {
-}
+pub struct AttributeCaseLint {}
 
 impl AttributeCaseLint {
     fn is_wrong_case(&self, value: &str) -> bool {
@@ -17,7 +9,9 @@ impl AttributeCaseLint {
 }
 
 impl Lint for AttributeCaseLint {
-    fn name(&self) -> &'static str { "attribute-case" }
+    fn name(&self) -> &'static str {
+        "attribute-case"
+    }
     fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
         if state.current_token.is_none() && self.is_wrong_case(token.value) {
             let suggestion = Suggestion::from(token, "Attributes must be all lowercase")

@@ -1,33 +1,21 @@
-mod tokens;
-mod wordize;
 mod checker;
 mod lints;
+mod tokens;
+mod wordize;
 
-use std::io::Result;
-use std::sync::Arc;
-use std::path::PathBuf;
-use codespan::{CodeMap, FileMap, FileName, ByteIndex, LineIndex, ColumnIndex, ByteOffset};
 use crate::checker::Checker;
 use crate::wordize::Wordize;
+use codespan::{ByteIndex, ByteOffset, CodeMap, ColumnIndex, FileMap, FileName, LineIndex};
+use std::io::Result;
+use std::path::PathBuf;
+use std::sync::Arc;
 
-pub use crate::wordize::Word;
 pub use crate::checker::{
-    Compatibility,
-    Severity,
-    AutoFixReplacement,
-    Suggestion,
+    AutoFixReplacement, Compatibility, Expect, Lint, Nesting, ParseState, Severity, Suggestion,
     Warning,
-    Lint,
-    ParseState,
-    Nesting,
-    Expect,
 };
-pub use crate::tokens::{
-    ArgType,
-    TokenType,
-    TokenContext,
-    TOKENS,
-};
+pub use crate::tokens::{ArgType, TokenContext, TokenType, TOKENS};
+pub use crate::wordize::Word;
 
 pub struct RMSCheckResult {
     warnings: Vec<Warning>,
@@ -51,9 +39,9 @@ impl RMSCheckResult {
     pub fn resolve_offset(&self, index: ByteIndex) -> Option<ByteOffset> {
         let file = self.codemap.find_file(index);
         file.and_then(|f| {
-            f.location(index).ok().and_then(|(l, c)|
-                f.offset(l, c).ok()
-            )
+            f.location(index)
+                .ok()
+                .and_then(|(l, c)| f.offset(l, c).ok())
         })
     }
 
@@ -76,8 +64,8 @@ impl<'a> Default for RMSCheck<'a> {
             .with_lint(Box::new(lints::DeadBranchCommentLint {}))
             .with_lint(Box::new(lints::IncludeLint::new()))
             .with_lint(Box::new(lints::IncorrectSectionLint {}))
-            // .with_lint(Box::new(lints::UnknownAttributeLint {}))
-            // buggy
+        // .with_lint(Box::new(lints::UnknownAttributeLint {}))
+        // buggy
     }
 }
 
@@ -106,7 +94,10 @@ impl<'a> RMSCheck<'a> {
     }
 
     pub fn add_source(mut self, name: &str, source: &str) -> Self {
-        let map = self.codemap.add_filemap(FileName::Virtual(name.to_string().into()), source.to_string());
+        let map = self.codemap.add_filemap(
+            FileName::Virtual(name.to_string().into()),
+            source.to_string(),
+        );
         self.filemaps.push(map);
         self
     }
@@ -123,9 +114,7 @@ impl<'a> RMSCheck<'a> {
 
     pub fn check(self) -> RMSCheckResult {
         let mut checker = self.checker.build();
-        let words = self.filemaps.iter()
-            .map(|map| Wordize::new(&map))
-            .flatten();
+        let words = self.filemaps.iter().map(|map| Wordize::new(&map)).flatten();
 
         let warnings = words.filter_map(|w| checker.write_token(&w)).collect();
 

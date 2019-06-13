@@ -1,10 +1,10 @@
+use crate::tokens::{ArgType, TokenContext, TokenType, TOKENS};
+use crate::wordize::Word;
+use codespan::{ByteIndex, ByteSpan};
+pub use codespan_reporting::{Diagnostic, Label, Severity};
+use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
 use strsim::levenshtein;
-use lazy_static::lazy_static;
-use codespan::{ByteSpan, ByteIndex};
-pub use codespan_reporting::{Diagnostic, Severity, Label};
-use crate::tokens::{ArgType, TokenType, TokenContext, TOKENS};
-use crate::wordize::Word;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Compatibility {
@@ -91,12 +91,20 @@ impl Suggestion {
     /// Create a suggestion.
     pub fn new(start: ByteIndex, end: ByteIndex, message: impl ToString) -> Self {
         let message = message.to_string();
-        Suggestion { span: ByteSpan::new(start, end), message, replacement: AutoFixReplacement::None }
+        Suggestion {
+            span: ByteSpan::new(start, end),
+            message,
+            replacement: AutoFixReplacement::None,
+        }
     }
     /// Create a suggestion applying to a specific token.
     pub fn from(token: &Word, message: impl ToString) -> Self {
         let message = message.to_string();
-        Suggestion { span: token.span, message, replacement: AutoFixReplacement::None }
+        Suggestion {
+            span: token.span,
+            message,
+            replacement: AutoFixReplacement::None,
+        }
     }
     /// Specify a possible fix for the problem.
     pub fn replace(mut self, replacement: impl ToString) -> Self {
@@ -170,9 +178,9 @@ impl Warning {
 
     /// Add a note referencing a snippet of code.
     pub fn note_at(mut self, span: ByteSpan, message: &str) -> Self {
-        self.diagnostic = self.diagnostic.with_label(
-            Label::new_secondary(span).with_message(message)
-        );
+        self.diagnostic = self
+            .diagnostic
+            .with_label(Label::new_secondary(span).with_message(message));
         self
     }
 
@@ -214,11 +222,14 @@ fn is_numeric(s: &str) -> bool {
 ///   1. an optional valid replacement value
 fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
     if s.starts_with("rnd(") && s.ends_with(')') && s[4..s.len() - 1].split(',').all(is_numeric) {
-        return (true, None)
+        return (true, None);
     } else if s.chars().any(char::is_whitespace) {
-        let no_ws = s.chars().filter(|c| !char::is_whitespace(*c)).collect::<String>();
+        let no_ws = s
+            .chars()
+            .filter(|c| !char::is_whitespace(*c))
+            .collect::<String>();
         if let (true, _) = is_valid_rnd(&no_ws) {
-            return (false, Some(no_ws))
+            return (false, Some(no_ws));
         }
     }
     (false, None)
@@ -251,7 +262,9 @@ pub enum Nesting {
 
 pub trait Lint {
     fn name(&self) -> &'static str;
-    fn run_inside_comments(&self) -> bool { false }
+    fn run_inside_comments(&self) -> bool {
+        false
+    }
     fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning>;
 }
 
@@ -376,19 +389,29 @@ impl<'a> Checker<'a> {
     }
 
     pub fn compatibility(self, compatibility: Compatibility) -> Self {
-        Checker { compatibility, ..self }
+        Checker {
+            compatibility,
+            ..self
+        }
     }
 
     /// Check if a constant was ever defined using #define.
     fn check_ever_defined(&self, token: &Word) -> Option<Warning> {
         if !self.state.may_have_define(token.value) {
-            let warn = token.warning(format!("Token `{}` is never defined, this condition will always fail", token.value));
-            Some(if let Some(similar) = meant(token.value, self.state.seen_defines.iter()) {
-                warn.suggest(Suggestion::from(token, format!("Did you mean `{}`?", similar))
-                                 .replace_unsafe(similar.to_string()))
-            } else {
-                warn
-            })
+            let warn = token.warning(format!(
+                "Token `{}` is never defined, this condition will always fail",
+                token.value
+            ));
+            Some(
+                if let Some(similar) = meant(token.value, self.state.seen_defines.iter()) {
+                    warn.suggest(
+                        Suggestion::from(token, format!("Did you mean `{}`?", similar))
+                            .replace_unsafe(similar.to_string()),
+                    )
+                } else {
+                    warn
+                },
+            )
         } else {
             None
         }
@@ -403,12 +426,16 @@ impl<'a> Checker<'a> {
                 Some(token.warning(format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
             } else {
                 let warn = token.warning(format!("Token `{}` is never defined", token.value));
-                Some(if let Some(similar) = meant(token.value, self.state.seen_consts.iter()) {
-                    warn.suggest(Suggestion::from(token, format!("Did you mean `{}`?", similar))
-                                 .replace_unsafe(similar.to_string()))
-                } else {
-                    warn
-                })
+                Some(
+                    if let Some(similar) = meant(token.value, self.state.seen_consts.iter()) {
+                        warn.suggest(
+                            Suggestion::from(token, format!("Did you mean `{}`?", similar))
+                                .replace_unsafe(similar.to_string()),
+                        )
+                    } else {
+                        warn
+                    },
+                )
             }
         } else {
             None
@@ -419,15 +446,21 @@ impl<'a> Checker<'a> {
     fn check_number(&mut self, token: &Word<'a>) -> Option<Warning> {
         // This may be a valued (#const) constant,
         // or a number (12, -35),
-        token.value.parse::<i32>().err()
+        token
+            .value
+            .parse::<i32>()
+            .err()
             .map(|_| {
                 let TokenType { name, .. } = self.state.current_token.unwrap();
-                let warn = token.error(format!("Expected a number argument to {}, but got {}", name, token.value));
+                let warn = token.error(format!(
+                    "Expected a number argument to {}, but got {}",
+                    name, token.value
+                ));
                 if token.value.starts_with('(') {
                     let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
                     warn.suggest(
                         Suggestion::from(token, "Did you forget the `rnd`?")
-                        .replace(replacement.unwrap_or_else(|| format!("rnd{}", token.value)))
+                            .replace(replacement.unwrap_or_else(|| format!("rnd{}", token.value))),
                     )
                 } else {
                     warn
@@ -438,11 +471,13 @@ impl<'a> Checker<'a> {
                 if let (true, _) = is_valid_rnd(token.value) {
                     None
                 } else if
-                    // probably "rnd(\d+, \d+)"
-                    (token.value.starts_with("rnd(") && token.value.ends_with(',')) ||
+                // probably "rnd(\d+, \d+)"
+                (token.value.starts_with("rnd(") && token.value.ends_with(',')) ||
                     // probably "rnd (\d+,\d+)"
-                    (token.value == "rnd") {
-                    self.state.expect(Expect::UnfinishedRnd(token.start(), token.value));
+                    (token.value == "rnd")
+                {
+                    self.state
+                        .expect(Expect::UnfinishedRnd(token.start(), token.value));
                     None
                 } else {
                     Some(warn)
@@ -479,17 +514,20 @@ impl<'a> Checker<'a> {
             let mut state = &mut self.state;
             self.lints
                 .iter_mut()
-                .filter(|(_, lint)| {
-                    !is_comment || lint.run_inside_comments()
-                })
+                .filter(|(_, lint)| !is_comment || lint.run_inside_comments())
                 .find_map(|(name, lint)| {
                     lint.lint_token(&mut state, token)
                         .map(|warning| warning.lint(&name))
                 })
         };
-        if warning.is_some() { return warning; }
+        if warning.is_some() {
+            return warning;
+        }
 
-        if token.value.starts_with('<') && token.value.ends_with('>') && !TOKENS.contains_key(token.value) {
+        if token.value.starts_with('<')
+            && token.value.ends_with('>')
+            && !TOKENS.contains_key(token.value)
+        {
             return Some(token.error(format!("Invalid section {}", token.value)));
         }
 
@@ -500,8 +538,14 @@ impl<'a> Checker<'a> {
                     if let Some(warning) = self.check_arg_type(*arg_type, &token) {
                         return Some(warning);
                     }
-                },
-                None => return Some(token.error(format!("Too many arguments ({}) to command `{}`", self.state.token_arg_index + 1, current_token.name))),
+                }
+                None => {
+                    return Some(token.error(format!(
+                        "Too many arguments ({}) to command `{}`",
+                        self.state.token_arg_index + 1,
+                        current_token.name
+                    )))
+                }
             }
         }
 
@@ -524,21 +568,22 @@ impl<'a> Checker<'a> {
             Expect::ConstName => {
                 self.state.define_const(token.value);
                 self.state.expect(Expect::None);
-            },
+            }
             Expect::DefineName => {
                 self.state.define(token.value);
                 self.state.expect(Expect::None);
-            },
+            }
             Expect::UnfinishedRnd(pos, val) => {
                 let suggestion = Suggestion::new(pos, token.end(), "rnd() must not contain spaces");
-                parse_error = Some(Warning::error(ByteSpan::new(pos, token.end()), "Incorrect rnd() call").suggest(
-                    match is_valid_rnd(&format!("{} {}", val, token.value)).1 {
-                        Some(replacement) => suggestion.replace(replacement),
-                        None => suggestion,
-                    }
-                ));
+                parse_error = Some(
+                    Warning::error(ByteSpan::new(pos, token.end()), "Incorrect rnd() call")
+                        .suggest(match is_valid_rnd(&format!("{} {}", val, token.value)).1 {
+                            Some(replacement) => suggestion.replace(replacement),
+                            None => suggestion,
+                        }),
+                );
                 self.state.expect(Expect::None);
-            },
+            }
             _ => (),
         }
 
@@ -548,15 +593,21 @@ impl<'a> Checker<'a> {
             // Instead we only mark this token as an incorrect comment.
             self.state.is_comment = true;
             if token.value.len() > 2 {
-                let warning = token.error("Incorrect comment: there must be a space after the opening /*");
+                let warning =
+                    token.error("Incorrect comment: there must be a space after the opening /*");
                 let (message, replacement) = if token.value.ends_with("*/") {
-                    ("Add spaces at the start and end of the comment",
-                     format!("/* {} */", &token.value[2..token.value.len() - 2]))
+                    (
+                        "Add spaces at the start and end of the comment",
+                        format!("/* {} */", &token.value[2..token.value.len() - 2]),
+                    )
                 } else {
-                    ("Add a space after the /*",
-                     format!("/* {}", &token.value[2..]))
+                    (
+                        "Add a space after the /*",
+                        format!("/* {}", &token.value[2..]),
+                    )
                 };
-                parse_error = Some(warning.suggest(Suggestion::from(token, message).replace(replacement)));
+                parse_error =
+                    Some(warning.suggest(Suggestion::from(token, message).replace(replacement)));
             }
         }
 
@@ -570,9 +621,15 @@ impl<'a> Checker<'a> {
                 // "**/" was probably meant to be a closing comment, but only <whitespace>*/ actually closes
                 // comments.
                 if token.value.len() > 2 && parse_error.is_none() {
-                    parse_error = Some(token.error("Possibly unclosed comment, */ must be preceded by whitespace")
-                        .suggest(Suggestion::from(token, "Add a space before the */")
-                            .replace(format!("{} */", &token.value[2..token.value.len() - 2]))));
+                    parse_error = Some(
+                        token
+                            .error("Possibly unclosed comment, */ must be preceded by whitespace")
+                            .suggest(
+                                Suggestion::from(token, "Add a space before the */").replace(
+                                    format!("{} */", &token.value[2..token.value.len() - 2]),
+                                ),
+                            ),
+                    );
                 }
             }
         }
@@ -586,12 +643,20 @@ impl<'a> Checker<'a> {
         fn unbalanced_error(name: &str, token: &Word, nest: Option<&Nesting>) -> Warning {
             let msg = format!("Unbalanced `{}`", name);
             match nest {
-                Some(Nesting::Brace(loc)) => token.error(msg).note_at(*loc, "Matches this open brace `{`"),
+                Some(Nesting::Brace(loc)) => token
+                    .error(msg)
+                    .note_at(*loc, "Matches this open brace `{`"),
                 Some(Nesting::If(loc)) => token.error(msg).note_at(*loc, "Matches this `if`"),
-                Some(Nesting::ElseIf(loc)) => token.error(msg).note_at(*loc, "Matches this `elseif`"),
+                Some(Nesting::ElseIf(loc)) => {
+                    token.error(msg).note_at(*loc, "Matches this `elseif`")
+                }
                 Some(Nesting::Else(loc)) => token.error(msg).note_at(*loc, "Matches this `else`"),
-                Some(Nesting::StartRandom(loc)) => token.error(msg).note_at(*loc, "Matches this `start_random`"),
-                Some(Nesting::PercentChance(loc)) => token.error(msg).note_at(*loc, "Matches this `percent_chance`"),
+                Some(Nesting::StartRandom(loc)) => token
+                    .error(msg)
+                    .note_at(*loc, "Matches this `start_random`"),
+                Some(Nesting::PercentChance(loc)) => token
+                    .error(msg)
+                    .note_at(*loc, "Matches this `percent_chance`"),
                 None => token.error(format!("{}–nothing is open", msg)),
             }
         }
@@ -602,86 +667,103 @@ impl<'a> Checker<'a> {
                 match self.state.nesting.last() {
                     Some(Nesting::Brace(_)) => {
                         is_ok = true;
-                    },
+                    }
                     nest => {
                         parse_error = Some(unbalanced_error("}", token, nest));
-                    },
+                    }
                 }
-                if is_ok { self.state.nesting.pop(); }
-            },
+                if is_ok {
+                    self.state.nesting.pop();
+                }
+            }
             "if" => self.state.nesting.push(Nesting::If(token.span)),
             "elseif" => {
                 let mut is_ok = false;
                 match self.state.nesting.last() {
                     Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
                         is_ok = true;
-                    },
+                    }
                     nest => {
                         parse_error = Some(unbalanced_error("elseif", token, nest));
                     }
                 }
-                if is_ok { self.state.nesting.pop(); }
+                if is_ok {
+                    self.state.nesting.pop();
+                }
                 self.state.nesting.push(Nesting::ElseIf(token.span));
-            },
+            }
             "else" => {
                 let mut is_ok = false;
                 match self.state.nesting.last() {
                     Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
                         is_ok = true;
-                    },
+                    }
                     nest => {
                         parse_error = Some(unbalanced_error("else", token, nest));
-                    },
+                    }
                 }
-                if is_ok { self.state.nesting.pop(); }
+                if is_ok {
+                    self.state.nesting.pop();
+                }
                 self.state.nesting.push(Nesting::Else(token.span));
-            },
+            }
             "endif" => {
                 let mut is_ok = false;
                 match self.state.nesting.last() {
                     Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
                         is_ok = true;
-                    },
+                    }
                     nest => {
                         parse_error = Some(unbalanced_error("endif", token, nest));
-                    },
+                    }
                 }
-                if is_ok { self.state.nesting.pop(); }
-            },
+                if is_ok {
+                    self.state.nesting.pop();
+                }
+            }
             "start_random" => self.state.nesting.push(Nesting::StartRandom(token.span)),
             "percent_chance" => {
                 let is_sibling_branch = match self.state.nesting.last() {
                     Some(Nesting::PercentChance(_)) => true,
                     _ => false,
                 };
-                if is_sibling_branch { self.state.nesting.pop(); }
+                if is_sibling_branch {
+                    self.state.nesting.pop();
+                }
 
                 match self.state.nesting.last() {
-                    Some(Nesting::StartRandom(_)) => {},
+                    Some(Nesting::StartRandom(_)) => {}
                     nest => {
                         parse_error = Some(unbalanced_error("percent_chance", token, nest));
-                    },
+                    }
                 }
 
                 self.state.nesting.push(Nesting::PercentChance(token.span));
-            },
+            }
             "end_random" => {
-                let needs_double_close = if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
-                    true
-                } else { false };
-                if needs_double_close { self.state.nesting.pop(); }
+                let needs_double_close =
+                    if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
+                        true
+                    } else {
+                        false
+                    };
+                if needs_double_close {
+                    self.state.nesting.pop();
+                }
 
                 let mut is_ok = false;
                 match self.state.nesting.last() {
                     Some(Nesting::StartRandom(_)) => {
                         is_ok = true;
-                    },
+                    }
                     nest => {
                         parse_error = Some(unbalanced_error("end_random", token, nest));
-                    },
+                    }
                 }
-                if is_ok { self.state.nesting.pop(); }
-            },
+                if is_ok {
+                    self.state.nesting.pop();
+                }
+            }
             "#const" => self.state.expect(Expect::ConstName),
             "#define" => self.state.expect(Expect::DefineName),
             _ => (),

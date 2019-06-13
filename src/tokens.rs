@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use lazy_static::lazy_static;
+use std::collections::HashMap;
 
 /// Argument type.
 #[derive(Clone, Copy)]
@@ -113,14 +113,24 @@ macro_rules! token {
         TokenType {
             name: $name,
             context: $context,
-            arg_types: [Some(ArgType::$arg1), Some(ArgType::$arg2), Some(ArgType::$arg3), None],
+            arg_types: [
+                Some(ArgType::$arg1),
+                Some(ArgType::$arg2),
+                Some(ArgType::$arg3),
+                None,
+            ],
         }
     };
     ( $name:expr, $context:expr, [ $arg1:ident, $arg2:ident, $arg3:ident, $arg4:ident ] ) => {
         TokenType {
             name: $name,
             context: $context,
-            arg_types: [Some(ArgType::$arg1), Some(ArgType::$arg2), Some(ArgType::$arg3), Some(ArgType::$arg4)],
+            arg_types: [
+                Some(ArgType::$arg1),
+                Some(ArgType::$arg2),
+                Some(ArgType::$arg3),
+                Some(ArgType::$arg4),
+            ],
         }
     };
 }

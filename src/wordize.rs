@@ -1,6 +1,6 @@
+use codespan::{ByteIndex, ByteOffset, ByteSpan, FileMap};
 use std::iter::Iterator;
 use std::str::CharIndices;
-use codespan::{FileMap, ByteIndex, ByteSpan, ByteOffset};
 
 /// Represents a word.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,10 +70,7 @@ impl<'a> Iterator for Wordize<'a> {
 
             let span = ByteSpan::new(start, end);
             let value = self.file_map.src_slice(span).unwrap();
-            Some(Word {
-                span,
-                value,
-            })
+            Some(Word { span, value })
         } else {
             None
         }
@@ -83,11 +80,14 @@ impl<'a> Iterator for Wordize<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codespan::{FileMap, FileName, LineIndex, ColumnIndex};
+    use codespan::{ColumnIndex, FileMap, FileName, LineIndex};
 
     #[test]
     fn split_words() {
-        let filemap = FileMap::new(FileName::Virtual("words.txt".into()), "simple test words".to_string());
+        let filemap = FileMap::new(
+            FileName::Virtual("words.txt".into()),
+            "simple test words".to_string(),
+        );
         let mut wordize = Wordize::new(&filemap);
         let word = wordize.next().unwrap();
         assert_eq!(word.value, "simple");
@@ -123,7 +123,10 @@ mod tests {
 
     #[test]
     fn split_words_with_chars() {
-        let filemap = FileMap::new(FileName::Virtual("words.txt".into()), "n/*ot \n \t  a*/comment".to_string());
+        let filemap = FileMap::new(
+            FileName::Virtual("words.txt".into()),
+            "n/*ot \n \t  a*/comment".to_string(),
+        );
         let mut wordize = Wordize::new(&filemap);
         let word = wordize.next().unwrap();
         assert_eq!(word.value, "n/*ot");
