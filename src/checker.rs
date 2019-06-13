@@ -1,12 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use strsim::levenshtein;
-
+use lazy_static::lazy_static;
 use codespan::{ByteSpan, ByteIndex};
-pub use codespan_reporting::{
-    Diagnostic,
-    Severity,
-    Label,
-};
+pub use codespan_reporting::{Diagnostic, Severity, Label};
 use crate::tokens::{ArgType, TokenType, TokenContext, TOKENS};
 use crate::wordize::Word;
 
@@ -313,37 +309,51 @@ pub struct Checker<'a> {
 }
 
 /// Builtin #define or #const names.
-const AOC_OPTION_DEFINES: [&str; 8] = [
+const AOC_OPTION_DEFINES: [&str; 6] = [
     "TINY_MAP",
     "SMALL_MAP",
     "MEDIUM_MAP",
     "LARGE_MAP",
     "HUGE_MAP",
     "GIGANTIC_MAP",
-
-    "REGICIDE",
-    "DEATH_MATCH",
 ];
 
-const UP_OPTION_DEFINES: [&str; 17] = [
-    "FIXED_POSITIONS",
-    "1_PLAYER_GAME",
-    "2_PLAYER_GAME",
-    "3_PLAYER_GAME",
-    "4_PLAYER_GAME",
-    "5_PLAYER_GAME",
-    "6_PLAYER_GAME",
-    "7_PLAYER_GAME",
-    "8_PLAYER_GAME",
-    "1_TEAM_GAME",
-    "2_TEAM_GAME",
-    "3_TEAM_GAME",
-    "4_TEAM_GAME",
-    "5_TEAM_GAME",
-    "6_TEAM_GAME",
-    "7_TEAM_GAME",
-    "8_TEAM_GAME",
-];
+lazy_static! {
+    static ref UP_OPTION_DEFINES: Vec<String> = {
+        let mut list = vec![
+            "UP_EXTENSION".to_string(),
+            "FIXED_POSITIONS".to_string(),
+            "AI_PLAYERS".to_string(),
+            "CAPTURE_RELIC".to_string(),
+            "DEATH_MATCH".to_string(),
+            "DEFEND_WONDER".to_string(),
+            "KING_OT_HILL".to_string(),
+            "RANDOM_MAP".to_string(),
+            "REGICIDE".to_string(),
+            "TURBO_RANDOM_MAP".to_string(),
+            "WONDER_RACE".to_string(),
+        ];
+
+        for i in 1..=8 {
+            list.push(format!("{}_PLAYER_GAME", i));
+        }
+        for i in 0..=4 {
+            list.push(format!("{}_TEAM_GAME", i));
+        }
+        for team in 0..=4 {
+            for player in 1..=8 {
+                list.push(format!("PLAYER{}_TEAM{}", player, team));
+            }
+        }
+        for team in 0..=4 {
+            for size in 0..=8 {
+                list.push(format!("TEAM{}_SIZE{}", team, size));
+            }
+        }
+
+        list
+    };
+}
 
 impl<'a> Checker<'a> {
     pub fn build(mut self) -> Self {
