@@ -1,13 +1,6 @@
 //! Hacky, yes :(
 
-use jsonrpc_core::{ErrorCode, IoHandler, Params};
-use languageserver_types::{
-    CodeActionProviderCapability, DidOpenTextDocumentParams, InitializeParams, InitializeResult,
-    PublishDiagnosticsParams, ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability,
-    TextDocumentSyncKind,
-};
-use rms_check::{Compatibility, RMSCheck};
-use serde_json::{self, json};
+use rms_check_lsp::RMSCheckLSP;
 use std::io::{self, BufRead, Write};
 
 /// More or less copied from RLS:
@@ -61,50 +54,10 @@ fn write_message(message: &str) {
     writer.flush().unwrap();
 }
 
-fn check_and_publish(doc: TextDocumentItem) {
-    let checker = RMSCheck::default()
-        .compatibility(Compatibility::Conquerors)
-        .add_source(doc.uri.as_str(), &doc.text);
-
-    let mut diagnostics = vec![];
-    let result = checker.check();
-    for warn in result.iter() {
-        let diag = codespan_lsp::make_lsp_diagnostic(
-            result.codemap(),
-            warn.diagnostic().clone(),
-            |_filename| Ok(doc.uri.clone()),
-        )
-        .unwrap();
-        diagnostics.push(diag);
-    }
-
-    let params = PublishDiagnosticsParams::new(doc.uri.clone(), diagnostics);
-    let message = serde_json::to_string(&json!({
-        "jsonrpc": "2.0",
-        "method": "textDocument/publishDiagnostics",
-        "params": params,
-    }))
-    .unwrap();
-    write_message(&message);
-}
-
 fn main() {
-    let mut handler = IoHandler::new();
-    handler.add_method("initialize", |params: Params| {
-        let _params: InitializeParams = params.parse()?;
-        let mut capabilities = ServerCapabilities::default();
-        capabilities.code_action_provider = Some(CodeActionProviderCapability::Simple(true));
-        capabilities.text_document_sync =
-            Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::Full));
-        let result = InitializeResult { capabilities };
-        serde_json::to_value(result).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
-    });
-    handler.add_notification("initialized", |_params: Params| {});
-    handler.add_notification("textDocument/didOpen", |params: Params| {
-        let params: DidOpenTextDocumentParams = params.parse().unwrap();
-        let doc = params.text_document;
-
-        check_and_publish(doc);
+    let mut lsp = RMSCheckLSP::new(|message| {
+        let message = serde_json::to_string(&message).unwrap();
+        write_message(&message);
     });
 
     let stdin = io::stdin();
@@ -112,7 +65,8 @@ fn main() {
     loop {
         let message = read_message(&mut reader).expect("could not read message");
 
-        if let Some(response) = handler.handle_request_sync(&message) {
+        if let Some(response) = lsp.handle_sync(message.parse().unwrap()) {
+            let response = serde_json::to_string(&response).unwrap();
             write_message(&response);
         }
     }
