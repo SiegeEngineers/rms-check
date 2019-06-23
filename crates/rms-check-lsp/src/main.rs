@@ -1,10 +1,14 @@
+//! Hacky, yes :(
+
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use languageserver_types::{
     CodeActionProviderCapability, DidOpenTextDocumentParams, InitializeParams, InitializeResult,
-    PublishDiagnosticsParams, ServerCapabilities, TextDocumentItem,
+    PublishDiagnosticsParams, ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability,
+    TextDocumentSyncKind,
 };
 use rms_check::{Compatibility, RMSCheck};
-use std::io::{self, BufRead, Read, Write};
+use serde_json::{self, json};
+use std::io::{self, BufRead, Write};
 
 /// More or less copied from RLS:
 /// https://github.com/rust-lang/rls/blob/36def189c0ef802b7ca07878100c856f492532cb/rls/src/server/io.rs
@@ -49,7 +53,7 @@ fn write_message(message: &str) {
     let mut writer = stdout.lock();
     write!(
         writer,
-        "content-length: {}\r\n\r\n{}",
+        "Content-Length: {}\r\n\r\n{}",
         message.len(),
         message
     )
@@ -57,7 +61,7 @@ fn write_message(message: &str) {
     writer.flush().unwrap();
 }
 
-fn check(doc: TextDocumentItem) {
+fn check_and_publish(doc: TextDocumentItem) {
     let checker = RMSCheck::default()
         .compatibility(Compatibility::Conquerors)
         .add_source(doc.uri.as_str(), &doc.text);
@@ -75,12 +79,12 @@ fn check(doc: TextDocumentItem) {
     }
 
     let params = PublishDiagnosticsParams::new(doc.uri.clone(), diagnostics);
-    let notif = jsonrpc_core::types::request::Notification {
-        jsonrpc: Some(jsonrpc_core::types::version::Version::V2),
-        method: "textDocument/publishDiagnostics".to_string(),
-        params: serde_json::from_value(serde_json::to_value(&params).unwrap()).unwrap(),
-    };
-    let message = serde_json::to_string(&notif).unwrap();
+    let message = serde_json::to_string(&json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": params,
+    }))
+    .unwrap();
     write_message(&message);
 }
 
@@ -90,6 +94,8 @@ fn main() {
         let _params: InitializeParams = params.parse()?;
         let mut capabilities = ServerCapabilities::default();
         capabilities.code_action_provider = Some(CodeActionProviderCapability::Simple(true));
+        capabilities.text_document_sync =
+            Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::Full));
         let result = InitializeResult { capabilities };
         serde_json::to_value(result).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     });
@@ -98,13 +104,14 @@ fn main() {
         let params: DidOpenTextDocumentParams = params.parse().unwrap();
         let doc = params.text_document;
 
-        check(doc);
+        check_and_publish(doc);
     });
 
     let stdin = io::stdin();
     let mut reader = stdin.lock();
     loop {
         let message = read_message(&mut reader).expect("could not read message");
+
         if let Some(response) = handler.handle_request_sync(&message) {
             write_message(&response);
         }
