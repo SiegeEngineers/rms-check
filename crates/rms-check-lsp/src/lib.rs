@@ -87,39 +87,47 @@ where
     }
 
     fn install_handlers(&mut self) {
-        let inner = Arc::clone(&self.inner);
-        self.handler
-            .add_method("initialize", move |params: Params| {
-                let params: InitializeParams = params.parse()?;
-                inner
-                    .lock()
-                    .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
-                    .initialize(params)
-            });
+        {
+            let inner = Arc::clone(&self.inner);
+            self.handler
+                .add_method("initialize", move |params: Params| {
+                    let params: InitializeParams = params.parse()?;
+                    inner
+                        .lock()
+                        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
+                        .initialize(params)
+                });
+        }
 
         self.handler
             .add_notification("initialized", move |_params: Params| {});
 
-        let inner = Arc::clone(&self.inner);
-        self.handler
-            .add_notification("textDocument/didOpen", move |params: Params| {
-                let params: DidOpenTextDocumentParams = params.parse().unwrap();
-                inner.lock().unwrap().opened(params)
-            });
+        {
+            let inner = Arc::clone(&self.inner);
+            self.handler
+                .add_notification("textDocument/didOpen", move |params: Params| {
+                    let params: DidOpenTextDocumentParams = params.parse().unwrap();
+                    inner.lock().unwrap().opened(params)
+                });
+        }
 
-        let inner = Arc::clone(&self.inner);
-        self.handler
-            .add_notification("textDocument/didChange", move |params: Params| {
-                let params: DidChangeTextDocumentParams = params.parse().unwrap();
-                inner.lock().unwrap().changed(params)
-            });
+        {
+            let inner = Arc::clone(&self.inner);
+            self.handler
+                .add_notification("textDocument/didChange", move |params: Params| {
+                    let params: DidChangeTextDocumentParams = params.parse().unwrap();
+                    inner.lock().unwrap().changed(params)
+                });
+        }
 
-        let inner = Arc::clone(&self.inner);
-        self.handler
-            .add_notification("textDocument/didClose", move |params: Params| {
-                let params: DidCloseTextDocumentParams = params.parse().unwrap();
-                inner.lock().unwrap().closed(params)
-            });
+        {
+            let inner = Arc::clone(&self.inner);
+            self.handler
+                .add_notification("textDocument/didClose", move |params: Params| {
+                    let params: DidCloseTextDocumentParams = params.parse().unwrap();
+                    inner.lock().unwrap().closed(params)
+                });
+        }
     }
 
     /*

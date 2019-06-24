@@ -1,4 +1,4 @@
-use super::super::{Lint, ParseState, Suggestion, TokenType, Warning, Word, TOKENS};
+use crate::{Lint, ParseState, Suggestion, TokenType, Warning, Word, TOKENS};
 use codespan::ByteSpan;
 
 #[derive(Default)]
@@ -16,9 +16,11 @@ impl Lint for CommentContentsLint {
     fn name(&self) -> &'static str {
         "comment-contents"
     }
+
     fn run_inside_comments(&self) -> bool {
         true
     }
+
     fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
         if !state.is_comment {
             return None;
@@ -69,8 +71,8 @@ impl Lint for CommentContentsLint {
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::{RMSCheck, Severity};
     use super::CommentContentsLint;
+    use crate::{RMSCheck, Severity};
     use std::path::PathBuf;
 
     #[test]

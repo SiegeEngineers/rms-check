@@ -1,4 +1,4 @@
-use super::super::{Lint, ParseState, Suggestion, Warning, Word};
+use crate::{Lint, ParseState, Suggestion, Warning, Word};
 
 pub struct IncludeLint {}
 
@@ -33,8 +33,8 @@ impl Lint for IncludeLint {
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::{RMSCheck, Severity};
     use super::IncludeLint;
+    use crate::{RMSCheck, Severity};
     use codespan::{ColumnIndex, LineIndex};
     use std::path::PathBuf;
 
