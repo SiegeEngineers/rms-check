@@ -346,7 +346,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "multisplice"
 version = "0.1.0"
-source = "git+https://github.com/goto-bus-stop/multisplice-rs.git#b00e3868ba6c7e5c52ae95fae106ff7db267cb76"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "ndarray"
@@ -507,7 +507,7 @@ dependencies = [
  "codespan-reporting 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "either 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "multisplice 0.1.0 (git+https://github.com/goto-bus-stop/multisplice-rs.git)",
+ "multisplice 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "quicli 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "strsim 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "termcolor 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -801,7 +801,7 @@ dependencies = [
 "checksum matrixmultiply 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)" = "dcad67dcec2d58ff56f6292582377e6921afdf3bfbd533e26fb8900ae575e002"
 "checksum memchr 2.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "e1dd4eaac298c32ce07eb6ed9242eda7d82955b9170b7d6db59b2e02cc63fcb8"
 "checksum memoffset 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0f9dc261e2b62d7a622bf416ea3c5245cdd5d9a7fcc428c0d06804dfce1775b3"
-"checksum multisplice 0.1.0 (git+https://github.com/goto-bus-stop/multisplice-rs.git)" = "<none>"
+"checksum multisplice 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "de40ee7986dc54d6cf1d05313c6944bbc11d4e780e68526d9b35daa74075b94f"
 "checksum ndarray 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)" = "7cf380a8af901ad627594013a3bbac903ae0a6f94e176e47e46b5bbc1877b928"
 "checksum nodrop 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)" = "2f9667ddcc6cc8a43afc9b7917599d7216aa09c463919ea32c59ed6cac8bc945"
 "checksum num-complex 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "107b9be86cd2481930688277b675b0114578227f034674726605b8a482d8baf8"
