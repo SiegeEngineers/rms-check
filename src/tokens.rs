@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use std::collections::HashMap;
 
 /// Argument type.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum ArgType {
     /// A literal string (no spaces)
     Word = 1,
@@ -17,7 +17,7 @@ pub enum ArgType {
 }
 
 /// Defines where a token can appear.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum TokenContext {
     /// A flow control token, can appear just about anywhere.
     Flow,
@@ -36,6 +36,7 @@ pub enum TokenContext {
 /// A list of token argument types (up to 4).
 pub type TokenArgTypes = [Option<ArgType>; 4];
 /// Describes some characteristic of a token.
+#[derive(Debug, Clone)]
 pub struct TokenType {
     /// The token's name, as it appears in RMS source code.
     pub name: &'static str,
@@ -267,6 +268,9 @@ lazy_static! {
 
         m.insert(token!("create_elevation", TokenContext::Command(Some("<ELEVATION_GENERATION>")), [Number]));
         m.insert(token!("spacing", TokenContext::Attribute(Some("create_elevation")), [Number]));
+
+        m.insert(token!("effect_amount", TokenContext::Command(Some("<PLAYER_SETUP>")), [Token, Token, Token, Number]));
+        m.insert(token!("effect_percent", TokenContext::Command(Some("<PLAYER_SETUP>")), [Token, Token, Token, Number]));
 
         m.build()
     };

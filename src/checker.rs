@@ -6,13 +6,13 @@ use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
 use strsim::levenshtein;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum Compatibility {
-    Conquerors,
-    UserPatch14,
-    UserPatch15,
-    HDEdition,
-    All,
+    Conquerors = 1,
+    UserPatch14 = 3,
+    UserPatch15 = 4,
+    HDEdition = 2,
+    All = 0,
 }
 
 impl Default for Compatibility {
@@ -22,7 +22,7 @@ impl Default for Compatibility {
 }
 
 /// Describes the next expected token.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum Expect<'a> {
     /// No expectations!
     None,
@@ -33,12 +33,14 @@ pub enum Expect<'a> {
     /// The second part of an incorrectly formatted `rnd(A,B)` call.
     UnfinishedRnd(ByteIndex, &'a str),
 }
+
 impl<'a> Default for Expect<'a> {
     fn default() -> Self {
         Expect::None
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum AutoFixReplacement {
     None,
     Safe(String),
@@ -61,6 +63,7 @@ impl AutoFixReplacement {
 }
 
 /// A suggestion that may fix a warning.
+#[derive(Debug, Clone)]
 pub struct Suggestion {
     /// The piece of source code that this suggestion would replace.
     span: ByteSpan,
@@ -120,6 +123,7 @@ impl Suggestion {
 }
 
 /// A warning.
+#[derive(Debug, Clone)]
 pub struct Warning {
     diagnostic: Diagnostic,
     /// A change suggestion: when present, the problem can be fixed by replacing the
@@ -250,7 +254,7 @@ fn meant<'a>(actual: &str, possible: impl Iterator<Item = &'a String>) -> Option
     result
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Nesting {
     If(ByteSpan),
     ElseIf(ByteSpan),
@@ -268,8 +272,10 @@ pub trait Lint {
     fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning>;
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ParseState<'a> {
+    /// The target compatibility for this map script.
+    pub compatibility: Compatibility,
     /// Whether we're currently inside a comment.
     pub is_comment: bool,
     /// The amount of nested statements we entered, like `if`, `start_random`.
@@ -316,25 +322,25 @@ impl<'a> ParseState<'a> {
 
 #[derive(Default)]
 pub struct Checker<'a> {
-    compatibility: Compatibility,
     lints: HashMap<String, Box<dyn Lint>>,
     state: ParseState<'a>,
 }
 
 /// Builtin #define or #const names.
-const AOC_OPTION_DEFINES: [&str; 6] = [
+const AOC_OPTION_DEFINES: [&str; 8] = [
     "TINY_MAP",
     "SMALL_MAP",
     "MEDIUM_MAP",
     "LARGE_MAP",
     "HUGE_MAP",
     "GIGANTIC_MAP",
+    "UP_AVAILABLE",
+    "UP_EXTENSION",
 ];
 
 lazy_static! {
     static ref UP_OPTION_DEFINES: Vec<String> = {
         let mut list = vec![
-            "UP_EXTENSION".to_string(),
             "FIXED_POSITIONS".to_string(),
             "AI_PLAYERS".to_string(),
             "CAPTURE_RELIC".to_string(),
@@ -370,7 +376,7 @@ lazy_static! {
 
 impl<'a> Checker<'a> {
     pub fn build(mut self) -> Self {
-        if self.compatibility == Compatibility::UserPatch15 {
+        if self.state.compatibility == Compatibility::UserPatch15 {
             for name in UP_OPTION_DEFINES.iter() {
                 self.state.optional_define(name);
             }
@@ -388,11 +394,9 @@ impl<'a> Checker<'a> {
         self
     }
 
-    pub fn compatibility(self, compatibility: Compatibility) -> Self {
-        Checker {
-            compatibility,
-            ..self
-        }
+    pub fn compatibility(mut self, compatibility: Compatibility) -> Self {
+        self.state.compatibility = compatibility;
+        self
     }
 
     /// Check if a constant was ever defined using #define.
