@@ -23,6 +23,7 @@ impl<'a> Word<'a> {
 }
 
 /// Iterator over words in a string, with their start and end positions.
+#[derive(Debug)]
 pub struct Wordize<'a> {
     file_map: &'a FileMap,
     chars: CharIndices<'a>,

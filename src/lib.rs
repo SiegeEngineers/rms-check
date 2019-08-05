@@ -1,5 +1,6 @@
 mod checker;
 mod lints;
+mod parser;
 mod tokens;
 mod wordize;
 
