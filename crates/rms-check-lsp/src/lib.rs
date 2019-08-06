@@ -1,12 +1,16 @@
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use languageserver_types::{
-    CodeActionProviderCapability, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, InitializeParams, InitializeResult, PublishDiagnosticsParams,
-    ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability, TextDocumentSyncKind,
+    CodeAction, CodeActionParams, CodeActionProviderCapability, DidChangeTextDocumentParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, InitializeParams, InitializeResult,
+    PublishDiagnosticsParams, ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability,
+    TextDocumentSyncKind, Url,
 };
-use rms_check::{Compatibility, RMSCheck};
+use rms_check::{Compatibility, RMSCheck, RMSCheckResult};
 use serde_json::{self, json};
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 type RpcResult = jsonrpc_core::Result<serde_json::Value>;
 
@@ -15,6 +19,7 @@ where
     Emit: Fn(serde_json::Value) + Send + 'static,
 {
     emit: Emit,
+    documents: HashMap<Url, TextDocumentItem>,
 }
 
 impl<Emit> Inner<Emit>
@@ -31,21 +36,60 @@ where
     }
 
     fn opened(&mut self, params: DidOpenTextDocumentParams) {
-        let doc = params.text_document;
+        let uri = params.text_document.uri.clone();
+        self.documents.insert(uri.clone(), params.text_document);
 
-        self.check_and_publish(doc);
+        self.check_and_publish(uri);
     }
 
-    fn changed(&mut self, params: DidChangeTextDocumentParams) {}
-    fn closed(&mut self, params: DidCloseTextDocumentParams) {}
+    fn changed(&mut self, mut params: DidChangeTextDocumentParams) {
+        match self.documents.get_mut(&params.text_document.uri) {
+            Some(doc) => {
+                doc.text = params.content_changes.remove(0).text;
+                self.check_and_publish(params.text_document.uri);
+            }
+            _ => (),
+        };
+    }
 
-    fn check_and_publish(&self, doc: TextDocumentItem) {
-        let checker = RMSCheck::default()
+    fn closed(&mut self, params: DidCloseTextDocumentParams) {
+        self.documents.remove(&params.text_document.uri);
+    }
+
+    fn code_action(&self, params: CodeActionParams) {
+        (self.emit)(json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/publishDiagnostics",
+            "params": vec![CodeAction {
+                kind: Some("quickfix".to_string()),
+                title: "Delete everything".to_string(),
+                edit: None,
+                diagnostics: None,
+                command: None,
+            }],
+        }));
+
+        // let result = self.check(&params.text_document);
+        // for warn in result.iter() {
+        //     if let Some(label) = warn.diagnostic().labels.first() {
+        //     }
+        // }
+    }
+
+    fn check(&self, doc: &TextDocumentItem) -> RMSCheckResult {
+        RMSCheck::default()
             .compatibility(Compatibility::Conquerors)
-            .add_source(doc.uri.as_str(), &doc.text);
+            .add_source(doc.uri.as_str(), &doc.text)
+            .check()
+    }
 
+    fn check_and_publish(&self, uri: Url) {
         let mut diagnostics = vec![];
-        let result = checker.check();
+        let doc = match self.documents.get(&uri) {
+            Some(doc) => doc,
+            _ => return,
+        };
+        let result = self.check(&doc);
         for warn in result.iter() {
             let diag = codespan_lsp::make_lsp_diagnostic(
                 result.codemap(),
@@ -79,7 +123,10 @@ where
 {
     pub fn new(emit: Emit) -> RMSCheckLSP<Emit> {
         let mut instance = RMSCheckLSP {
-            inner: Arc::new(Mutex::new(Inner { emit })),
+            inner: Arc::new(Mutex::new(Inner {
+                emit,
+                documents: Default::default(),
+            })),
             handler: IoHandler::new(),
         };
         instance.install_handlers();
@@ -128,14 +175,16 @@ where
                     inner.lock().unwrap().closed(params)
                 });
         }
-    }
 
-    /*
-    fn emit(&self, message: serde_json::Value) {
-        let emit = self.inner.lock().unwrap().emit;
-        emit(message);
+        {
+            let inner = Arc::clone(&self.inner);
+            self.handler
+                .add_notification("textDocument/codeAction", move |params: Params| {
+                    let params: CodeActionParams = params.parse().unwrap();
+                    inner.lock().unwrap().code_action(params)
+                });
+        }
     }
-    */
 
     pub fn handle_sync(&mut self, message: serde_json::Value) -> Option<serde_json::Value> {
         self.handler
