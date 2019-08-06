@@ -4,19 +4,17 @@ mod parser;
 mod tokens;
 mod wordize;
 
-use crate::checker::Checker;
-use crate::wordize::Wordize;
-use codespan::{ByteIndex, ByteOffset, CodeMap, ColumnIndex, FileMap, FileName, LineIndex};
-use std::io::Result;
-use std::path::PathBuf;
-use std::sync::Arc;
-
-pub use crate::checker::{
-    AutoFixReplacement, Compatibility, Expect, Lint, Nesting, ParseState, Severity, Suggestion,
-    Warning,
+use crate::{checker::Checker, wordize::Wordize};
+pub use crate::{
+    checker::{
+        AutoFixReplacement, Compatibility, Expect, Lint, Nesting, ParseState, Severity, Suggestion,
+        Warning,
+    },
+    tokens::{ArgType, TokenContext, TokenType, TOKENS},
+    wordize::Word,
 };
-pub use crate::tokens::{ArgType, TokenContext, TokenType, TOKENS};
-pub use crate::wordize::Word;
+use codespan::{ByteIndex, ByteOffset, CodeMap, ColumnIndex, FileMap, FileName, LineIndex};
+use std::{collections::HashMap, io::Result, path::PathBuf, sync::Arc};
 
 pub struct RMSCheckResult {
     warnings: Vec<Warning>,
@@ -54,7 +52,8 @@ impl RMSCheckResult {
 pub struct RMSCheck<'a> {
     checker: Checker<'a>,
     codemap: CodeMap,
-    filemaps: Vec<Arc<FileMap>>,
+    file_maps: Vec<Arc<FileMap>>,
+    binary_files: HashMap<String, Vec<u8>>,
 }
 
 impl<'a> Default for RMSCheck<'a> {
@@ -76,7 +75,8 @@ impl<'a> RMSCheck<'a> {
         let check = RMSCheck {
             checker: Checker::default(),
             codemap: CodeMap::new(),
-            filemaps: vec![],
+            file_maps: Default::default(),
+            binary_files: Default::default(),
         };
         check.add_source("random_map.def", include_str!("random_map.def"))
     }
@@ -95,18 +95,23 @@ impl<'a> RMSCheck<'a> {
         }
     }
 
+    pub fn add_binary(mut self, name: &str, source: Vec<u8>) -> Self {
+        self.binary_files.insert(name.to_string(), source);
+        self
+    }
+
     pub fn add_source(mut self, name: &str, source: &str) -> Self {
         let map = self.codemap.add_filemap(
             FileName::Virtual(name.to_string().into()),
             source.to_string(),
         );
-        self.filemaps.push(map);
+        self.file_maps.push(map);
         self
     }
 
     pub fn add_file(mut self, path: PathBuf) -> Result<Self> {
         let map = self.codemap.add_filemap_from_disk(path)?;
-        self.filemaps.push(map);
+        self.file_maps.push(map);
         Ok(self)
     }
 
@@ -116,7 +121,11 @@ impl<'a> RMSCheck<'a> {
 
     pub fn check(self) -> RMSCheckResult {
         let mut checker = self.checker.build();
-        let words = self.filemaps.iter().map(|map| Wordize::new(&map)).flatten();
+        let words = self
+            .file_maps
+            .iter()
+            .map(|map| Wordize::new(&map))
+            .flatten();
 
         let warnings = words.filter_map(|w| checker.write_token(&w)).collect();
 
