@@ -1,12 +1,12 @@
-use codespan::{FileName};
+use codespan::{CodeMap, FileName};
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use languageserver_types::{
-    CodeAction, CodeActionParams, CodeActionProviderCapability, DidChangeTextDocumentParams,
-    DidCloseTextDocumentParams, DidOpenTextDocumentParams, InitializeParams, InitializeResult,
-    PublishDiagnosticsParams, ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Url,
+    CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    InitializeParams, InitializeResult, NumberOrString, PublishDiagnosticsParams,
+    ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability, TextDocumentSyncKind, Url,
 };
-use rms_check::{Compatibility, RMSCheck, RMSCheckResult};
+use rms_check::{Compatibility, RMSCheck, RMSCheckResult, Warning};
 use serde_json::{self, json};
 use std::{
     cmp::Ordering,
@@ -28,6 +28,36 @@ impl<Emit> Inner<Emit>
 where
     Emit: Fn(serde_json::Value) + Send + 'static,
 {
+    fn codemap_name_to_file(&self, filename: &FileName) -> Result<Url, ()> {
+        let filename = match filename {
+            FileName::Virtual(filename) => filename.to_string(),
+            // should not be any real filenames when using the language server
+            FileName::Real(_) => return Err(()),
+        };
+
+        if filename.starts_with("file://") {
+            return filename.parse().map_err(|_| ());
+        }
+
+        Err(())
+    }
+
+    fn make_lsp_diagnostic(&self, codemap: &CodeMap, warn: &Warning) -> Diagnostic {
+        let diag = codespan_lsp::make_lsp_diagnostic(codemap, warn.diagnostic().clone(), |f| {
+            self.codemap_name_to_file(f)
+        })
+        .unwrap();
+
+        Diagnostic {
+            code: warn
+                .diagnostic()
+                .code.as_ref()
+                .map(|code| NumberOrString::String(code.to_string())),
+            source: Some("rms-check".to_string()),
+            ..diag
+        }
+    }
+
     fn initialize(&mut self, _params: InitializeParams) -> RpcResult {
         let mut capabilities = ServerCapabilities::default();
         capabilities.code_action_provider = Some(CodeActionProviderCapability::Simple(true));
@@ -64,12 +94,14 @@ where
         let doc = self.documents.get(&params.text_document.uri).unwrap();
         let result = self.check(&doc);
         let filename = doc.uri.to_string();
-        let file_map = result.codemap().iter().find(|map| {
-            match map.name() {
+        let file_map = result
+            .codemap()
+            .iter()
+            .find(|map| match map.name() {
                 FileName::Virtual(n) => *n == filename,
                 _ => false,
-            }
-        }).unwrap();
+            })
+            .unwrap();
         let start = codespan_lsp::position_to_byte_index(file_map, &params.range.start)
             .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
         let end = codespan_lsp::position_to_byte_index(file_map, &params.range.end)
@@ -89,12 +121,7 @@ where
                 actions.push(CodeAction {
                     title: sugg.message().to_string(),
                     kind: Some("quickfix".to_string()),
-                    diagnostics: Some(vec![codespan_lsp::make_lsp_diagnostic(
-                        result.codemap(),
-                        warn.diagnostic().clone(),
-                        |_filename| Ok(doc.uri.clone()),
-                    )
-                    .unwrap()]),
+                    diagnostics: Some(vec![self.make_lsp_diagnostic(result.codemap(), warn)]),
                     edit: None,
                     command: None,
                 });
@@ -120,12 +147,7 @@ where
         };
         let result = self.check(&doc);
         for warn in result.iter() {
-            let diag = codespan_lsp::make_lsp_diagnostic(
-                result.codemap(),
-                warn.diagnostic().clone(),
-                |_filename| Ok(doc.uri.clone()),
-            )
-            .unwrap();
+            let diag = self.make_lsp_diagnostic(result.codemap(), warn);
             diagnostics.push(diag);
         }
 
