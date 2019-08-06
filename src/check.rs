@@ -1,4 +1,5 @@
 use crate::cli_reporter::report as cli_report;
+use failure::Fallible;
 use multisplice::Multisplice;
 use quicli::prelude::*;
 use rms_check::{AutoFixReplacement, Compatibility, RMSCheck};
@@ -18,7 +19,7 @@ pub struct CheckArgs {
     pub fix_unsafe: bool,
 }
 
-pub fn cli_check(args: CheckArgs) -> Result<()> {
+pub fn cli_check(args: CheckArgs) -> Fallible<()> {
     let checker = RMSCheck::default()
         .compatibility(args.compatibility)
         .add_file(args.file)?;
@@ -33,7 +34,7 @@ pub fn cli_check(args: CheckArgs) -> Result<()> {
     Ok(())
 }
 
-pub fn cli_fix(args: CheckArgs) -> Result<()> {
+pub fn cli_fix(args: CheckArgs) -> Fallible<()> {
     let mut input_file = File::open(&args.file)?;
     let mut bytes = vec![];
     input_file.read_to_end(&mut bytes)?;

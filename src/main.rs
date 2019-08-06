@@ -10,7 +10,9 @@ mod language_server;
 
 use check::{cli_check, cli_fix, CheckArgs};
 use language_server::cli_server;
-use quicli::{main, prelude::*};
+use failure::Fallible;
+use quicli::prelude::*;
+use structopt::StructOpt;
 use rms_check::Compatibility;
 
 #[derive(Debug, StructOpt)]
@@ -57,7 +59,9 @@ impl Cli {
     }
 }
 
-main!(|args: Cli| {
+fn main() -> Fallible<()> {
+    let args = Cli::from_args();
+
     if args.server {
         cli_server();
         unreachable!();
@@ -85,5 +89,7 @@ main!(|args: Cli| {
         file: args.file.unwrap().into(),
         dry_run: args.dry_run,
         fix_unsafe: args.fix_unsafe,
-    })?
-});
+    })?;
+
+    Ok(())
+}
