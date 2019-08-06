@@ -54,7 +54,7 @@ fn write_message(message: &str) {
     writer.flush().unwrap();
 }
 
-fn main() {
+pub fn cli_server() {
     let mut lsp = RMSCheckLSP::new(|message| {
         let message = serde_json::to_string(&message).unwrap();
         write_message(&message);

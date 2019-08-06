@@ -4,29 +4,32 @@
 //! rms-check "/path/to/aoc/Random/Everything_Random_v4.3.rms"
 //! ```
 
+mod check;
 mod cli_reporter;
+mod language_server;
 
-use cli_reporter::report as cli_report;
-use multisplice::Multisplice;
+use check::{cli_check, cli_fix, CheckArgs};
+use language_server::cli_server;
 use quicli::{main, prelude::*};
-use rms_check::{AutoFixReplacement, Compatibility, RMSCheck};
-use std::fs::{remove_file, File};
-use std::io::Read;
-use std::path::PathBuf;
+use rms_check::Compatibility;
 
 #[derive(Debug, StructOpt)]
-struct Cli {
+pub struct Cli {
+    /// Start the language server.
+    #[structopt(long = "server")]
+    server: bool,
+
     /// Auto-fix some problems.
     #[structopt(long = "fix")]
     fix: bool,
     /// Auto-fix some problems, but don't actually write.
-    #[structopt(long = "fix-dry-run")]
-    fix_dry_run: bool,
+    #[structopt(long = "dry-run")]
+    dry_run: bool,
     /// Run unsafe autofixes. These may break your map!
     #[structopt(long = "fix-unsafe")]
     fix_unsafe: bool,
     /// The file to check.
-    file: String,
+    file: Option<String>,
 
     #[structopt(long = "aoc")]
     aoc: bool,
@@ -38,116 +41,49 @@ struct Cli {
     hd_edition: bool,
 }
 
-fn compat(args: &Cli) -> Compatibility {
-    if args.hd_edition {
-        Compatibility::HDEdition
-    } else if args.userpatch14 {
-        Compatibility::UserPatch14
-    } else if args.userpatch15 {
-        Compatibility::UserPatch15
-    } else if args.aoc {
-        Compatibility::Conquerors
-    } else {
-        Compatibility::All
-    }
-}
-
-fn cli_check(args: Cli) -> Result<()> {
-    let checker = RMSCheck::default()
-        .compatibility(compat(&args))
-        .add_file(args.file.into())?;
-    let result = checker.check();
-    let has_warnings = result.has_warnings();
-
-    cli_report(result);
-
-    if has_warnings {
-        bail!("There were warnings");
-    }
-    Ok(())
-}
-
-fn cli_fix(args: Cli, dry: bool) -> Result<()> {
-    let mut input_file = File::open(&args.file)?;
-    let mut bytes = vec![];
-    input_file.read_to_end(&mut bytes)?;
-    let source = String::from_utf8_lossy(&bytes);
-
-    let checker = RMSCheck::default()
-        .compatibility(compat(&args))
-        .add_file(PathBuf::from(&args.file))?;
-    let result = checker.check();
-
-    let mut splicer = Multisplice::new(&source);
-
-    if !result.has_warnings() {
-        // All good!
-        return Ok(());
-    }
-
-    for warn in result.iter() {
-        for suggestion in warn.suggestions() {
-            match suggestion.replacement() {
-                AutoFixReplacement::Safe(ref new_value) => {
-                    let start = result.resolve_position(suggestion.start()).unwrap();
-                    let end = result.resolve_position(suggestion.end()).unwrap();
-                    eprintln!(
-                        "autofix {}:{} → {}:{} to {}",
-                        start.0.number(),
-                        start.1.number(),
-                        end.0.number(),
-                        end.1.number(),
-                        new_value
-                    );
-                    let start = result.resolve_offset(suggestion.start()).unwrap();
-                    let end = result.resolve_offset(suggestion.end()).unwrap();
-                    splicer.splice(start.to_usize(), end.to_usize(), new_value);
-                }
-                AutoFixReplacement::Unsafe(ref new_value) if args.fix_unsafe => {
-                    let start = result.resolve_position(suggestion.start()).unwrap();
-                    let end = result.resolve_position(suggestion.end()).unwrap();
-                    eprintln!(
-                        "UNSAFE autofix {}:{} → {}:{} to {}",
-                        start.0.number(),
-                        start.1.number(),
-                        end.0.number(),
-                        end.1.number(),
-                        new_value
-                    );
-                    let start = result.resolve_offset(suggestion.start()).unwrap();
-                    let end = result.resolve_offset(suggestion.end()).unwrap();
-                    splicer.splice(start.to_usize(), end.to_usize(), new_value);
-                }
-                _ => (),
-            }
+impl Cli {
+    pub fn compat(&self) -> Compatibility {
+        if self.hd_edition {
+            Compatibility::HDEdition
+        } else if self.userpatch14 {
+            Compatibility::UserPatch14
+        } else if self.userpatch15 {
+            Compatibility::UserPatch15
+        } else if self.aoc {
+            Compatibility::Conquerors
+        } else {
+            Compatibility::All
         }
-    }
-
-    if dry {
-        let temp = format!("{}.tmp", args.file);
-        write_to_file(&temp, &splicer.to_string())?;
-        let result = cli_check(Cli {
-            file: temp.clone(),
-            ..args
-        });
-        remove_file(&temp)?;
-        result
-    } else {
-        let backup = format!("{}.bak", args.file);
-        write_to_file(&backup, &source)?;
-        write_to_file(&args.file, &splicer.to_string())?;
-        remove_file(&backup)?;
-        cli_check(args)
     }
 }
 
 main!(|args: Cli| {
-    if args.fix {
-        return cli_fix(args, false);
-    }
-    if args.fix_dry_run {
-        return cli_fix(args, true);
+    if args.server {
+        cli_server();
+        unreachable!();
     }
 
-    cli_check(args)?
+    if args.fix {
+        if args.file.is_none() {
+            bail!("must specify a file to fix");
+        }
+
+        return cli_fix(CheckArgs {
+            compatibility: args.compat(),
+            file: args.file.unwrap().into(),
+            dry_run: args.dry_run,
+            fix_unsafe: args.fix_unsafe,
+        });
+    }
+
+    if args.file.is_none() {
+        bail!("must specify a file to check");
+    }
+
+    cli_check(CheckArgs {
+        compatibility: args.compat(),
+        file: args.file.unwrap().into(),
+        dry_run: args.dry_run,
+        fix_unsafe: args.fix_unsafe,
+    })?
 });
