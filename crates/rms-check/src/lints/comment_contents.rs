@@ -86,18 +86,25 @@ mod tests {
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
         let second = warnings.next().unwrap();
-        assert!(warnings.next().is_none());
+        let third = warnings.next().unwrap();
+        assert!(dbg!(warnings.next()).is_none());
         assert_eq!(first.diagnostic().severity, Severity::Warning);
         assert_eq!(
             first.diagnostic().code,
             Some("comment-contents".to_string())
         );
-        assert_eq!(first.message(), "This close comment may be ignored because a previous command is expecting 0 more argument(s)");
+        assert_eq!(first.message(), "This close comment may be ignored because a previous command is expecting 2 more argument(s)");
         assert_eq!(second.diagnostic().severity, Severity::Warning);
         assert_eq!(
             second.diagnostic().code,
             Some("comment-contents".to_string())
         );
-        assert_eq!(second.message(), "Using constant names in comments can be dangerous, because the game may interpret them as other tokens instead.");
+        assert_eq!(second.message(), "This close comment may be ignored because a previous command is expecting 0 more argument(s)");
+        assert_eq!(third.diagnostic().severity, Severity::Warning);
+        assert_eq!(
+            third.diagnostic().code,
+            Some("comment-contents".to_string())
+        );
+        assert_eq!(third.message(), "Using constant names in comments can be dangerous, because the game may interpret them as other tokens instead.");
     }
 }
