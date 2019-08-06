@@ -10,14 +10,19 @@ A syntax checker for Age of Empires 2 rando map scripts.
 Detect common problems with AoE Random Map Scripts
 
 USAGE:
-    rms-check [FLAGS] <file>
+    rms-check [FLAGS] [file]
 
 FLAGS:
-        --fix            Auto-fix some problems.
-        --fix-dry-run    Auto-fix some problems, but don't actually write.
-        --fix-unsafe     Run unsafe autofixes. These may break your map!
-    -h, --help           Prints help information
-    -V, --version        Prints version information
+        --aoc
+        --dry-run       Auto-fix some problems, but don't actually write.
+        --fix           Auto-fix some problems.
+        --fix-unsafe    Run unsafe autofixes. These may break your map!
+    -h, --help          Prints help information
+        --hd
+        --server        Start the language server.
+        --up14
+        --up15
+    -V, --version       Prints version information
 
 ARGS:
     <file>    The file to check.
