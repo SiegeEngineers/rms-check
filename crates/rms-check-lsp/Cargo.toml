@@ -8,6 +8,7 @@ repository = "https://github.com/goto-bus-stop/rms-check.git"
 edition = "2018"
 
 [dependencies]
+codespan = "^0.3.0"
 codespan-lsp = "^0.3.0"
 jsonrpc-core = "^13.0.0"
 languageserver-types = "^0.54.0"

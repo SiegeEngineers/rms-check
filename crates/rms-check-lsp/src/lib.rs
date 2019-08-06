@@ -1,3 +1,4 @@
+use codespan::{FileMap, FileName};
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use languageserver_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, DidChangeTextDocumentParams,
@@ -5,9 +6,10 @@ use languageserver_types::{
     PublishDiagnosticsParams, ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability,
     TextDocumentSyncKind, Url,
 };
-use rms_check::{Compatibility, RMSCheck, RMSCheckResult};
+use rms_check::{Compatibility, RMSCheck, RMSCheckResult, Warning};
 use serde_json::{self, json};
 use std::{
+    cmp::Ordering,
     collections::HashMap,
     sync::{Arc, Mutex},
 };
@@ -26,7 +28,7 @@ impl<Emit> Inner<Emit>
 where
     Emit: Fn(serde_json::Value) + Send + 'static,
 {
-    fn initialize(&mut self, params: InitializeParams) -> RpcResult {
+    fn initialize(&mut self, _params: InitializeParams) -> RpcResult {
         let mut capabilities = ServerCapabilities::default();
         capabilities.code_action_provider = Some(CodeActionProviderCapability::Simple(true));
         capabilities.text_document_sync =
@@ -43,10 +45,12 @@ where
     }
 
     fn changed(&mut self, mut params: DidChangeTextDocumentParams) {
+        let uri = params.text_document.uri.clone();
+
         match self.documents.get_mut(&params.text_document.uri) {
             Some(doc) => {
                 doc.text = params.content_changes.remove(0).text;
-                self.check_and_publish(params.text_document.uri);
+                self.check_and_publish(uri);
             }
             _ => (),
         };
@@ -56,24 +60,49 @@ where
         self.documents.remove(&params.text_document.uri);
     }
 
-    fn code_action(&self, params: CodeActionParams) {
-        (self.emit)(json!({
-            "jsonrpc": "2.0",
-            "method": "textDocument/publishDiagnostics",
-            "params": vec![CodeAction {
-                kind: Some("quickfix".to_string()),
-                title: "Delete everything".to_string(),
-                edit: None,
-                diagnostics: None,
-                command: None,
-            }],
-        }));
+    fn code_action(&mut self, params: CodeActionParams) -> RpcResult {
+        let doc = self.documents.get(&params.text_document.uri).unwrap();
+        let result = self.check(&doc);
+        let filename = doc.uri.to_string();
+        let file_map = result.codemap().iter().find(|map| {
+            match map.name() {
+                FileName::Virtual(n) => *n == filename,
+                _ => false,
+            }
+        }).unwrap();
+        let start = codespan_lsp::position_to_byte_index(file_map, &params.range.start)
+            .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
+        let end = codespan_lsp::position_to_byte_index(file_map, &params.range.end)
+            .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
 
-        // let result = self.check(&params.text_document);
-        // for warn in result.iter() {
-        //     if let Some(label) = warn.diagnostic().labels.first() {
-        //     }
-        // }
+        let warnings = result.iter().filter(|warn| {
+            if let Some(label) = warn.diagnostic().labels.first() {
+                return label.span.containment(start) == Ordering::Equal
+                    || label.span.containment(end) == Ordering::Equal;
+            }
+            return false;
+        });
+
+        let mut actions = vec![];
+        for warn in warnings {
+            for sugg in warn.suggestions() {
+                actions.push(CodeAction {
+                    title: sugg.message().to_string(),
+                    kind: Some("quickfix".to_string()),
+                    diagnostics: Some(vec![codespan_lsp::make_lsp_diagnostic(
+                        result.codemap(),
+                        warn.diagnostic().clone(),
+                        |_filename| Ok(doc.uri.clone()),
+                    )
+                    .unwrap()]),
+                    edit: None,
+                    command: None,
+                });
+            }
+        }
+
+        serde_json::to_value(actions)
+            .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
 
     fn check(&self, doc: &TextDocumentItem) -> RMSCheckResult {
@@ -179,7 +208,7 @@ where
         {
             let inner = Arc::clone(&self.inner);
             self.handler
-                .add_notification("textDocument/codeAction", move |params: Params| {
+                .add_method("textDocument/codeAction", move |params: Params| {
                     let params: CodeActionParams = params.parse().unwrap();
                     inner.lock().unwrap().code_action(params)
                 });

@@ -543,6 +543,7 @@ dependencies = [
 name = "rms-check-lsp"
 version = "0.1.0"
 dependencies = [
+ "codespan 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "codespan-lsp 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 13.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "languageserver-types 0.54.0 (registry+https://github.com/rust-lang/crates.io-index)",

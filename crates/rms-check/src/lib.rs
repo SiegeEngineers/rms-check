@@ -45,6 +45,10 @@ impl RMSCheckResult {
         })
     }
 
+    pub fn into_iter(self) -> impl IntoIterator<Item = Warning> {
+        self.warnings.into_iter()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &Warning> {
         self.warnings.iter()
     }
