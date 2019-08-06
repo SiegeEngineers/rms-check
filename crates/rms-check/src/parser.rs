@@ -523,6 +523,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn dry_arabia() {
         let f = std::fs::read("tests/rms/Dry Arabia.rms").unwrap();
         let mut f = filemap(std::str::from_utf8(&f).unwrap());
