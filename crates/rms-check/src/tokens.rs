@@ -164,7 +164,7 @@ lazy_static! {
         m.insert(token!("<OBJECTS_GENERATION>", TokenContext::Section));
         m.insert(token!("<CONNECTION_GENERATION>", TokenContext::Section));
 
-        m.insert(token!("ai_info_map_type", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Number, Number, Number]));
+        m.insert(token!("ai_info_map_type", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Token, Number, Number]));
         m.insert(token!("random_placement", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>"))));
         m.insert(token!("grouped_by_team", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>"))));
 
