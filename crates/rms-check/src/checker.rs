@@ -194,7 +194,7 @@ impl Warning {
     }
 }
 
-impl<'a> Word<'a> {
+impl Word<'_> {
     /// Create a warning applying to this token.
     pub fn warning<S: AsRef<str>>(&self, message: S) -> Warning {
         Warning {

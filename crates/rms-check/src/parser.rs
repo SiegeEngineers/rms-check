@@ -42,6 +42,26 @@ pub enum Atom<'a> {
     Other(Word<'a>),
 }
 
+impl Atom<'_> {
+    /// Get the full span for an atom.
+    pub fn span(&self) -> ByteSpan {
+        use Atom::*;
+        match self {
+            Section(def) |  Else(def) | EndIf(def) | OpenBlock(def) | CloseBlock(def) | Other(def) => def.span,
+            Const(def, name, val) => def.span.to(val.unwrap_or(*name).span),
+            Define(def,arg) | If(def, arg) | ElseIf(def, arg) => def.span.to(arg.span),
+            Command(name, args) => match args.last() {
+                Some(arg) => name.span.to(arg.span),
+                None => name.span,
+            },
+            Comment(left, _, right) => left.span.to(match right {
+                Some(right) => right.span,
+                None => ByteSpan::new(left.span.start(), ByteIndex::none()),
+            }),
+        }
+    }
+}
+
 impl Display for Atom<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Atom::*;
