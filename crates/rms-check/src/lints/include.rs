@@ -1,10 +1,11 @@
-use crate::{Lint, ParseState, Suggestion, Warning, Word};
+use crate::{Atom, Lint, ParseState, Suggestion, Warning};
 
+#[derive(Default)]
 pub struct IncludeLint {}
 
 impl IncludeLint {
     pub fn new() -> Self {
-        IncludeLint {}
+        Default::default()
     }
 }
 
@@ -12,21 +13,22 @@ impl Lint for IncludeLint {
     fn name(&self) -> &'static str {
         "include"
     }
-    fn lint_token(&mut self, _state: &mut ParseState, token: &Word) -> Option<Warning> {
-        match token.value {
-            "#include_drs" => Some(token.error("#include_drs can only be used by builtin maps")),
-            "#include" => {
-                let suggestion = Suggestion::from(
-                    token,
+    fn lint_atom(&mut self, _state: &mut ParseState, atom: &Atom) -> Vec<Warning> {
+        match atom {
+            Atom::Command(cmd, _) if cmd.value == "#include_drs" => {
+                vec![atom.error("#include_drs can only be used by builtin maps")]
+            }
+            Atom::Command(cmd, _) if cmd.value == "#include" => {
+                let suggestion = Suggestion::new(
+                    atom.span().start(),
+                    atom.span().end(),
                     "If you're trying to make a map pack, use a map pack generator instead.",
                 );
-                Some(
-                    token
-                        .error("#include can only be used by builtin maps")
-                        .suggest(suggestion),
-                )
+                vec![atom
+                    .error("#include can only be used by builtin maps")
+                    .suggest(suggestion)]
             }
-            _ => None,
+            _ => Default::default(),
         }
     }
 }

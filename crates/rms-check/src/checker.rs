@@ -1,5 +1,8 @@
-use crate::tokens::{ArgType, TokenContext, TokenType, TOKENS};
-use crate::wordize::Word;
+use crate::{
+    parser::Atom,
+    tokens::{ArgType, TokenContext, TokenType, TOKENS},
+    wordize::Word,
+};
 use codespan::{ByteIndex, ByteSpan};
 pub use codespan_reporting::{Diagnostic, Label, Severity};
 use lazy_static::lazy_static;
@@ -213,6 +216,25 @@ impl Word<'_> {
     }
 }
 
+impl Atom<'_> {
+    /// Create a warning applying to this token.
+    pub fn warning<S: AsRef<str>>(&self, message: S) -> Warning {
+        Warning {
+            diagnostic: Diagnostic::new_warning(message.as_ref().to_string())
+                .with_label(Label::new_primary(self.span())),
+            suggestions: vec![],
+        }
+    }
+    /// Create an error applying to this token.
+    pub fn error<S: AsRef<str>>(&self, message: S) -> Warning {
+        Warning {
+            diagnostic: Diagnostic::new_error(message.as_ref().to_string())
+                .with_label(Label::new_primary(self.span())),
+            suggestions: vec![],
+        }
+    }
+}
+
 /// Check if a string is numeric.
 fn is_numeric(s: &str) -> bool {
     s.parse::<i32>().is_ok()
@@ -269,7 +291,12 @@ pub trait Lint {
     fn run_inside_comments(&self) -> bool {
         false
     }
-    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning>;
+    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
+        Default::default()
+    }
+    fn lint_atom(&mut self, state: &mut ParseState, tamo: &Atom) -> Vec<Warning> {
+        Default::default()
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -554,6 +581,19 @@ impl<'a> Checker<'a> {
         }
 
         None
+    }
+
+    pub fn write_atom(&mut self, atom: &Atom<'a>) -> Vec<Warning> {
+        let mut state = &mut self.state;
+        let mut warnings = vec![];
+        for (name, lint) in self.lints.iter_mut() {
+            warnings.extend(
+                lint.lint_atom(&mut state, atom)
+                    .into_iter()
+                    .map(move |warning| warning.lint(&name)),
+            );
+        }
+        warnings
     }
 
     /// Parse and lint the next token.

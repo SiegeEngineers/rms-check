@@ -4,12 +4,13 @@ mod parser;
 mod tokens;
 mod wordize;
 
-use crate::{checker::Checker, wordize::Wordize};
+use crate::{checker::Checker, parser::Parser, wordize::Wordize};
 pub use crate::{
     checker::{
         AutoFixReplacement, Compatibility, Expect, Lint, Nesting, ParseState, Severity, Suggestion,
         Warning,
     },
+    parser::Atom,
     tokens::{ArgType, TokenContext, TokenType, TOKENS},
     wordize::Word,
 };
@@ -127,8 +128,17 @@ impl<'a> RMSCheck<'a> {
             .map(|map| Wordize::new(&map))
             .flatten();
 
-        let warnings = words.filter_map(|w| checker.write_token(&w)).collect();
+        let token_warnings: Vec<Warning> = words.filter_map(|w| checker.write_token(&w)).collect();
+        let mut atom_warnings = vec![];
+        let parsers = self.file_maps.iter().map(|map| Parser::new(&map));
+        for parser in parsers {
+            for (atom, _warnings) in parser {
+                atom_warnings.extend(checker.write_atom(&atom));
+            }
+        }
 
+        let mut warnings = token_warnings;
+        warnings.extend(atom_warnings);
         RMSCheckResult {
             codemap: self.codemap,
             warnings,

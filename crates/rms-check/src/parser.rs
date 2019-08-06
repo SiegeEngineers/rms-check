@@ -1,8 +1,13 @@
-use crate::{tokens::TOKENS,
-wordize::{Word, Wordize}};
+use crate::{
+    tokens::TOKENS,
+    wordize::{Word, Wordize},
+};
 use codespan::{ByteIndex, ByteOffset, ByteSpan, FileMap};
 use itertools::MultiPeek;
-use std::{fmt::{self,Display},ops::RangeBounds};
+use std::{
+    fmt::{self, Display},
+    ops::RangeBounds,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WarningKind {
@@ -51,9 +56,12 @@ impl Atom<'_> {
     pub fn span(&self) -> ByteSpan {
         use Atom::*;
         match self {
-            Section(def) |  Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def) | OpenBlock(def) | CloseBlock(def) | Other(def) => def.span,
+            Section(def) | Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def)
+            | OpenBlock(def) | CloseBlock(def) | Other(def) => def.span,
             Const(def, name, val) => def.span.to(val.unwrap_or(*name).span),
-            Define(def,arg) | If(def, arg) | ElseIf(def, arg) |  PercentChance(def, arg) => def.span.to(arg.span),
+            Define(def, arg) | If(def, arg) | ElseIf(def, arg) | PercentChance(def, arg) => {
+                def.span.to(arg.span)
+            }
             Command(name, args) => match args.last() {
                 Some(arg) => name.span.to(arg.span),
                 None => name.span,
@@ -70,7 +78,12 @@ impl Display for Atom<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Atom::*;
         match self {
-            Const(_, name, val) => write!(f, "Const<{}, {}>", name.value, val.map(|v| v.value).unwrap_or("()")),
+            Const(_, name, val) => write!(
+                f,
+                "Const<{}, {}>",
+                name.value,
+                val.map(|v| v.value).unwrap_or("()")
+            ),
             Define(_, name) => write!(f, "Define<{}>", name.value),
             Section(name) => write!(f, "Section{}", name.value),
             If(_, condition) => write!(f, "If<{}>", condition.value),
@@ -82,7 +95,14 @@ impl Display for Atom<'_> {
             EndRandom(_) => write!(f, "EndRandom"),
             OpenBlock(_) => write!(f, "OpenBlock"),
             CloseBlock(_) => write!(f, "CloseBlock"),
-            Command(name, args) => write!(f, "Command<{}{}>", name.value, args.iter().map(|a| format!(", {}", a.value)).collect::<String>()),
+            Command(name, args) => write!(
+                f,
+                "Command<{}{}>",
+                name.value,
+                args.iter()
+                    .map(|a| format!(", {}", a.value))
+                    .collect::<String>()
+            ),
             Comment(_, content, _) => write!(f, "Comment<{:?}>", content),
             Other(other) => write!(f, "Other<{}>", other.value),
         }
@@ -177,7 +197,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn read_command(&mut self, command_name: Word<'a>, lower_name: &str) -> Option<(Atom<'a>, Vec<Warning>)> {
+    fn read_command(
+        &mut self,
+        command_name: Word<'a>,
+        lower_name: &str,
+    ) -> Option<(Atom<'a>, Vec<Warning>)> {
         let mut warnings = vec![];
 
         // token is guaranteed to exist at this point
@@ -197,10 +221,7 @@ impl<'a> Parser<'a> {
             };
             warnings.push(Warning::new(span, WarningKind::MissingCommandArgs));
         }
-        Some((
-            Atom::Command(command_name, args),
-            warnings,
-        ))
+        Some((Atom::Command(command_name, args), warnings))
     }
 }
 
@@ -248,7 +269,7 @@ impl<'a> Iterator for Parser<'a> {
                     Atom::Other(word),
                     vec![Warning::new(word.span, WarningKind::MissingPercentChance)],
                 )),
-            }
+            },
             "end_random" => t(Atom::EndRandom(word)),
             "#define" => match self.read_arg() {
                 Some(name) => t(Atom::Define(word, name)),
@@ -271,7 +292,9 @@ impl<'a> Iterator for Parser<'a> {
                     vec![Warning::new(word.span, WarningKind::MissingConstName)],
                 )),
             },
-            command_name if TOKENS.contains_key(command_name) => self.read_command(word, command_name),
+            command_name if TOKENS.contains_key(command_name) => {
+                self.read_command(word, command_name)
+            }
             _ => t(Atom::Other(word)),
         }
     }
@@ -496,6 +519,15 @@ mod tests {
             assert_eq!(tok.value, "}");
         } else {
             assert!(false)
+        }
+    }
+
+    #[test]
+    fn dry_arabia() {
+        let f = std::fs::read("tests/rms/Dry Arabia.rms").unwrap();
+        let mut f = filemap(std::str::from_utf8(&f).unwrap());
+        for (atom, _) in Parser::new(&mut f) {
+            println!("{}", atom);
         }
     }
 }
