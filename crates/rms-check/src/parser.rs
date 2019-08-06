@@ -1,8 +1,8 @@
-use crate::tokens::{ArgType, TOKENS};
-use crate::wordize::{Word, Wordize};
+use crate::{tokens::TOKENS,
+wordize::{Word, Wordize}};
 use codespan::{ByteIndex, ByteOffset, ByteSpan, FileMap};
 use itertools::MultiPeek;
-use std::ops::RangeBounds;
+use std::{fmt::{self,Display},ops::RangeBounds};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WarningKind {
@@ -40,6 +40,26 @@ pub enum Atom<'a> {
     Command(Word<'a>, Vec<Word<'a>>),
     Comment(Word<'a>, String, Option<Word<'a>>),
     Other(Word<'a>),
+}
+
+impl Display for Atom<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Atom::*;
+        match self {
+            Const(_, name, val) => write!(f, "Const<{}, {}>", name.value, val.map(|v| v.value).unwrap_or("()")),
+            Define(_, name) => write!(f, "Define<{}>", name.value),
+            Section(name) => write!(f, "Section{}", name.value),
+            If(_, condition) => write!(f, "If<{}>", condition.value),
+            ElseIf(_, condition) => write!(f, "ElseIf<{}>", condition.value),
+            Else(_) => write!(f, "Else"),
+            EndIf(_) => write!(f, "EndIf"),
+            OpenBlock(_) => write!(f, "OpenBlock"),
+            CloseBlock(_) => write!(f, "CloseBlock"),
+            Command(name, args) => write!(f, "Command<{}{}>", name.value, args.iter().map(|a| format!(", {}", a.value)).collect::<String>()),
+            Comment(_, content, _) => write!(f, "Comment<{:?}>", content),
+            Other(other) => write!(f, "Other<{}>", other.value),
+        }
+    }
 }
 
 /// A forgiving random map script parser, turning a stream of words into a stream of atoms.
