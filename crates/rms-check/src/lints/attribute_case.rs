@@ -1,4 +1,4 @@
-use super::super::{Lint, ParseState, Suggestion, Warning, Word, TOKENS};
+use super::super::{Lint, ParseState, Suggestion, Warning, Atom, TOKENS};
 
 pub struct AttributeCaseLint {}
 
@@ -12,13 +12,15 @@ impl Lint for AttributeCaseLint {
     fn name(&self) -> &'static str {
         "attribute-case"
     }
-    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
-        if state.current_token.is_none() && self.is_wrong_case(token.value) {
-            let suggestion = Suggestion::from(token, "Attributes must be all lowercase")
-                .replace(token.value.to_lowercase());
-            let message = format!("Unknown attribute `{}`", token.value);
-            return Some(token.error(message).suggest(suggestion));
+    fn lint_atom(&mut self, state: &mut ParseState, atom: &Atom) -> Vec<Warning> {
+        match atom {
+            Atom::Command(cmd, _) if self.is_wrong_case(cmd.value) => {
+                let suggestion = Suggestion::from(cmd, "Attributes must be all lowercase")
+                    .replace(cmd.value.to_lowercase());
+                let message = format!("Unknown attribute `{}`", cmd.value);
+                vec![atom.error(message).suggest(suggestion)]
+            },
+            _ => Default::default(),
         }
-        None
     }
 }
