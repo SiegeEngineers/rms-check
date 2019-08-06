@@ -127,6 +127,7 @@ impl<'a> Parser<'a> {
             "/*" | "*/" | "{" | "}" => return None,
             "if" | "elseif" | "else" | "endif" => return None,
             "start_random" | "percent_chance" | "end_random" => return None,
+            command_name if TOKENS.contains_key(command_name) => return None,
             _ => (),
         }
 
