@@ -1,0 +1,60 @@
+{
+  "name": "rms-check-vscode",
+  "description": "A language server example",
+  "author": "Renée Kooi <renee@kooi.me>",
+  "license": "MIT",
+  "version": "0.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/goto-bus-stop/rms-check",
+    "directory": "vscode"
+  },
+  "categories": [],
+  "keywords": [
+    "Age of Empires 2",
+    "aoe2",
+    "rms",
+    "random map script",
+    "multi-root ready"
+  ],
+  "publisher": "goto-bus-stop",
+  "engines": {
+    "vscode": "^1.23.0"
+  },
+  "activationEvents": [
+    "onLanguage:aoe2-rms"
+  ],
+  "main": "./client/extension",
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "Example configuration",
+      "properties": {
+        "rmsCheck.maxNumberOfProblems": {
+          "scope": "resource",
+          "type": "number",
+          "default": 100,
+          "description": "Controls the maximum number of problems produced by the server."
+        },
+        "rmsCheck.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^5.2.1",
+    "wasi": "0.0.6"
+  },
+  "devDependencies": {
+    "vscode": "^1.1.34"
+  }
+}
