@@ -291,10 +291,10 @@ pub trait Lint {
     fn run_inside_comments(&self) -> bool {
         false
     }
-    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
+    fn lint_token(&mut self, _state: &mut ParseState, _token: &Word) -> Option<Warning> {
         Default::default()
     }
-    fn lint_atom(&mut self, state: &mut ParseState, tamo: &Atom) -> Vec<Warning> {
+    fn lint_atom(&mut self, _state: &mut ParseState, _atom: &Atom) -> Vec<Warning> {
         Default::default()
     }
 }

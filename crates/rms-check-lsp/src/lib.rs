@@ -1,4 +1,4 @@
-use codespan::{FileMap, FileName};
+use codespan::{FileName};
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use languageserver_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, DidChangeTextDocumentParams,
@@ -6,7 +6,7 @@ use languageserver_types::{
     PublishDiagnosticsParams, ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability,
     TextDocumentSyncKind, Url,
 };
-use rms_check::{Compatibility, RMSCheck, RMSCheckResult, Warning};
+use rms_check::{Compatibility, RMSCheck, RMSCheckResult};
 use serde_json::{self, json};
 use std::{
     cmp::Ordering,
