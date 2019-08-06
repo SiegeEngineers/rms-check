@@ -12,6 +12,7 @@ pub enum WarningKind {
     MissingCommandArgs,
     MissingIfCondition,
     UnclosedComment,
+    WrongCommandCase,
 }
 
 #[derive(Debug, Clone)]
@@ -170,8 +171,16 @@ impl<'a> Parser<'a> {
     }
 
     fn read_command(&mut self, command_name: Word<'a>) -> Option<(Atom<'a>, Vec<Warning>)> {
+        let mut warnings = vec![];
+        fn is_not_lowercase(c: char) -> bool {
+            c.is_ascii_alphabetic() && !c.is_ascii_lowercase()
+        }
+        if command_name.value.chars().any(is_not_lowercase) {
+            warnings.push(Warning::new(command_name.span, WarningKind::WrongCommandCase));
+        }
+
         // token is guaranteed to exist at this point
-        let token_type = &TOKENS[command_name.value];
+        let token_type = &TOKENS[&command_name.value.to_ascii_lowercase()];
         let mut args = vec![];
         for _ in 0..token_type.arg_len() {
             match self.read_arg() {
@@ -180,18 +189,17 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if args.len() == token_type.arg_len() as usize {
-            Some((Atom::Command(command_name, args), vec![]))
-        } else {
+        if args.len() != token_type.arg_len() as usize {
             let span = match args.last() {
                 Some(arg) => command_name.span.to(arg.span),
                 _ => command_name.span,
             };
-            Some((
-                Atom::Command(command_name, args),
-                vec![Warning::new(span, WarningKind::MissingCommandArgs)],
-            ))
+            warnings.push(Warning::new(span, WarningKind::MissingCommandArgs));
         }
+        Some((
+            Atom::Command(command_name, args),
+            warnings,
+        ))
     }
 }
 
@@ -253,7 +261,7 @@ impl<'a> Iterator for Parser<'a> {
                     vec![Warning::new(word.span, WarningKind::MissingConstName)],
                 )),
             },
-            command_name if TOKENS.contains_key(command_name) => self.read_command(word),
+            command_name if TOKENS.contains_key(&command_name.to_ascii_lowercase()) => self.read_command(word),
             _ => t(Atom::Other(word)),
         }
     }
@@ -386,6 +394,29 @@ mod tests {
             assert_eq!(args.len(), 1);
             assert_eq!(args[0].value, "10");
             assert!(warnings.is_empty());
+        } else {
+            assert!(false);
+        }
+        if let (Atom::Command(name, args), warnings) = &atoms[1] {
+            assert_eq!(name.value, "grouped_by_team");
+            assert!(args.is_empty());
+            assert!(warnings.is_empty());
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn command_wrong_case() {
+        let mut f = filemap("land_Percent 10 grouped_by_team");
+        let atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
+        assert_eq!(atoms.len(), 2);
+        if let (Atom::Command(name, args), warnings) = &atoms[0] {
+            assert_eq!(name.value, "land_Percent");
+            assert_eq!(args.len(), 1);
+            assert_eq!(args[0].value, "10");
+            assert_eq!(warnings.len(), 1);
+            assert_eq!(warnings[0].kind, WarningKind::WrongCommandCase);
         } else {
             assert!(false);
         }
