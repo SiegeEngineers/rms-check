@@ -502,15 +502,23 @@ dependencies = [
 name = "rms-check"
 version = "0.1.0"
 dependencies = [
- "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "codespan 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "codespan-reporting 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "either 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "strsim 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "rms-check-cli"
+version = "0.1.0"
+dependencies = [
+ "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "codespan-reporting 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "multisplice 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "quicli 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "strsim 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rms-check 0.1.0",
+ "rms-check-lsp 0.1.0",
  "termcolor 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

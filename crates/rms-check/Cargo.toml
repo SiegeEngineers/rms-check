@@ -1,5 +1,5 @@
 [package]
-name = "rms-check-cli"
+name = "rms-check"
 version = "0.1.0"
 authors = ["Renée Kooi <renee@kooi.me>"]
 license = "GPL-3.0"
@@ -8,16 +8,8 @@ repository = "https://github.com/goto-bus-stop/rms-check.git"
 edition = "2018"
 
 [dependencies]
-ansi_term = "^0.11.0"
+codespan = "^0.3.0"
 codespan-reporting = "^0.3.0"
-multisplice = "^0.1.0"
-quicli = "^0.3.0"
-termcolor = "^1.0.4"
-rms-check = { path = "crates/rms-check" }
-rms-check-lsp = { path = "crates/rms-check-lsp" }
-
-[workspace]
-members = [
-  "crates/rms-check-lsp",
-  "crates/rms-check",
-]
+itertools = "^0.8.0"
+lazy_static = "^1.1.0"
+strsim = "^0.9.0"
