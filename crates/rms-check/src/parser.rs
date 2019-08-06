@@ -11,8 +11,8 @@ pub enum WarningKind {
     MissingDefineName,
     MissingCommandArgs,
     MissingIfCondition,
+    MissingPercentChance,
     UnclosedComment,
-    WrongCommandCase,
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +36,9 @@ pub enum Atom<'a> {
     ElseIf(Word<'a>, Word<'a>),
     Else(Word<'a>),
     EndIf(Word<'a>),
+    StartRandom(Word<'a>),
+    PercentChance(Word<'a>, Word<'a>),
+    EndRandom(Word<'a>),
     OpenBlock(Word<'a>),
     CloseBlock(Word<'a>),
     Command(Word<'a>, Vec<Word<'a>>),
@@ -48,9 +51,9 @@ impl Atom<'_> {
     pub fn span(&self) -> ByteSpan {
         use Atom::*;
         match self {
-            Section(def) |  Else(def) | EndIf(def) | OpenBlock(def) | CloseBlock(def) | Other(def) => def.span,
+            Section(def) |  Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def) | OpenBlock(def) | CloseBlock(def) | Other(def) => def.span,
             Const(def, name, val) => def.span.to(val.unwrap_or(*name).span),
-            Define(def,arg) | If(def, arg) | ElseIf(def, arg) => def.span.to(arg.span),
+            Define(def,arg) | If(def, arg) | ElseIf(def, arg) |  PercentChance(def, arg) => def.span.to(arg.span),
             Command(name, args) => match args.last() {
                 Some(arg) => name.span.to(arg.span),
                 None => name.span,
@@ -74,6 +77,9 @@ impl Display for Atom<'_> {
             ElseIf(_, condition) => write!(f, "ElseIf<{}>", condition.value),
             Else(_) => write!(f, "Else"),
             EndIf(_) => write!(f, "EndIf"),
+            StartRandom(_) => write!(f, "StartRandom"),
+            PercentChance(_, chance) => write!(f, "PercentChance<{}>", chance.value),
+            EndRandom(_) => write!(f, "EndRandom"),
             OpenBlock(_) => write!(f, "OpenBlock"),
             CloseBlock(_) => write!(f, "CloseBlock"),
             Command(name, args) => write!(f, "Command<{}{}>", name.value, args.iter().map(|a| format!(", {}", a.value)).collect::<String>()),
@@ -171,17 +177,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn read_command(&mut self, command_name: Word<'a>) -> Option<(Atom<'a>, Vec<Warning>)> {
+    fn read_command(&mut self, command_name: Word<'a>, lower_name: &str) -> Option<(Atom<'a>, Vec<Warning>)> {
         let mut warnings = vec![];
-        fn is_not_lowercase(c: char) -> bool {
-            c.is_ascii_alphabetic() && !c.is_ascii_lowercase()
-        }
-        if command_name.value.chars().any(is_not_lowercase) {
-            warnings.push(Warning::new(command_name.span, WarningKind::WrongCommandCase));
-        }
 
         // token is guaranteed to exist at this point
-        let token_type = &TOKENS[&command_name.value.to_ascii_lowercase()];
+        let token_type = &TOKENS[lower_name];
         let mut args = vec![];
         for _ in 0..token_type.arg_len() {
             match self.read_arg() {
@@ -221,7 +221,7 @@ impl<'a> Iterator for Parser<'a> {
             return t(Atom::Section(word));
         }
 
-        match word.value {
+        match word.value.to_ascii_lowercase().as_str() {
             "{" => t(Atom::OpenBlock(word)),
             "}" => t(Atom::CloseBlock(word)),
             "/*" => self.read_comment(word),
@@ -241,6 +241,15 @@ impl<'a> Iterator for Parser<'a> {
             },
             "else" => t(Atom::Else(word)),
             "endif" => t(Atom::EndIf(word)),
+            "start_random" => t(Atom::StartRandom(word)),
+            "percent_chance" => match self.read_arg() {
+                Some(chance) => t(Atom::PercentChance(word, chance)),
+                None => Some((
+                    Atom::Other(word),
+                    vec![Warning::new(word.span, WarningKind::MissingPercentChance)],
+                )),
+            }
+            "end_random" => t(Atom::EndRandom(word)),
             "#define" => match self.read_arg() {
                 Some(name) => t(Atom::Define(word, name)),
                 None => Some((
@@ -262,7 +271,7 @@ impl<'a> Iterator for Parser<'a> {
                     vec![Warning::new(word.span, WarningKind::MissingConstName)],
                 )),
             },
-            command_name if TOKENS.contains_key(&command_name.to_ascii_lowercase()) => self.read_command(word),
+            command_name if TOKENS.contains_key(command_name) => self.read_command(word, command_name),
             _ => t(Atom::Other(word)),
         }
     }
@@ -407,22 +416,22 @@ mod tests {
         }
     }
 
+    /// It should accept wrong casing, a linter can fix it up.
     #[test]
     fn command_wrong_case() {
-        let mut f = filemap("land_Percent 10 grouped_by_team");
+        let mut f = filemap("land_Percent 10 grouped_BY_team");
         let atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 2);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "land_Percent");
             assert_eq!(args.len(), 1);
             assert_eq!(args[0].value, "10");
-            assert_eq!(warnings.len(), 1);
-            assert_eq!(warnings[0].kind, WarningKind::WrongCommandCase);
+            assert!(warnings.is_empty());
         } else {
             assert!(false);
         }
         if let (Atom::Command(name, args), warnings) = &atoms[1] {
-            assert_eq!(name.value, "grouped_by_team");
+            assert_eq!(name.value, "grouped_BY_team");
             assert!(args.is_empty());
             assert!(warnings.is_empty());
         } else {
