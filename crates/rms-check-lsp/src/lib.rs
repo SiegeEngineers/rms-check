@@ -51,7 +51,8 @@ where
         Diagnostic {
             code: warn
                 .diagnostic()
-                .code.as_ref()
+                .code
+                .as_ref()
                 .map(|code| NumberOrString::String(code.to_string())),
             source: Some("rms-check".to_string()),
             ..diag
@@ -232,7 +233,10 @@ where
             self.handler
                 .add_method("textDocument/codeAction", move |params: Params| {
                     let params: CodeActionParams = params.parse().unwrap();
-                    inner.lock().unwrap().code_action(params)
+                    inner
+                        .lock()
+                        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
+                        .code_action(params)
                 });
         }
     }

@@ -9,11 +9,11 @@ mod cli_reporter;
 mod language_server;
 
 use check::{cli_check, cli_fix, CheckArgs};
-use language_server::cli_server;
 use failure::Fallible;
+use language_server::cli_server;
 use quicli::prelude::*;
-use structopt::StructOpt;
 use rms_check::Compatibility;
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub struct Cli {

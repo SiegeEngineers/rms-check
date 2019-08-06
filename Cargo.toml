@@ -25,6 +25,6 @@ termcolor = "^1.0.4"
 
 [workspace]
 members = [
-  "crates/rms-check-lsp",
   "crates/rms-check",
+  "crates/rms-check-lsp",
 ]

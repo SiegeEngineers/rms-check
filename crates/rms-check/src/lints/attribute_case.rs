@@ -1,4 +1,4 @@
-use super::super::{Lint, ParseState, Suggestion, Warning, Atom, TOKENS};
+use super::super::{Atom, Lint, ParseState, Suggestion, Warning, TOKENS};
 
 pub struct AttributeCaseLint {}
 
@@ -19,7 +19,7 @@ impl Lint for AttributeCaseLint {
                     .replace(cmd.value.to_lowercase());
                 let message = format!("Unknown attribute `{}`", cmd.value);
                 vec![atom.error(message).suggest(suggestion)]
-            },
+            }
             _ => Default::default(),
         }
     }
