@@ -161,22 +161,17 @@ where
     }
 }
 
-pub struct RMSCheckLSP<Emit>
-where
-    Emit: Fn(serde_json::Value) + Send + 'static,
-{
+type Emit = Box<dyn Fn(serde_json::Value) + Send + 'static>;
+pub struct RMSCheckLSP {
     inner: Arc<Mutex<Inner<Emit>>>,
     handler: IoHandler,
 }
 
-impl<Emit> RMSCheckLSP<Emit>
-where
-    Emit: Fn(serde_json::Value) + Send + 'static,
-{
-    pub fn new(emit: Emit) -> RMSCheckLSP<Emit> {
+impl RMSCheckLSP {
+    pub fn new(emit: impl Fn(serde_json::Value) + Send + 'static + Sized) -> RMSCheckLSP {
         let mut instance = RMSCheckLSP {
             inner: Arc::new(Mutex::new(Inner {
-                emit,
+                emit: Box::new(emit),
                 documents: Default::default(),
             })),
             handler: IoHandler::new(),
@@ -237,6 +232,18 @@ where
                         .lock()
                         .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
                         .code_action(params)
+                });
+        }
+
+        {
+            let inner = Arc::clone(&self.inner);
+            self.handler
+                .add_method("textDocument/foldingRange", move |params: Params| {
+                    let params: FoldingRangeParams = params.parse().unwrap();
+                    inner
+                        .lock()
+                        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
+                        .folding_ranges(params)
                 });
         }
     }

@@ -1,0 +1,19 @@
+[package]
+name = "rms-check-vscode-server-wasm"
+version = "0.1.0"
+authors = ["Renée Kooi <renee@kooi.me>"]
+license = "GPL-3.0"
+description = "Detect common problems with AoE Random Map Scripts"
+repository = "https://github.com/goto-bus-stop/rms-check.git"
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+rms-check-lsp = { path = "../../crates/rms-check-lsp" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde_json = "^1.0.37"
+wee_alloc  = "^0.4.4"
+wasm-bindgen = "^0.2.48"

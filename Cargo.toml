@@ -27,4 +27,5 @@ termcolor = "^1.0.4"
 members = [
   "crates/rms-check",
   "crates/rms-check-lsp",
+  "vscode/server",
 ]
