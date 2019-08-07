@@ -571,71 +571,51 @@ impl<'a> Checker<'a> {
         match token.value {
             "{" => self.state.nesting.push(Nesting::Brace(token.span)),
             "}" => {
-                let mut is_ok = false;
                 match self.state.nesting.last() {
                     Some(Nesting::Brace(_)) => {
-                        is_ok = true;
+                        self.state.nesting.pop();
                     }
                     nest => {
                         parse_error = Some(unbalanced_error("}", token, nest));
                     }
                 }
-                if is_ok {
-                    self.state.nesting.pop();
-                }
             }
             "if" => self.state.nesting.push(Nesting::If(token.span)),
             "elseif" => {
-                let mut is_ok = false;
                 match self.state.nesting.last() {
                     Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
-                        is_ok = true;
+                        self.state.nesting.pop();
                     }
                     nest => {
                         parse_error = Some(unbalanced_error("elseif", token, nest));
                     }
                 }
-                if is_ok {
-                    self.state.nesting.pop();
-                }
                 self.state.nesting.push(Nesting::ElseIf(token.span));
             }
             "else" => {
-                let mut is_ok = false;
                 match self.state.nesting.last() {
                     Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
-                        is_ok = true;
+                        self.state.nesting.pop();
                     }
                     nest => {
                         parse_error = Some(unbalanced_error("else", token, nest));
                     }
                 }
-                if is_ok {
-                    self.state.nesting.pop();
-                }
                 self.state.nesting.push(Nesting::Else(token.span));
             }
             "endif" => {
-                let mut is_ok = false;
                 match self.state.nesting.last() {
                     Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
-                        is_ok = true;
+                        self.state.nesting.pop();
                     }
                     nest => {
                         parse_error = Some(unbalanced_error("endif", token, nest));
                     }
                 }
-                if is_ok {
-                    self.state.nesting.pop();
-                }
             }
             "start_random" => self.state.nesting.push(Nesting::StartRandom(token.span)),
             "percent_chance" => {
-                let is_sibling_branch = match self.state.nesting.last() {
-                    Some(Nesting::PercentChance(_)) => true,
-                    _ => false,
-                };
-                if is_sibling_branch {
+                if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
                     self.state.nesting.pop();
                 }
 
@@ -649,27 +629,17 @@ impl<'a> Checker<'a> {
                 self.state.nesting.push(Nesting::PercentChance(token.span));
             }
             "end_random" => {
-                let needs_double_close =
-                    if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
-                        true
-                    } else {
-                        false
-                    };
-                if needs_double_close {
+                if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
                     self.state.nesting.pop();
-                }
+                };
 
-                let mut is_ok = false;
                 match self.state.nesting.last() {
                     Some(Nesting::StartRandom(_)) => {
-                        is_ok = true;
+                        self.state.nesting.pop();
                     }
                     nest => {
                         parse_error = Some(unbalanced_error("end_random", token, nest));
                     }
-                }
-                if is_ok {
-                    self.state.nesting.pop();
                 }
             }
             "#const" => self.state.expect(Expect::ConstName),
