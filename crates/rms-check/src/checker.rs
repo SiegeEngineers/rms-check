@@ -194,7 +194,7 @@ impl Warning {
         self
     }
 
-    fn lint(mut self, lint: &str) -> Self {
+    pub fn lint(mut self, lint: &str) -> Self {
         self.diagnostic = self.diagnostic.with_code(lint);
         self
     }

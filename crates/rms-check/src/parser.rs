@@ -22,8 +22,8 @@ pub enum WarningKind {
 
 #[derive(Debug, Clone)]
 pub struct Warning {
-    kind: WarningKind,
-    span: ByteSpan,
+    pub kind: WarningKind,
+    pub span: ByteSpan,
 }
 
 impl Warning {

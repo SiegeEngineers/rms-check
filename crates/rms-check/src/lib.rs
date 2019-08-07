@@ -132,17 +132,17 @@ impl<'a> RMSCheck<'a> {
             .map(|map| Wordize::new(&map))
             .flatten();
 
-        let token_warnings: Vec<Warning> = words.filter_map(|w| checker.write_token(&w)).collect();
-        let mut atom_warnings = vec![];
+        let mut warnings: Vec<Warning> = words.filter_map(|w| checker.write_token(&w)).collect();
         let parsers = self.file_maps.iter().map(|map| Parser::new(&map));
         for parser in parsers {
-            for (atom, _warnings) in parser {
-                atom_warnings.extend(checker.write_atom(&atom));
+            for (atom, parse_warning) in parser {
+                warnings.extend(checker.write_atom(&atom));
+                for w in parse_warning {
+                    warnings.push(Warning::error(w.span, format!("{:?}", w.kind)).lint("parse"));
+                }
             }
         }
 
-        let mut warnings = token_warnings;
-        warnings.extend(atom_warnings);
         RMSCheckResult {
             codemap: self.codemap,
             warnings,
