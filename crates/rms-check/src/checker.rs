@@ -77,6 +77,9 @@ pub struct Suggestion {
 }
 
 impl Suggestion {
+    pub fn span(&self) -> ByteSpan {
+        self.span
+    }
     /// Get the starting position this suggestion applies to.
     pub fn start(&self) -> ByteIndex {
         self.span.start()

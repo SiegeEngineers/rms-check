@@ -5,9 +5,10 @@ use languageserver_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
     FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams,
     InitializeResult, NumberOrString, PublishDiagnosticsParams, ServerCapabilities,
-    TextDocumentItem, TextDocumentSyncCapability, TextDocumentSyncKind, Url,
+    TextDocumentItem, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
+    WorkspaceEdit,
 };
-use rms_check::{Compatibility, Parser, RMSCheck, RMSCheckResult, Warning};
+use rms_check::{AutoFixReplacement, Compatibility, Parser, RMSCheck, RMSCheckResult, Warning};
 use serde_json::{self, json};
 use std::{
     cmp::Ordering,
@@ -121,11 +122,31 @@ where
         let mut actions = vec![];
         for warn in warnings {
             for sugg in warn.suggestions() {
+                if !sugg.replacement().is_fixable() {
+                    continue;
+                }
                 actions.push(CodeAction {
                     title: sugg.message().to_string(),
                     kind: Some("quickfix".to_string()),
                     diagnostics: Some(vec![self.make_lsp_diagnostic(result.codemap(), warn)]),
-                    edit: None,
+                    edit: Some(WorkspaceEdit {
+                        changes: Some({
+                            let mut map = HashMap::new();
+                            map.insert(
+                                doc.uri.clone(),
+                                vec![TextEdit {
+                                    range: codespan_lsp::byte_span_to_range(file_map, sugg.span())
+                                        .unwrap(),
+                                    new_text: match sugg.replacement() {
+                                        AutoFixReplacement::Safe(s) => s.clone(),
+                                        _ => unreachable!(),
+                                    },
+                                }],
+                            );
+                            map
+                        }),
+                        document_changes: None,
+                    }),
                     command: None,
                 });
             }
