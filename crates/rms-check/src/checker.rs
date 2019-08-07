@@ -1,13 +1,12 @@
 use crate::{
     parser::Atom,
-    tokens::{ArgType, TokenContext, TokenType, TOKENS},
+    tokens::{TokenContext, TokenType, TOKENS},
     wordize::Word,
 };
 use codespan::{ByteIndex, ByteSpan};
 pub use codespan_reporting::{Diagnostic, Label, Severity};
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
-use strsim::levenshtein;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum Compatibility {
@@ -264,21 +263,6 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
     (false, None)
 }
 
-fn meant<'a>(actual: &str, possible: impl Iterator<Item = &'a String>) -> Option<&'a String> {
-    let mut lowest = 10000;
-    let mut result = None;
-
-    for expected in possible {
-        let lev = levenshtein(actual, expected);
-        if lev < lowest {
-            result = Some(expected);
-            lowest = lev;
-        }
-    }
-
-    result
-}
-
 #[derive(Debug, Clone)]
 pub enum Nesting {
     If(ByteSpan),
@@ -429,118 +413,6 @@ impl<'a> Checker<'a> {
         self
     }
 
-    /// Check if a constant was ever defined using #define.
-    fn check_ever_defined(&self, token: &Word) -> Option<Warning> {
-        if !self.state.may_have_define(token.value) {
-            let warn = token.warning(format!(
-                "Token `{}` is never defined, this condition will always fail",
-                token.value
-            ));
-            Some(
-                if let Some(similar) = meant(token.value, self.state.seen_defines.iter()) {
-                    warn.suggest(
-                        Suggestion::from(token, format!("Did you mean `{}`?", similar))
-                            .replace_unsafe(similar.to_string()),
-                    )
-                } else {
-                    warn
-                },
-            )
-        } else {
-            None
-        }
-    }
-
-    /// Check if a constant was ever defined with a value (using #const)
-    fn check_defined_with_value(&self, token: &Word) -> Option<Warning> {
-        // 1. Check if this may or may not be defined—else warn
-        if !self.state.has_const(token.value) {
-            if self.state.has_define(token.value) {
-                // 2. Check if this has a value (is defined using #const)—else warn
-                Some(token.warning(format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
-            } else {
-                let warn = token.warning(format!("Token `{}` is never defined", token.value));
-                Some(
-                    if let Some(similar) = meant(token.value, self.state.seen_consts.iter()) {
-                        warn.suggest(
-                            Suggestion::from(token, format!("Did you mean `{}`?", similar))
-                                .replace_unsafe(similar.to_string()),
-                        )
-                    } else {
-                        warn
-                    },
-                )
-            }
-        } else {
-            None
-        }
-    }
-
-    /// Check if a word is a valid number.
-    fn check_number(&mut self, token: &Word<'a>) -> Option<Warning> {
-        // This may be a valued (#const) constant,
-        // or a number (12, -35),
-        token
-            .value
-            .parse::<i32>()
-            .err()
-            .map(|_| {
-                let TokenType { name, .. } = self.state.current_token.unwrap();
-                let warn = token.error(format!(
-                    "Expected a number argument to {}, but got {}",
-                    name, token.value
-                ));
-                if token.value.starts_with('(') {
-                    let (_, replacement) = is_valid_rnd(&format!("rnd{}", token.value));
-                    warn.suggest(
-                        Suggestion::from(token, "Did you forget the `rnd`?")
-                            .replace(replacement.unwrap_or_else(|| format!("rnd{}", token.value))),
-                    )
-                } else {
-                    warn
-                }
-            })
-            .and_then(|warn| {
-                // or rnd(\d+,\d+)
-                if let (true, _) = is_valid_rnd(token.value) {
-                    None
-                } else if
-                // probably "rnd(\d+, \d+)"
-                (token.value.starts_with("rnd(") && token.value.ends_with(',')) ||
-                    // probably "rnd (\d+,\d+)"
-                    (token.value == "rnd")
-                {
-                    self.state
-                        .expect(Expect::UnfinishedRnd(token.start(), token.value));
-                    None
-                } else {
-                    Some(warn)
-                }
-            })
-    }
-
-    /// Check if a token is the correct argument type.
-    fn check_arg_type(&mut self, arg_type: ArgType, token: &Word<'a>) -> Option<Warning> {
-        match arg_type {
-            ArgType::Number => self.check_number(token),
-            ArgType::Word => {
-                token.value.parse::<i32>()
-                    .ok()
-                    .map(|_| token.warning(format!("Expected a word, but got a number {}. This uses the number as the constant *name*, so it may not do what you expect.", token.value)))
-                    .or_else(|| if token.value.chars().any(char::is_lowercase) {
-                        Some(token.warning("Using lowercase for constant names may cause confusion with attribute or command names.")
-                             .suggest(Suggestion::from(token, "Use uppercase for constants.")
-                                      .replace(token.value.to_uppercase())))
-                    } else {
-                        None
-                    })
-            },
-            ArgType::OptionalToken => self.check_ever_defined(token),
-            ArgType::Token => self.check_defined_with_value(token),
-            _ => None,
-        }
-    }
-
     /// Check an incoming token.
     fn lint_token(&mut self, token: &Word<'a>) -> Option<Warning> {
         let warning = {
@@ -563,24 +435,6 @@ impl<'a> Checker<'a> {
             && !TOKENS.contains_key(token.value)
         {
             return Some(token.error(format!("Invalid section {}", token.value)));
-        }
-
-        if let Some(current_token) = self.state.current_token {
-            let current_arg_type = current_token.arg_type(self.state.token_arg_index);
-            match current_arg_type {
-                Some(arg_type) => {
-                    if let Some(warning) = self.check_arg_type(*arg_type, &token) {
-                        return Some(warning);
-                    }
-                }
-                None => {
-                    return Some(token.error(format!(
-                        "Too many arguments ({}) to command `{}`",
-                        self.state.token_arg_index + 1,
-                        current_token.name
-                    )))
-                }
-            }
         }
 
         None

@@ -1,0 +1,11 @@
+/* should be Token, Number, Number, Number */
+ai_info_map_type 0 1 0 1
+/* should be Token */
+base_terrain 10
+
+#const SOMEVAL 10
+/* should be Number */
+number_of_objects SOMEVAL
+
+/* not enough arguments */
+create_object { }

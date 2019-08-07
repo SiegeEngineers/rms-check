@@ -300,32 +300,6 @@ impl<'a> Iterator for Parser<'a> {
     }
 }
 
-/// Check if a string is numeric.
-fn is_numeric(s: &str) -> bool {
-    s.parse::<i32>().is_ok()
-}
-
-/// Check if a string contains a valid rnd(1,10) call.
-///
-/// Returns a tuple with values:
-///
-///   0. whether the string was valid
-///   1. an optional valid replacement value
-fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
-    if s.starts_with("rnd(") && s.ends_with(')') && s[4..s.len() - 1].split(',').all(is_numeric) {
-        return (true, None);
-    } else if s.chars().any(char::is_whitespace) {
-        let no_ws = s
-            .chars()
-            .filter(|c| !char::is_whitespace(*c))
-            .collect::<String>();
-        if let (true, _) = is_valid_rnd(&no_ws) {
-            return (false, Some(no_ws));
-        }
-    }
-    (false, None)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

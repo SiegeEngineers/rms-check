@@ -10,7 +10,7 @@ pub use crate::{
         AutoFixReplacement, Compatibility, Expect, Lint, Nesting, ParseState, Severity, Suggestion,
         Warning,
     },
-    parser::{Atom, Parser},
+    parser::{Atom, Parser, WarningKind},
     tokens::{ArgType, TokenContext, TokenType, TOKENS},
     wordize::Word,
 };
@@ -64,6 +64,7 @@ pub struct RMSCheck<'a> {
 impl<'a> Default for RMSCheck<'a> {
     fn default() -> RMSCheck<'a> {
         RMSCheck::new()
+            .with_lint(Box::new(lints::ArgTypesLint::new()))
             .with_lint(Box::new(lints::AttributeCaseLint {}))
             .with_lint(Box::new(lints::CommentContentsLint::new()))
             .with_lint(Box::new(lints::CompatibilityLint::new()))
@@ -138,6 +139,10 @@ impl<'a> RMSCheck<'a> {
             for (atom, parse_warning) in parser {
                 warnings.extend(checker.write_atom(&atom));
                 for w in parse_warning {
+                    if w.kind == WarningKind::MissingCommandArgs {
+                        // Handled by arg-types lint
+                        continue;
+                    }
                     warnings.push(Warning::error(w.span, format!("{:?}", w.kind)).lint("parse"));
                 }
             }
