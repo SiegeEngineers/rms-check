@@ -71,7 +71,7 @@ impl<'a> Default for RMSCheck<'a> {
             .with_lint(Box::new(lints::CompatibilityLint::new()))
             .with_lint(Box::new(lints::DeadBranchCommentLint {}))
             .with_lint(Box::new(lints::IncludeLint::new()))
-            .with_lint(Box::new(lints::IncorrectSectionLint {}))
+            .with_lint(Box::new(lints::IncorrectSectionLint::new()))
         // .with_lint(Box::new(lints::UnknownAttributeLint {}))
         // buggy
     }

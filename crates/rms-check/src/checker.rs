@@ -302,7 +302,7 @@ pub struct ParseState<'a> {
     /// The type of token we expect to see next.
     pub expect: Expect<'a>,
     /// The current <SECTION>, as well as its opening token.
-    pub current_section: Option<(Word<'a>, &'static str)>,
+    pub current_section: Option<Atom<'a>>,
     /// List of #const definitions we've seen so far.
     pub seen_consts: HashSet<String>,
     /// List of #define definitions we've seen so far.
@@ -451,6 +451,12 @@ impl<'a> Checker<'a> {
                     .map(move |warning| warning.lint(&name)),
             );
         }
+
+        match atom {
+            Atom::Section(_) => self.state.current_section = Some(atom.clone()),
+            _ => (),
+        }
+
         warnings
     }
 
@@ -679,9 +685,6 @@ impl<'a> Checker<'a> {
             self.state.current_token = Some(token_type);
             self.state.token_arg_index = 0;
 
-            if let TokenContext::Section = token_type.context() {
-                self.state.current_section = Some((*token, token_type.name));
-            }
         }
 
         // A parse error is more important than a lint warning, probably…
