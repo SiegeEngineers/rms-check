@@ -41,11 +41,15 @@ pub struct Cli {
     userpatch15: bool,
     #[structopt(long = "hd")]
     hd_edition: bool,
+    #[structopt(long = "wk")]
+    wololo_kingdoms: bool,
 }
 
 impl Cli {
     pub fn compat(&self) -> Compatibility {
-        if self.hd_edition {
+        if self.wololo_kingdoms {
+            Compatibility::WololoKingdoms
+        } else if self.hd_edition {
             Compatibility::HDEdition
         } else if self.userpatch14 {
             Compatibility::UserPatch14

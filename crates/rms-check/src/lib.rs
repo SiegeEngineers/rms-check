@@ -59,6 +59,7 @@ pub struct RMSCheck<'a> {
     codemap: CodeMap,
     file_maps: Vec<Arc<FileMap>>,
     binary_files: HashMap<String, Vec<u8>>,
+    compatibility: Compatibility,
 }
 
 impl<'a> Default for RMSCheck<'a> {
@@ -78,18 +79,19 @@ impl<'a> Default for RMSCheck<'a> {
 
 impl<'a> RMSCheck<'a> {
     pub fn new() -> Self {
-        let check = RMSCheck {
+        RMSCheck {
             checker: Checker::default(),
             codemap: CodeMap::new(),
             file_maps: Default::default(),
             binary_files: Default::default(),
-        };
-        check.add_source("random_map.def", include_str!("random_map.def"))
+            compatibility: Default::default(),
+        }
     }
 
     pub fn compatibility(self, compatibility: Compatibility) -> Self {
         Self {
             checker: self.checker.compatibility(compatibility),
+            compatibility,
             ..self
         }
     }
@@ -125,7 +127,18 @@ impl<'a> RMSCheck<'a> {
         &self.codemap
     }
 
-    pub fn check(self) -> RMSCheckResult {
+    pub fn check(mut self) -> RMSCheckResult {
+        self = match self.compatibility {
+            Compatibility::WololoKingdoms => {
+                self.add_source("random_map.def", include_str!("def_wk.rms"))
+            },
+            Compatibility::UserPatch15 => {
+                self.add_source("random_map.def", include_str!("def_aoc.rms"))
+                    .add_source("UserPatchConst.rms", include_str!("def_up15.rms"))
+            }
+            _ => self.add_source("random_map.def", include_str!("def_aoc.rms")),
+        };
+
         let mut checker = self.checker.build();
         let words = self
             .file_maps

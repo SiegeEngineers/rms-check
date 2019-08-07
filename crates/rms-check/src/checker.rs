@@ -13,6 +13,7 @@ pub enum Compatibility {
     Conquerors = 1,
     UserPatch14 = 3,
     UserPatch15 = 4,
+    WololoKingdoms = 5,
     HDEdition = 2,
     All = 0,
 }

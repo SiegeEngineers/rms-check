@@ -1,6 +1,6 @@
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define Effect Constants              */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const SET_ATTRIBUTE   0	/* Type: Attribute Const */
 #const ADD_ATTRIBUTE   4	/* Type: Attribute Const */
 #const MUL_ATTRIBUTE   5	/* Type: Attribute Const */
@@ -31,35 +31,18 @@
 #const GAIA_MODIFY_TECH      -9
 #const GAIA_SET_PLAYER_DATA -10
 
-/*
-effect_amount SET_ATTRIBUTE VILLAGER_CLASS ATTR_HITPOINTS 20
-effect_percent ADD_ATTRIBUTE VILLAGER_CLASS ATTR_MOVE_SPEED 30
-effect_amount MUL_ATTRIBUTE VILLAGER_CLASS ATTR_HITPOINTS 2
-effect_amount MOD_RESOURCE AMOUNT_STARTING_FOOD ATTR_ADD 20
-effect_amount MUL_RESOURCE AMOUNT_STARTING_FOOD ATTR_DISABLE 5
-effect_amount SET_TECH_COST RI_LOOM AMOUNT_GOLD 10
-effect_amount ADD_TECH_COST RI_LOOM AMOUNT_GOLD 20
-effect_amount MOD_TECH_TIME RI_LOOM ATTR_SET 60
-effect_amount ENABLE_OBJECT TRANSPORT_SHIP ATTR_ENABLE 0
-effect_amount UPGRADE_UNIT WOLF OUTLAW 0
-effect_amount DISABLE_TECH RI_LOOM ATTR_DISABLE 22
-effect_amount ENABLE_TECH RI_LOOM ATTR_ENABLE 22
-effect_amount MODIFY_TECH RI_LOOM ATTR_SET_TIME 60
-effect_amount SET_PLAYER_DATA DATA_CIV_NAME_ID ATTR_SET 10230
-*/
-
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define Effect Type Constants         */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const ATTR_DISABLE 0
 #const ATTR_ENABLE 1
 #const ATTR_FORCE 2
 #const ATTR_SET 0
 #const ATTR_ADD 1
 
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define ModifyTech Constants          */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const ATTR_SET_TIME -1
 #const ATTR_ADD_TIME -2
 #const ATTR_SET_FOOD_COST 0
@@ -71,9 +54,9 @@ effect_amount SET_PLAYER_DATA DATA_CIV_NAME_ID ATTR_SET 10230
 #const ATTR_ADD_STONE_COST 16386
 #const ATTR_ADD_GOLD_COST 16387
 
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define Attribute Constants           */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const ATTR_HITPOINTS 0
 #const ATTR_LINE_OF_SIGHT 1
 #const ATTR_GARRISON_CAPACITY 2
@@ -112,30 +95,30 @@ effect_amount SET_PLAYER_DATA DATA_CIV_NAME_ID ATTR_SET 10230
 #const ATTR_DATA_FLAGS 31
 
 /* New: Category 70+ */
-#const ATTR_HERO_STATUS 40		/* ADD_ATTRIBUTE append flags */
-#const ATTR_ATTACK_DELAY 41		/* ADD_ATTRIBUTE enabled */
+#const ATTR_HERO_STATUS 40		/* `ADD_ATTRIBUTE` append flags */
+#const ATTR_ATTACK_DELAY 41		/* `ADD_ATTRIBUTE` enabled */
 #const ATTR_TRAIN_LOCATION 42
 #const ATTR_TRAIN_BUTTON 43
 #const ATTR_BLAST_LEVEL 44
-#const ATTR_HERO_HEAL_TIME 45		/* ADD_ATTRIBUTE enabled */
-#const ATTR_SHOWN_ATTACK 46		/* ADD_ATTRIBUTE enabled */
-#const ATTR_SHOWN_RANGE 47		/* ADD_ATTRIBUTE enabled */
-#const ATTR_SHOWN_MELEE_ARMOR 48	/* ADD_ATTRIBUTE enabled */
-#const ATTR_SHOWN_PIERCE_ARMOR 49	/* ADD_ATTRIBUTE enabled */
+#const ATTR_HERO_HEAL_TIME 45		/* `ADD_ATTRIBUTE` enabled */
+#const ATTR_SHOWN_ATTACK 46		/* `ADD_ATTRIBUTE` enabled */
+#const ATTR_SHOWN_RANGE 47		/* `ADD_ATTRIBUTE` enabled */
+#const ATTR_SHOWN_MELEE_ARMOR 48	/* `ADD_ATTRIBUTE` enabled */
+#const ATTR_SHOWN_PIERCE_ARMOR 49	/* `ADD_ATTRIBUTE` enabled */
 
 /* New: Category 10+ */
 #const ATTR_NAME_ID 50
 #const ATTR_CREATE_SDESC_ID 51
-#const ATTR_CREATE_LDESC_ID 52		/* unused (becomes ATTR_CREATE_SDESC_ID + 20000) */
+#const ATTR_CREATE_LDESC_ID 52		/* unused (becomes `ATTR_CREATE_SDESC_ID` + 20000) */
 #const ATTR_TERRAIN_ID 53
-#const ATTR_TRAITS 54			/* ADD_ATTRIBUTE append flags */
+#const ATTR_TRAITS 54			/* `ADD_ATTRIBUTE` append flags */
 #const ATTR_CIV_ID 55
 #const ATTR_PIECE 56
 #const ATTR_DEAD_ID 57
 
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define ResourceAmount Constants      */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const AMOUNT_FOOD 0
 #const AMOUNT_WOOD 1
 #const AMOUNT_STONE 2
@@ -157,34 +140,34 @@ effect_amount SET_PLAYER_DATA DATA_CIV_NAME_ID ATTR_SET 10230
 #const AMOUNT_REVEAL_CLASS1 210
 #const AMOUNT_REVEAL_CLASS2 211
 
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define PlayerData Constants          */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const DATA_CIV_NAME_ID 0
 #const DATA_MODE_FLAGS 1
 
-/* DATA_MODE_FLAGS: use GAIA_SET_PLAYER_DATA
+/* DATA_MODE_FLAGS: use `GAIA_SET_PLAYER_DATA`
      01: enable treason (flares guard unit type if no king exists)
      02: disable spies (button only, disable tech 408 to block research) */
 
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define AssignTarget Constants        */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const AT_PLAYER 0
 #const AT_COLOR 1
 #const AT_TEAM 2
 
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define Building Constants            */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const TOWN_CENTER_FOUNDATION 621
 #const PALISADE_WALL 72
 #const STONE_WALL 117
 #const FORTIFIED_WALL 155
 
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define Upgrade Constants             */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const TOWN_CENTER_F 71
 #const TOWN_CENTER_C 141
 #const TOWN_CENTER_I 142
@@ -223,9 +206,9 @@ effect_amount SET_PLAYER_DATA DATA_CIV_NAME_ID ATTR_SET 10230
 #const BLACKSMITH_I 19
 #const UNIVERSITY_I 210
 
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define Villager Constants            */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const VILLAGER_BASE_M 83
 #const VILLAGER_BASE_F 293
 #const VILLAGER_FARMER_M 259
@@ -249,9 +232,9 @@ effect_amount SET_PLAYER_DATA DATA_CIV_NAME_ID ATTR_SET 10230
 #const VILLAGER_REPAIRER_M 156
 #const VILLAGER_REPAIRER_F 222
 
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define Class Constants               */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const VILLAGER_CLASS 904
 #const BUILDING_CLASS 903
 #const OCEAN_FISH_CLASS 905
@@ -277,9 +260,9 @@ effect_amount SET_PLAYER_DATA DATA_CIV_NAME_ID ATTR_SET 10230
 #const PETARD_CLASS 935
 #const WARSHIP_CLASS 922
 
-/*--------------------------------------*/
+/* ------------------------------------ */
 /* Define Extra Constants               */
-/*--------------------------------------*/
+/* ------------------------------------ */
 #const REAL_TERRAIN -1
 #const ELITE_UNIQUE_UNIT -2
 #const UNIQUE_UNIT -1
