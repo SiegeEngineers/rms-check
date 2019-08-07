@@ -3,10 +3,11 @@ use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use languageserver_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    InitializeParams, InitializeResult, NumberOrString, PublishDiagnosticsParams,
-    ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability, TextDocumentSyncKind, Url,
+    FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams,
+    InitializeResult, NumberOrString, PublishDiagnosticsParams, ServerCapabilities,
+    TextDocumentItem, TextDocumentSyncCapability, TextDocumentSyncKind, Url,
 };
-use rms_check::{Compatibility, RMSCheck, RMSCheckResult, Warning};
+use rms_check::{Compatibility, Parser, RMSCheck, RMSCheckResult, Warning};
 use serde_json::{self, json};
 use std::{
     cmp::Ordering,
@@ -64,6 +65,7 @@ where
         capabilities.code_action_provider = Some(CodeActionProviderCapability::Simple(true));
         capabilities.text_document_sync =
             Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::Full));
+        capabilities.folding_range_provider = Some(FoldingRangeProviderCapability::Simple(true));
         let result = InitializeResult { capabilities };
         serde_json::to_value(result).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
@@ -131,6 +133,100 @@ where
 
         serde_json::to_value(actions)
             .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
+    }
+
+    fn folding_ranges(&self, params: FoldingRangeParams) -> RpcResult {
+        let doc = self.documents.get(&params.text_document.uri).unwrap();
+        let mut map = CodeMap::new();
+        let file = map.add_filemap(FileName::virtual_(doc.uri.to_string()), doc.text.clone());
+        let parser = Parser::new(&*file);
+
+        let line = |index| file.location(index).unwrap().0.to_usize() as u64;
+        let col = |index| file.location(index).unwrap().1.to_usize() as u64;
+        let fold = || FoldingRange {
+                            start_line: 0,
+                            end_line: 0,
+                            start_character: Default::default(),
+                            end_character: Default::default(),
+                            kind: Default::default(),
+                        };
+
+        let mut folds = vec![];
+        let mut waiting_folds = vec![];
+        use rms_check::Atom::*;
+        for (atom, _) in parser {
+            match atom {
+                Comment(start, _, Some(end)) => {
+                    let start_line = line(start.span.start());
+                    let end_line = line(end.span.start());
+                    if end_line > start_line {
+                        folds.push(FoldingRange {
+                            start_line,
+                            end_line,
+                            end_character: Some(col(end.span.end())),
+                            ..fold()
+                        });
+                    }
+                },
+                OpenBlock(_) => waiting_folds.push(atom),
+                CloseBlock(end) => match waiting_folds.pop() {
+                    Some(OpenBlock(start)) => folds.push(FoldingRange {
+                        start_line: line(start.span.end()),
+                        end_line: line(end.span.start()),
+                        start_character: Some(col(start.span.end())),
+                        end_character: Some(col(end.span.start())),
+                        ..fold()
+                    }),
+                    _ => (),
+                },
+                If(_, _) => waiting_folds.push(atom),
+                ElseIf(end, _) => {
+                    let start = match waiting_folds.pop() {
+                        Some(If(start, _)) | Some(ElseIf(start, _)) => start,
+                        _ => continue,
+                    };
+                    let start_line = line(start.span.start());
+                    let mut end_line = line(end.span.start());
+                    if end_line > start_line {
+                        end_line -= 1;
+                        folds.push(FoldingRange {
+                            start_line,
+                            end_line,
+                            ..fold()
+                        });
+                    }
+                    waiting_folds.push(atom);
+                }
+                Else(end) => {
+                    let start = match waiting_folds.pop() {
+                        Some(If(start, _)) | Some(ElseIf(start, _)) => start,
+                        _ => continue,
+                    };
+                    let start_line = line(start.span.start());
+                    let mut end_line = line(end.span.start());
+                    if end_line > start_line {
+                        end_line -= 1;
+                        folds.push(FoldingRange {
+                            start_line,
+                            end_line,
+                            ..fold()
+                        });
+                    }
+                    waiting_folds.push(atom);
+                }
+                EndIf(end) => match waiting_folds.pop() {
+                    Some(If(start, _)) | Some(ElseIf(start, _)) => folds.push(FoldingRange {
+                        start_line: line(start.span.start()),
+                        end_line: line(end.span.start()),
+                        ..fold()
+                    }),
+                    _ => (),
+                },
+                _ => (),
+            }
+        }
+
+        serde_json::to_value(folds).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
 
     fn check(&self, doc: &TextDocumentItem) -> RMSCheckResult {

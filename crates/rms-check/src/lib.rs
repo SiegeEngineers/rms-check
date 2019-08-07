@@ -4,13 +4,13 @@ mod parser;
 mod tokens;
 mod wordize;
 
-use crate::{checker::Checker, parser::Parser, wordize::Wordize};
+use crate::{checker::Checker, wordize::Wordize};
 pub use crate::{
     checker::{
         AutoFixReplacement, Compatibility, Expect, Lint, Nesting, ParseState, Severity, Suggestion,
         Warning,
     },
-    parser::Atom,
+    parser::{Atom, Parser},
     tokens::{ArgType, TokenContext, TokenType, TOKENS},
     wordize::Word,
 };
