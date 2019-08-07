@@ -1,8 +1,8 @@
-use wasm_bindgen::prelude::*;
 use rms_check_lsp::RMSCheckLSP;
+use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-extern {
+extern "C" {
     fn write_message(message: &str);
 }
 

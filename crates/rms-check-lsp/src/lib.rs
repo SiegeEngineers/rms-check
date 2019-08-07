@@ -144,12 +144,12 @@ where
         let line = |index| file.location(index).unwrap().0.to_usize() as u64;
         let col = |index| file.location(index).unwrap().1.to_usize() as u64;
         let fold = || FoldingRange {
-                            start_line: 0,
-                            end_line: 0,
-                            start_character: Default::default(),
-                            end_character: Default::default(),
-                            kind: Default::default(),
-                        };
+            start_line: 0,
+            end_line: 0,
+            start_character: Default::default(),
+            end_character: Default::default(),
+            kind: Default::default(),
+        };
 
         let mut folds = vec![];
         let mut waiting_folds = vec![];
@@ -167,7 +167,7 @@ where
                             ..fold()
                         });
                     }
-                },
+                }
                 OpenBlock(_) => waiting_folds.push(atom),
                 CloseBlock(end) => match waiting_folds.pop() {
                     Some(OpenBlock(start)) => folds.push(FoldingRange {
@@ -180,24 +180,7 @@ where
                     _ => (),
                 },
                 If(_, _) => waiting_folds.push(atom),
-                ElseIf(end, _) => {
-                    let start = match waiting_folds.pop() {
-                        Some(If(start, _)) | Some(ElseIf(start, _)) => start,
-                        _ => continue,
-                    };
-                    let start_line = line(start.span.start());
-                    let mut end_line = line(end.span.start());
-                    if end_line > start_line {
-                        end_line -= 1;
-                        folds.push(FoldingRange {
-                            start_line,
-                            end_line,
-                            ..fold()
-                        });
-                    }
-                    waiting_folds.push(atom);
-                }
-                Else(end) => {
+                ElseIf(end, _) | Else(end) => {
                     let start = match waiting_folds.pop() {
                         Some(If(start, _)) | Some(ElseIf(start, _)) => start,
                         _ => continue,
@@ -215,13 +198,55 @@ where
                     waiting_folds.push(atom);
                 }
                 EndIf(end) => match waiting_folds.pop() {
-                    Some(If(start, _)) | Some(ElseIf(start, _)) => folds.push(FoldingRange {
-                        start_line: line(start.span.start()),
-                        end_line: line(end.span.start()),
-                        ..fold()
-                    }),
+                    Some(If(start, _)) | Some(ElseIf(start, _)) | Some(Else(start)) => {
+                        folds.push(FoldingRange {
+                            start_line: line(start.span.start()),
+                            end_line: line(end.span.start()),
+                            ..fold()
+                        })
+                    }
                     _ => (),
                 },
+                StartRandom(_) => waiting_folds.push(atom),
+                PercentChance(end, _) => {
+                    if let Some(PercentChance(start, _)) = waiting_folds.last() {
+                        let start_line = line(start.span.start());
+                        let mut end_line = line(end.span.start());
+                        if end_line > start_line {
+                            end_line -= 1;
+                            folds.push(FoldingRange {
+                                start_line,
+                                end_line,
+                                ..fold()
+                            });
+                        }
+                        waiting_folds.pop();
+                    }
+                    waiting_folds.push(atom);
+                }
+                EndRandom(end) => {
+                    if let Some(PercentChance(start, _)) = waiting_folds.last() {
+                        let start_line = line(start.span.start());
+                        let mut end_line = line(end.span.start());
+                        if end_line > start_line {
+                            end_line -= 1;
+                            folds.push(FoldingRange {
+                                start_line,
+                                end_line,
+                                ..fold()
+                            });
+                        }
+                        waiting_folds.pop();
+                    }
+                    if let Some(StartRandom(start)) = waiting_folds.last() {
+                        folds.push(FoldingRange {
+                            start_line: line(start.span.start()),
+                            end_line: line(end.span.start()),
+                            ..fold()
+                        });
+                        waiting_folds.pop();
+                    }
+                }
                 _ => (),
             }
         }
