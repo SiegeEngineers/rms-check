@@ -4,8 +4,4 @@
 mod wasm;
 
 #[cfg(target_arch = "wasm32")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
-#[cfg(target_arch = "wasm32")]
 pub use wasm::*;
