@@ -16,6 +16,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+mod folds;
+
 type RpcResult = jsonrpc_core::Result<serde_json::Value>;
 
 struct Inner<Emit>
@@ -160,117 +162,9 @@ where
         let doc = self.documents.get(&params.text_document.uri).unwrap();
         let mut map = CodeMap::new();
         let file = map.add_filemap(FileName::virtual_(doc.uri.to_string()), doc.text.clone());
-        let parser = Parser::new(&*file);
+        let folder = folds::FoldingRanges::new(&file);
 
-        let line = |index| file.location(index).unwrap().0.to_usize() as u64;
-        let col = |index| file.location(index).unwrap().1.to_usize() as u64;
-        let fold = || FoldingRange {
-            start_line: 0,
-            end_line: 0,
-            start_character: Default::default(),
-            end_character: Default::default(),
-            kind: Default::default(),
-        };
-
-        let mut folds = vec![];
-        let mut waiting_folds = vec![];
-        use rms_check::Atom::*;
-        for (atom, _) in parser {
-            match atom {
-                Comment(start, _, Some(end)) => {
-                    let start_line = line(start.span.start());
-                    let end_line = line(end.span.start());
-                    if end_line > start_line {
-                        folds.push(FoldingRange {
-                            start_line,
-                            end_line,
-                            end_character: Some(col(end.span.end())),
-                            ..fold()
-                        });
-                    }
-                }
-                OpenBlock(_) => waiting_folds.push(atom),
-                CloseBlock(end) => match waiting_folds.pop() {
-                    Some(OpenBlock(start)) => folds.push(FoldingRange {
-                        start_line: line(start.span.end()),
-                        end_line: line(end.span.start()),
-                        start_character: Some(col(start.span.end())),
-                        end_character: Some(col(end.span.start())),
-                        ..fold()
-                    }),
-                    _ => (),
-                },
-                If(_, _) => waiting_folds.push(atom),
-                ElseIf(end, _) | Else(end) => {
-                    let start = match waiting_folds.pop() {
-                        Some(If(start, _)) | Some(ElseIf(start, _)) => start,
-                        _ => continue,
-                    };
-                    let start_line = line(start.span.start());
-                    let mut end_line = line(end.span.start());
-                    if end_line > start_line {
-                        end_line -= 1;
-                        folds.push(FoldingRange {
-                            start_line,
-                            end_line,
-                            ..fold()
-                        });
-                    }
-                    waiting_folds.push(atom);
-                }
-                EndIf(end) => match waiting_folds.pop() {
-                    Some(If(start, _)) | Some(ElseIf(start, _)) | Some(Else(start)) => {
-                        folds.push(FoldingRange {
-                            start_line: line(start.span.start()),
-                            end_line: line(end.span.start()),
-                            ..fold()
-                        })
-                    }
-                    _ => (),
-                },
-                StartRandom(_) => waiting_folds.push(atom),
-                PercentChance(end, _) => {
-                    if let Some(PercentChance(start, _)) = waiting_folds.last() {
-                        let start_line = line(start.span.start());
-                        let mut end_line = line(end.span.start());
-                        if end_line > start_line {
-                            end_line -= 1;
-                            folds.push(FoldingRange {
-                                start_line,
-                                end_line,
-                                ..fold()
-                            });
-                        }
-                        waiting_folds.pop();
-                    }
-                    waiting_folds.push(atom);
-                }
-                EndRandom(end) => {
-                    if let Some(PercentChance(start, _)) = waiting_folds.last() {
-                        let start_line = line(start.span.start());
-                        let mut end_line = line(end.span.start());
-                        if end_line > start_line {
-                            end_line -= 1;
-                            folds.push(FoldingRange {
-                                start_line,
-                                end_line,
-                                ..fold()
-                            });
-                        }
-                        waiting_folds.pop();
-                    }
-                    if let Some(StartRandom(start)) = waiting_folds.last() {
-                        folds.push(FoldingRange {
-                            start_line: line(start.span.start()),
-                            end_line: line(end.span.start()),
-                            ..fold()
-                        });
-                        waiting_folds.pop();
-                    }
-                }
-                _ => (),
-            }
-        }
+        let folds: Vec<FoldingRange> = folder.collect();
 
         serde_json::to_value(folds).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
