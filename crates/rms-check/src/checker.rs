@@ -118,7 +118,7 @@ impl Suggestion {
     }
     /// Create a suggestion applying to a specific token.
     #[inline]
-    pub fn from(token: &Word, message: impl ToString) -> Self {
+    pub fn from(token: &Word<'_>, message: impl ToString) -> Self {
         let message = message.to_string();
         Suggestion {
             span: token.span,
@@ -298,10 +298,10 @@ pub trait Lint {
     fn run_inside_comments(&self) -> bool {
         false
     }
-    fn lint_token(&mut self, _state: &mut ParseState, _token: &Word) -> Option<Warning> {
+    fn lint_token(&mut self, _state: &mut ParseState<'_>, _token: &Word<'_>) -> Option<Warning> {
         Default::default()
     }
-    fn lint_atom(&mut self, _state: &mut ParseState, _atom: &Atom) -> Vec<Warning> {
+    fn lint_atom(&mut self, _state: &mut ParseState<'_>, _atom: &Atom<'_>) -> Vec<Warning> {
         Default::default()
     }
 }
@@ -567,7 +567,7 @@ impl<'a> Checker<'a> {
             return parse_error.or(lint_warning);
         }
 
-        fn unbalanced_error(name: &str, token: &Word, nest: Option<&Nesting>) -> Warning {
+        fn unbalanced_error(name: &str, token: &Word<'_>, nest: Option<&Nesting>) -> Warning {
             let msg = format!("Unbalanced `{}`", name);
             match nest {
                 Some(Nesting::Brace(loc)) => token

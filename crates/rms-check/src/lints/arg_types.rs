@@ -9,7 +9,7 @@ impl ArgTypesLint {
         Default::default()
     }
 
-    fn check_ever_defined(&self, state: &ParseState, token: &Word) -> Option<Warning> {
+    fn check_ever_defined(&self, state: &ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
         if !state.may_have_define(token.value) {
             let warn = token.warning(format!(
                 "Token `{}` is never defined, this condition will always fail",
@@ -31,7 +31,7 @@ impl ArgTypesLint {
     }
 
     /// Check if a constant was ever defined with a value (using #const)
-    fn check_defined_with_value(&self, state: &ParseState, token: &Word) -> Option<Warning> {
+    fn check_defined_with_value(&self, state: &ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
         // 1. Check if this may or may not be defined—else warn
         if !state.has_const(token.value) {
             if state.has_define(token.value) {
@@ -55,7 +55,7 @@ impl ArgTypesLint {
         }
     }
 
-    fn check_number(&self, state: &ParseState, cmd: &Word, arg: &Word) -> Option<Warning> {
+    fn check_number(&self, _state: &ParseState<'_>, cmd: &Word<'_>, arg: &Word<'_>) -> Option<Warning> {
         // This may be a valued (#const) constant,
         // or a number (12, -35),
         arg.value
@@ -88,10 +88,10 @@ impl ArgTypesLint {
 
     fn check_arg(
         &self,
-        state: &ParseState,
-        atom: &Atom,
+        state: &ParseState<'_>,
+        atom: &Atom<'_>,
         arg_type: &ArgType,
-        arg: Option<&Word>,
+        arg: Option<&Word<'_>>,
     ) -> Option<Warning> {
         let cmd = if let Atom::Command(cmd, _) = atom {
             cmd
@@ -107,7 +107,7 @@ impl ArgTypesLint {
             ));
         };
 
-        fn unexpected_number_warning(arg: &Word) -> Option<Warning> {
+        fn unexpected_number_warning(arg: &Word<'_>) -> Option<Warning> {
             arg.value.parse::<i32>().ok().map(|_| {
                 arg.error(format!(
                     "Expected a const name, but got a number {}",
@@ -143,7 +143,7 @@ impl Lint for ArgTypesLint {
     fn name(&self) -> &'static str {
         "arg-types"
     }
-    fn lint_atom(&mut self, state: &mut ParseState, atom: &Atom) -> Vec<Warning> {
+    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
         if let Atom::Command(cmd, args) = atom {
             let token_type = &TOKENS[&cmd.value.to_lowercase()];
             let mut warnings = vec![];

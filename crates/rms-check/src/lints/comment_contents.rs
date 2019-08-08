@@ -21,7 +21,7 @@ impl Lint for CommentContentsLint {
         true
     }
 
-    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
+    fn lint_token(&mut self, state: &mut ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
         if !state.is_comment {
             return None;
         }

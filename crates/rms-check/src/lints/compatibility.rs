@@ -10,13 +10,13 @@ impl CompatibilityLint {
         Self::default()
     }
 
-    fn has_up_extension(&self, state: &ParseState) -> bool {
+    fn has_up_extension(&self, state: &ParseState<'_>) -> bool {
         if state.compatibility >= Compatibility::UserPatch15 {
             return true;
         }
         self.conditions.iter().any(|item| item == "UP_EXTENSION")
     }
-    fn has_up_available(&self, state: &ParseState) -> bool {
+    fn has_up_available(&self, state: &ParseState<'_>) -> bool {
         if state.compatibility >= Compatibility::UserPatch14 {
             return true;
         }
@@ -27,7 +27,7 @@ impl CompatibilityLint {
         self.conditions.push(name.to_string());
     }
 
-    fn check_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
+    fn check_token(&mut self, state: &mut ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
         match token.value {
             "effect_amount" | "effect_percent" => {
                 if self.has_up_extension(state) {
@@ -74,7 +74,7 @@ impl Lint for CompatibilityLint {
         "compatibility"
     }
 
-    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
+    fn lint_token(&mut self, state: &mut ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
         match state.current_token {
             Some(TokenType { name, .. }) if *name == "if" => {
                 // `token` will be the arg to `if`

@@ -75,7 +75,7 @@ impl Atom<'_> {
 }
 
 impl Display for Atom<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Atom::*;
         match self {
             Const(_, name, val) => write!(
@@ -321,7 +321,7 @@ mod tests {
     #[test]
     fn const_ok() {
         let mut f = filemap("#const A B");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
+        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         if let (Atom::Const(def, name, val), warnings) = &atoms[0] {
             assert_eq!(def.value, "#const");
             assert_eq!(name.value, "A");
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn const_missing_value() {
         let mut f = filemap("#const B");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
+        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         if let (Atom::Const(def, name, val), warnings) = &atoms[0] {
             assert_eq!(def.value, "#const");
             assert_eq!(name.value, "B");
@@ -351,7 +351,7 @@ mod tests {
     #[test]
     fn const_missing_name() {
         let mut f = filemap("#const");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
+        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         if let (Atom::Other(token), warnings) = &atoms[0] {
             assert_eq!(token.value, "#const");
             assert_eq!(warnings.len(), 1);
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn define_ok() {
         let mut f = filemap("#define B");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
+        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         if let (Atom::Define(def, name), warnings) = &atoms[0] {
             assert_eq!(def.value, "#define");
             assert_eq!(name.value, "B");
@@ -377,7 +377,7 @@ mod tests {
     #[test]
     fn define_missing_name() {
         let mut f = filemap("#define");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
+        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         if let (Atom::Other(token), warnings) = &atoms[0] {
             assert_eq!(token.value, "#define");
             assert_eq!(warnings.len(), 1);
@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn command_noargs() {
         let mut f = filemap("random_placement");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
+        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 1);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "random_placement");
@@ -404,7 +404,7 @@ mod tests {
     #[test]
     fn command_1arg() {
         let mut f = filemap("land_percent 10 grouped_by_team");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
+        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 2);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "land_percent");
@@ -427,7 +427,7 @@ mod tests {
     #[test]
     fn command_wrong_case() {
         let mut f = filemap("land_Percent 10 grouped_BY_team");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
+        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 2);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "land_Percent");
@@ -449,7 +449,7 @@ mod tests {
     #[test]
     fn command_block() {
         let mut f = filemap("create_terrain SNOW { base_size 15 }");
-        let mut atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
+        let mut atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 4);
         if let (Atom::Command(name, args), _) = atoms.remove(0) {
             assert_eq!(name.value, "create_terrain");
@@ -480,7 +480,7 @@ mod tests {
     #[test]
     fn comment_basic() {
         let mut f = filemap("create_terrain SNOW /* this is a comment */ { }");
-        let mut atoms = Parser::new(&mut f).collect::<Vec<(Atom, Vec<Warning>)>>();
+        let mut atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 4);
         if let (Atom::Command(_, _), _) = atoms.remove(0) {
             // ok

@@ -12,7 +12,7 @@ impl Lint for AttributeCaseLint {
     fn name(&self) -> &'static str {
         "attribute-case"
     }
-    fn lint_atom(&mut self, state: &mut ParseState, atom: &Atom) -> Vec<Warning> {
+    fn lint_atom(&mut self, _state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
         match atom {
             Atom::Command(cmd, _) if self.is_wrong_case(cmd.value) => {
                 let suggestion = Suggestion::from(cmd, "Attributes must be all lowercase")

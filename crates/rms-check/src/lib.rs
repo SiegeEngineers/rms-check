@@ -1,3 +1,10 @@
+#![deny(future_incompatible)]
+#![deny(nonstandard_style)]
+#![deny(rust_2018_idioms)]
+#![deny(unsafe_code)]
+#![warn(missing_docs)]
+#![warn(unused)]
+
 mod checker;
 mod lints;
 mod parser;
@@ -104,7 +111,7 @@ impl<'a> RMSCheck<'a> {
     }
 
     #[inline]
-    pub fn with_lint(self, lint: Box<Lint>) -> Self {
+    pub fn with_lint(self, lint: Box<dyn Lint>) -> Self {
         Self {
             checker: self.checker.with_lint(lint),
             ..self

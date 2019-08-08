@@ -13,7 +13,7 @@ impl Lint for IncludeLint {
     fn name(&self) -> &'static str {
         "include"
     }
-    fn lint_atom(&mut self, _state: &mut ParseState, atom: &Atom) -> Vec<Warning> {
+    fn lint_atom(&mut self, _state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
         match atom {
             Atom::Command(cmd, _) if cmd.value == "#include_drs" => {
                 vec![atom.error("#include_drs can only be used by builtin maps")]

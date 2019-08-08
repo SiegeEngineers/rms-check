@@ -1,3 +1,10 @@
+#![deny(future_incompatible)]
+#![deny(nonstandard_style)]
+#![deny(rust_2018_idioms)]
+#![deny(unsafe_code)]
+#![warn(missing_docs)]
+#![warn(unused)]
+
 use codespan::{CodeMap, FileName};
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use languageserver_types::{
@@ -8,7 +15,7 @@ use languageserver_types::{
     TextDocumentItem, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
     WorkspaceEdit,
 };
-use rms_check::{AutoFixReplacement, Compatibility, Parser, RMSCheck, RMSCheckResult, Warning};
+use rms_check::{AutoFixReplacement, Compatibility, RMSCheck, RMSCheckResult, Warning};
 use serde_json::{self, json};
 use std::{
     cmp::Ordering,

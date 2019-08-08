@@ -8,7 +8,7 @@ impl Lint for DeadBranchCommentLint {
     fn run_inside_comments(&self) -> bool {
         true
     }
-    fn lint_token(&mut self, state: &mut ParseState, token: &Word) -> Option<Warning> {
+    fn lint_token(&mut self, state: &mut ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
         if token.value != "/*" {
             return None;
         }
