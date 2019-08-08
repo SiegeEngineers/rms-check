@@ -1,4 +1,4 @@
-use crate::{Lint, ParseState, TokenContext, Warning, Atom, TOKENS};
+use crate::{Atom, Lint, ParseState, TokenContext, Warning, TOKENS};
 
 #[derive(Default)]
 pub struct IncorrectSectionLint {}
@@ -25,8 +25,12 @@ impl Lint for IncorrectSectionLint {
                             _ => unreachable!(),
                         };
                         if name.value != *expected_section {
-                            return vec![atom.error(format!("Command is invalid in section {}, it can only appear in {}", name.value, expected_section))
-                                        .note_at(current_section.span(), "Section started here")];
+                            return vec![atom
+                                .error(format!(
+                                    "Command is invalid in section {}, it can only appear in {}",
+                                    name.value, expected_section
+                                ))
+                                .note_at(current_section.span(), "Section started here")];
                         }
                     }
                     None => {

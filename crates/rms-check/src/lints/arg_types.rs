@@ -101,7 +101,10 @@ impl ArgTypesLint {
         let arg = if let Some(arg) = arg {
             arg
         } else {
-            return Some(Warning::error(atom.span(), format!("Missing arguments to {}", cmd.value)));
+            return Some(Warning::error(
+                atom.span(),
+                format!("Missing arguments to {}", cmd.value),
+            ));
         };
 
         fn unexpected_number_warning(arg: &Word) -> Option<Warning> {
@@ -245,10 +248,7 @@ mod tests {
         assert!(warnings.next().is_none());
         assert_eq!(first.diagnostic().severity, Severity::Error);
         assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
-        assert_eq!(
-            first.message(),
-            "Expected a const name, but got a number 0"
-        );
+        assert_eq!(first.message(), "Expected a const name, but got a number 0");
         let first_span = first.diagnostic().labels[0].span;
         assert_eq!(
             result.resolve_position(first_span.start()).unwrap(),
@@ -281,10 +281,7 @@ mod tests {
 
         assert_eq!(fourth.diagnostic().severity, Severity::Error);
         assert_eq!(fourth.diagnostic().code, Some("arg-types".to_string()));
-        assert_eq!(
-            fourth.message(),
-            "Missing arguments to create_object"
-        );
+        assert_eq!(fourth.message(), "Missing arguments to create_object");
         let fourth_span = fourth.diagnostic().labels[0].span;
         assert_eq!(
             result.resolve_position(fourth_span.start()).unwrap(),

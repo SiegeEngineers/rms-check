@@ -1,6 +1,6 @@
 use crate::{
     parser::Atom,
-    tokens::{TokenContext, TokenType, TOKENS},
+    tokens::{TokenType, TOKENS},
     wordize::Word,
 };
 use codespan::{ByteIndex, ByteSpan};
@@ -19,6 +19,7 @@ pub enum Compatibility {
 }
 
 impl Default for Compatibility {
+    #[inline]
     fn default() -> Compatibility {
         Compatibility::Conquerors
     }
@@ -26,7 +27,7 @@ impl Default for Compatibility {
 
 /// Describes the next expected token.
 #[derive(Debug, Clone, Copy)]
-pub enum Expect<'a> {
+enum Expect<'a> {
     /// No expectations!
     None,
     /// A #define name.
@@ -38,6 +39,7 @@ pub enum Expect<'a> {
 }
 
 impl<'a> Default for Expect<'a> {
+    #[inline]
     fn default() -> Self {
         Expect::None
     }
@@ -51,12 +53,14 @@ pub enum AutoFixReplacement {
 }
 
 impl AutoFixReplacement {
+    #[inline]
     pub fn is_fixable(&self) -> bool {
         match self {
             AutoFixReplacement::Safe(_) => true,
             _ => false,
         }
     }
+    #[inline]
     pub fn is_fixable_unsafe(&self) -> bool {
         match self {
             AutoFixReplacement::None => false,
@@ -77,27 +81,33 @@ pub struct Suggestion {
 }
 
 impl Suggestion {
+    #[inline]
     pub fn span(&self) -> ByteSpan {
         self.span
     }
     /// Get the starting position this suggestion applies to.
+    #[inline]
     pub fn start(&self) -> ByteIndex {
         self.span.start()
     }
     /// Get the end position this suggestion applies to.
+    #[inline]
     pub fn end(&self) -> ByteIndex {
         self.span.end()
     }
     /// Get the suggestion message.
+    #[inline]
     pub fn message(&self) -> &str {
         &self.message
     }
     /// Get the replacement string that could fix the problem.
+    #[inline]
     pub fn replacement(&self) -> &AutoFixReplacement {
         &self.replacement
     }
 
     /// Create a suggestion.
+    #[inline]
     pub fn new(start: ByteIndex, end: ByteIndex, message: impl ToString) -> Self {
         let message = message.to_string();
         Suggestion {
@@ -107,6 +117,7 @@ impl Suggestion {
         }
     }
     /// Create a suggestion applying to a specific token.
+    #[inline]
     pub fn from(token: &Word, message: impl ToString) -> Self {
         let message = message.to_string();
         Suggestion {
@@ -116,12 +127,14 @@ impl Suggestion {
         }
     }
     /// Specify a possible fix for the problem.
+    #[inline]
     pub fn replace(mut self, replacement: impl ToString) -> Self {
         self.replacement = AutoFixReplacement::Safe(replacement.to_string());
         self
     }
     /// Specify a possible fix for the problem, but one that may not be correct and requires some
     /// manual intervention.
+    #[inline]
     pub fn replace_unsafe(mut self, replacement: impl ToString) -> Self {
         self.replacement = AutoFixReplacement::Unsafe(replacement.to_string());
         self
@@ -138,32 +151,38 @@ pub struct Warning {
 }
 
 impl Warning {
+    #[inline]
     pub fn diagnostic(&self) -> &Diagnostic {
         &self.diagnostic
     }
     /// Get the severity of this warning.
+    #[inline]
     pub fn severity(&self) -> Severity {
         self.diagnostic.severity
     }
+    #[inline]
     pub fn labels(&self) -> &Vec<Label> {
         &self.diagnostic.labels
     }
     /// Get the human-readable error message.
+    #[inline]
     pub fn message(&self) -> &str {
         &self.diagnostic.message
     }
     /// Check whether any suggestions could be made.
+    #[inline]
     pub fn has_suggestions(&self) -> bool {
         !self.suggestions.is_empty()
     }
     /// Get any suggestions that may help to fix the problem.
+    #[inline]
     pub fn suggestions(&self) -> &Vec<Suggestion> {
         &self.suggestions
     }
 
     /// Create a new warning with severity "Warning".
     #[allow(unused)]
-    pub fn warning<S: AsRef<str>>(span: ByteSpan, message: S) -> Self {
+    pub(crate) fn warning<S: AsRef<str>>(span: ByteSpan, message: S) -> Self {
         Warning {
             diagnostic: Diagnostic::new_warning(message.as_ref().to_string())
                 .with_label(Label::new_primary(span)),
@@ -172,7 +191,7 @@ impl Warning {
     }
 
     /// Create a new warning with severity "Error".
-    pub fn error<S: AsRef<str>>(span: ByteSpan, message: S) -> Self {
+    pub(crate) fn error<S: AsRef<str>>(span: ByteSpan, message: S) -> Self {
         Warning {
             diagnostic: Diagnostic::new_error(message.as_ref().to_string())
                 .with_label(Label::new_primary(span)),
@@ -181,20 +200,20 @@ impl Warning {
     }
 
     /// Define a replacement suggestion for this warning.
-    pub fn suggest(mut self, suggestion: Suggestion) -> Self {
+    pub(crate) fn suggest(mut self, suggestion: Suggestion) -> Self {
         self.suggestions.push(suggestion);
         self
     }
 
     /// Add a note referencing a snippet of code.
-    pub fn note_at(mut self, span: ByteSpan, message: &str) -> Self {
+    pub(crate) fn note_at(mut self, span: ByteSpan, message: &str) -> Self {
         self.diagnostic = self
             .diagnostic
             .with_label(Label::new_secondary(span).with_message(message));
         self
     }
 
-    pub fn lint(mut self, lint: &str) -> Self {
+    pub(crate) fn lint(mut self, lint: &str) -> Self {
         self.diagnostic = self.diagnostic.with_code(lint);
         self
     }
@@ -202,7 +221,7 @@ impl Warning {
 
 impl Word<'_> {
     /// Create a warning applying to this token.
-    pub fn warning<S: AsRef<str>>(&self, message: S) -> Warning {
+    pub(crate) fn warning<S: AsRef<str>>(&self, message: S) -> Warning {
         Warning {
             diagnostic: Diagnostic::new_warning(message.as_ref().to_string())
                 .with_label(Label::new_primary(self.span)),
@@ -210,7 +229,7 @@ impl Word<'_> {
         }
     }
     /// Create an error applying to this token.
-    pub fn error<S: AsRef<str>>(&self, message: S) -> Warning {
+    pub(crate) fn error<S: AsRef<str>>(&self, message: S) -> Warning {
         Warning {
             diagnostic: Diagnostic::new_error(message.as_ref().to_string())
                 .with_label(Label::new_primary(self.span)),
@@ -221,7 +240,7 @@ impl Word<'_> {
 
 impl Atom<'_> {
     /// Create a warning applying to this token.
-    pub fn warning<S: AsRef<str>>(&self, message: S) -> Warning {
+    pub(crate) fn warning<S: AsRef<str>>(&self, message: S) -> Warning {
         Warning {
             diagnostic: Diagnostic::new_warning(message.as_ref().to_string())
                 .with_label(Label::new_primary(self.span())),
@@ -229,7 +248,7 @@ impl Atom<'_> {
         }
     }
     /// Create an error applying to this token.
-    pub fn error<S: AsRef<str>>(&self, message: S) -> Warning {
+    pub(crate) fn error<S: AsRef<str>>(&self, message: S) -> Warning {
         Warning {
             diagnostic: Diagnostic::new_error(message.as_ref().to_string())
                 .with_label(Label::new_primary(self.span())),
@@ -300,7 +319,7 @@ pub struct ParseState<'a> {
     /// The amount of arguments we've read.
     pub token_arg_index: u8,
     /// The type of token we expect to see next.
-    pub expect: Expect<'a>,
+    expect: Expect<'a>,
     /// The current <SECTION>, as well as its opening token.
     pub current_section: Option<Atom<'a>>,
     /// List of #const definitions we've seen so far.
@@ -330,7 +349,7 @@ impl<'a> ParseState<'a> {
     pub fn has_const(&self, name: &str) -> bool {
         self.seen_consts.contains(name)
     }
-    pub fn expect(&mut self, expect: Expect<'a>) {
+    fn expect(&mut self, expect: Expect<'a>) {
         self.expect = expect;
     }
 }
@@ -570,16 +589,14 @@ impl<'a> Checker<'a> {
         }
         match token.value {
             "{" => self.state.nesting.push(Nesting::Brace(token.span)),
-            "}" => {
-                match self.state.nesting.last() {
-                    Some(Nesting::Brace(_)) => {
-                        self.state.nesting.pop();
-                    }
-                    nest => {
-                        parse_error = Some(unbalanced_error("}", token, nest));
-                    }
+            "}" => match self.state.nesting.last() {
+                Some(Nesting::Brace(_)) => {
+                    self.state.nesting.pop();
                 }
-            }
+                nest => {
+                    parse_error = Some(unbalanced_error("}", token, nest));
+                }
+            },
             "if" => self.state.nesting.push(Nesting::If(token.span)),
             "elseif" => {
                 match self.state.nesting.last() {
@@ -603,16 +620,14 @@ impl<'a> Checker<'a> {
                 }
                 self.state.nesting.push(Nesting::Else(token.span));
             }
-            "endif" => {
-                match self.state.nesting.last() {
-                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
-                        self.state.nesting.pop();
-                    }
-                    nest => {
-                        parse_error = Some(unbalanced_error("endif", token, nest));
-                    }
+            "endif" => match self.state.nesting.last() {
+                Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
+                    self.state.nesting.pop();
                 }
-            }
+                nest => {
+                    parse_error = Some(unbalanced_error("endif", token, nest));
+                }
+            },
             "start_random" => self.state.nesting.push(Nesting::StartRandom(token.span)),
             "percent_chance" => {
                 if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
@@ -654,7 +669,6 @@ impl<'a> Checker<'a> {
         if let Some(ref token_type) = TOKENS.get(token.value) {
             self.state.current_token = Some(token_type);
             self.state.token_arg_index = 0;
-
         }
 
         // A parse error is more important than a lint warning, probably…

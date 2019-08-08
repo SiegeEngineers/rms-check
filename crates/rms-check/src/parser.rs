@@ -117,6 +117,7 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    #[inline]
     pub fn new(file_map: &'a FileMap) -> Self {
         Parser {
             file_map,

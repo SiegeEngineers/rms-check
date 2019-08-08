@@ -7,8 +7,7 @@ mod wordize;
 use crate::{checker::Checker, wordize::Wordize};
 pub use crate::{
     checker::{
-        AutoFixReplacement, Compatibility, Expect, Lint, Nesting, ParseState, Severity, Suggestion,
-        Warning,
+        AutoFixReplacement, Compatibility, Lint, Nesting, ParseState, Severity, Suggestion, Warning,
     },
     parser::{Atom, Parser, WarningKind},
     tokens::{ArgType, TokenContext, TokenType, TOKENS},
@@ -23,19 +22,23 @@ pub struct RMSCheckResult {
 }
 
 impl RMSCheckResult {
+    #[inline]
     pub fn codemap(&self) -> &CodeMap {
         &self.codemap
     }
 
+    #[inline]
     pub fn has_warnings(&self) -> bool {
         !self.warnings.is_empty()
     }
 
+    #[inline]
     pub fn resolve_position(&self, index: ByteIndex) -> Option<(LineIndex, ColumnIndex)> {
         let file = self.codemap.find_file(index);
         file.and_then(|f| f.location(index).ok())
     }
 
+    #[inline]
     pub fn resolve_offset(&self, index: ByteIndex) -> Option<ByteOffset> {
         let file = self.codemap.find_file(index);
         file.and_then(|f| {
@@ -45,10 +48,12 @@ impl RMSCheckResult {
         })
     }
 
+    #[inline]
     pub fn into_iter(self) -> impl IntoIterator<Item = Warning> {
         self.warnings.into_iter()
     }
 
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &Warning> {
         self.warnings.iter()
     }
@@ -78,6 +83,7 @@ impl<'a> Default for RMSCheck<'a> {
 }
 
 impl<'a> RMSCheck<'a> {
+    #[inline]
     pub fn new() -> Self {
         RMSCheck {
             checker: Checker::default(),
@@ -88,6 +94,7 @@ impl<'a> RMSCheck<'a> {
         }
     }
 
+    #[inline]
     pub fn compatibility(self, compatibility: Compatibility) -> Self {
         Self {
             checker: self.checker.compatibility(compatibility),
@@ -96,6 +103,7 @@ impl<'a> RMSCheck<'a> {
         }
     }
 
+    #[inline]
     pub fn with_lint(self, lint: Box<Lint>) -> Self {
         Self {
             checker: self.checker.with_lint(lint),
@@ -103,11 +111,13 @@ impl<'a> RMSCheck<'a> {
         }
     }
 
+    #[inline]
     pub fn add_binary(mut self, name: &str, source: Vec<u8>) -> Self {
         self.binary_files.insert(name.to_string(), source);
         self
     }
 
+    #[inline]
     pub fn add_source(mut self, name: &str, source: &str) -> Self {
         let map = self.codemap.add_filemap(
             FileName::Virtual(name.to_string().into()),
@@ -117,12 +127,14 @@ impl<'a> RMSCheck<'a> {
         self
     }
 
+    #[inline]
     pub fn add_file(mut self, path: PathBuf) -> Result<Self> {
         let map = self.codemap.add_filemap_from_disk(path)?;
         self.file_maps.push(map);
         Ok(self)
     }
 
+    #[inline]
     pub fn codemap(&self) -> &CodeMap {
         &self.codemap
     }
@@ -131,11 +143,10 @@ impl<'a> RMSCheck<'a> {
         self = match self.compatibility {
             Compatibility::WololoKingdoms => {
                 self.add_source("random_map.def", include_str!("def_wk.rms"))
-            },
-            Compatibility::UserPatch15 => {
-                self.add_source("random_map.def", include_str!("def_aoc.rms"))
-                    .add_source("UserPatchConst.rms", include_str!("def_up15.rms"))
             }
+            Compatibility::UserPatch15 => self
+                .add_source("random_map.def", include_str!("def_aoc.rms"))
+                .add_source("UserPatchConst.rms", include_str!("def_up15.rms")),
             _ => self.add_source("random_map.def", include_str!("def_aoc.rms")),
         };
 
@@ -169,6 +180,7 @@ impl<'a> RMSCheck<'a> {
 }
 
 /// Check a random map script for errors or other issues.
+#[inline]
 pub fn check(source: &str, compatibility: Compatibility) -> RMSCheckResult {
     let checker = RMSCheck::default()
         .compatibility(compatibility)

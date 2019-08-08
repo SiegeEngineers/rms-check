@@ -13,10 +13,12 @@ pub struct Word<'a> {
 
 impl<'a> Word<'a> {
     /// Get the position of the first character in this word.
+    #[inline]
     pub fn start(&self) -> ByteIndex {
         self.span.start()
     }
     /// Get the position of the character just past this word.
+    #[inline]
     pub fn end(&self) -> ByteIndex {
         self.span.end()
     }
