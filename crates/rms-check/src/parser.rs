@@ -111,14 +111,20 @@ impl Display for Atom<'_> {
 
 /// A forgiving random map script parser, turning a stream of words into a stream of atoms.
 #[derive(Debug)]
-pub struct Parser<'a> {
-    file_map: &'a FileMap,
-    iter: MultiPeek<Wordize<'a>>,
+pub struct Parser<'a, Source>
+where
+    Source: AsRef<str>,
+{
+    file_map: &'a FileMap<Source>,
+    iter: MultiPeek<Wordize<'a, Source>>,
 }
 
-impl<'a> Parser<'a> {
+impl<'a, Source> Parser<'a, Source>
+where
+    Source: AsRef<str>,
+{
     #[inline]
-    pub fn new(file_map: &'a FileMap) -> Self {
+    pub fn new(file_map: &'a FileMap<Source>) -> Self {
         Parser {
             file_map,
             iter: itertools::multipeek(Wordize::new(file_map)),
@@ -226,7 +232,10 @@ impl<'a> Parser<'a> {
     }
 }
 
-impl<'a> Iterator for Parser<'a> {
+impl<'a, Source> Iterator for Parser<'a, Source>
+where
+    Source: AsRef<str>,
+{
     type Item = (Atom<'a>, Vec<Warning>);
     fn next(&mut self) -> Option<Self::Item> {
         let word = match self.iter.next() {

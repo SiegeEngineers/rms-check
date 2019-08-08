@@ -26,14 +26,20 @@ impl<'a> Word<'a> {
 
 /// Iterator over words in a string, with their start and end positions.
 #[derive(Debug)]
-pub struct Wordize<'a> {
-    file_map: &'a FileMap,
+pub struct Wordize<'a, Source>
+where
+    Source: AsRef<str>,
+{
+    file_map: &'a FileMap<Source>,
     chars: CharIndices<'a>,
 }
 
-impl<'a> Wordize<'a> {
+impl<'a, Source> Wordize<'a, Source>
+where
+    Source: AsRef<str>,
+{
     /// Create an iterator over the `source` string's words.
-    pub fn new(file_map: &'a FileMap) -> Self {
+    pub fn new(file_map: &'a FileMap<Source>) -> Self {
         Wordize {
             file_map,
             chars: file_map.src().char_indices(),
@@ -41,7 +47,10 @@ impl<'a> Wordize<'a> {
     }
 }
 
-impl<'a> Iterator for Wordize<'a> {
+impl<'a, Source> Iterator for Wordize<'a, Source>
+where
+    Source: AsRef<str>,
+{
     type Item = Word<'a>;
 
     /// Get the next word.
