@@ -21,6 +21,10 @@ pub struct Cli {
     #[structopt(long = "server")]
     server: bool,
 
+    /// Format the given file.
+    #[structopt(long = "format")]
+    format: bool,
+
     /// Auto-fix some problems.
     #[structopt(long = "fix")]
     fix: bool,
@@ -69,6 +73,17 @@ fn main() -> Fallible<()> {
     if args.server {
         cli_server();
         unreachable!();
+    }
+
+    if args.format {
+        if args.file.is_none() {
+            bail!("must specify a file to format");
+        }
+
+        let bytes = std::fs::read(args.file.unwrap())?;
+        let string = std::str::from_utf8(&bytes)?;
+        println!("{}", rms_check::format(string));
+        return Ok(());
     }
 
     if args.fix {
