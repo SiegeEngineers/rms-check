@@ -98,6 +98,28 @@ impl<'atom> Formatter<'atom> {
         input
     }
 
+    fn comment(&mut self, content: &str) {
+        self.text("/* ");
+        let mut lines = content.lines();
+        if let Some(first_line) = lines.next() {
+            self.text(first_line.trim());
+        }
+        let mut is_multiline = false;
+        for line in lines {
+            is_multiline = true;
+            self.newline();
+            self.text(" * ");
+            if line.trim().starts_with("* ") {
+                self.text(&line.chars().skip_while(|&c| char::is_whitespace(c)).collect::<String>());
+            } else {
+                self.text(line);
+            }
+        }
+        if is_multiline { self.newline(); }
+        self.text(" */");
+        self.newline();
+    }
+
     pub fn format(mut self, input: impl Iterator<Item = Atom<'atom>>) -> String {
         use Atom::*;
         let mut input = input.peekable();
@@ -120,6 +142,7 @@ impl<'atom> Formatter<'atom> {
                 OpenBlock(_) => {
                     input = self.block(input);
                 }
+                Comment(_, content, _) => self.comment(content),
                 _ => (),
             }
 
