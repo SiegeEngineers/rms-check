@@ -118,12 +118,14 @@ impl<'a> RMSCheck<'a> {
         }
     }
 
+    /// Add a binary file.
     #[inline]
     pub fn add_binary(mut self, name: &str, source: Vec<u8>) -> Self {
         self.binary_files.insert(name.to_string(), source);
         self
     }
 
+    /// Add a source string.
     #[inline]
     pub fn add_source(mut self, name: &str, source: &str) -> Self {
         let map = self.codemap.add_filemap(
@@ -134,6 +136,16 @@ impl<'a> RMSCheck<'a> {
         self
     }
 
+    /// Add a definitions file, parsed before any other files.
+    fn add_definitions(&mut self, name: &str, source: &str) {
+        let map = self.codemap.add_filemap(
+            FileName::Virtual(name.to_string().into()),
+            source.to_string(),
+        );
+        self.file_maps.insert(0, map);
+    }
+
+    /// Add a source string from disk.
     #[inline]
     pub fn add_file(mut self, path: PathBuf) -> Result<Self> {
         let map = self.codemap.add_filemap_from_disk(path)?;
@@ -141,20 +153,25 @@ impl<'a> RMSCheck<'a> {
         Ok(self)
     }
 
+    /// Get the internal CodeMap, useful for converting byte indices.
     #[inline]
     pub fn codemap(&self) -> &CodeMap {
         &self.codemap
     }
 
+    /// Run the lints and get the result.
     pub fn check(mut self) -> RMSCheckResult {
-        self = match self.compatibility {
+        match self.compatibility {
             Compatibility::WololoKingdoms => {
-                self.add_source("random_map.def", include_str!("def_wk.rms"))
+                self.add_definitions("random_map.def", include_str!("def_wk.rms"));
             }
-            Compatibility::UserPatch15 => self
-                .add_source("random_map.def", include_str!("def_aoc.rms"))
-                .add_source("UserPatchConst.rms", include_str!("def_up15.rms")),
-            _ => self.add_source("random_map.def", include_str!("def_aoc.rms")),
+            Compatibility::UserPatch15 =>{
+                self.add_definitions("random_map.def", include_str!("def_aoc.rms"));
+                self.add_definitions("UserPatchConst.rms", include_str!("def_up15.rms"));
+            }
+            _ => {
+                self.add_definitions("random_map.def", include_str!("def_aoc.rms"));
+            }
         };
 
         let mut checker = self.checker.build();
