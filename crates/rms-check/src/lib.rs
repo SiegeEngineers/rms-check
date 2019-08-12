@@ -6,6 +6,7 @@
 #![warn(unused)]
 
 mod checker;
+mod formatter;
 mod lints;
 mod parser;
 mod tokens;
@@ -16,6 +17,7 @@ pub use crate::{
     checker::{
         AutoFixReplacement, Compatibility, Lint, Nesting, ParseState, Severity, Suggestion, Warning,
     },
+    formatter::format,
     parser::{Atom, Parser, WarningKind},
     tokens::{ArgType, TokenContext, TokenType, TOKENS},
     wordize::Word,
