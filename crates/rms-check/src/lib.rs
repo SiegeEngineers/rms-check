@@ -71,7 +71,6 @@ pub struct RMSCheck<'a> {
     codemap: CodeMap,
     file_maps: Vec<Arc<FileMap>>,
     binary_files: HashMap<String, Vec<u8>>,
-    compatibility: Compatibility,
 }
 
 impl<'a> Default for RMSCheck<'a> {
@@ -97,7 +96,6 @@ impl<'a> RMSCheck<'a> {
             codemap: CodeMap::new(),
             file_maps: Default::default(),
             binary_files: Default::default(),
-            compatibility: Default::default(),
         }
     }
 
@@ -105,7 +103,6 @@ impl<'a> RMSCheck<'a> {
     pub fn compatibility(self, compatibility: Compatibility) -> Self {
         Self {
             checker: self.checker.compatibility(compatibility),
-            compatibility,
             ..self
         }
     }
@@ -134,15 +131,6 @@ impl<'a> RMSCheck<'a> {
         );
         self.file_maps.push(map);
         self
-    }
-
-    /// Add a definitions file, parsed before any other files.
-    fn add_definitions(&mut self, name: &str, source: &str) {
-        let map = self.codemap.add_filemap(
-            FileName::Virtual(name.to_string().into()),
-            source.to_string(),
-        );
-        self.file_maps.insert(0, map);
     }
 
     /// Add a source string from disk.
