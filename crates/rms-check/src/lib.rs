@@ -161,19 +161,6 @@ impl<'a> RMSCheck<'a> {
 
     /// Run the lints and get the result.
     pub fn check(mut self) -> RMSCheckResult {
-        match self.compatibility {
-            Compatibility::WololoKingdoms => {
-                self.add_definitions("random_map.def", include_str!("def_wk.rms"));
-            }
-            Compatibility::UserPatch15 =>{
-                self.add_definitions("random_map.def", include_str!("def_aoc.rms"));
-                self.add_definitions("UserPatchConst.rms", include_str!("def_up15.rms"));
-            }
-            _ => {
-                self.add_definitions("random_map.def", include_str!("def_aoc.rms"));
-            }
-        };
-
         let mut checker = self.checker.build();
         let words = self
             .file_maps

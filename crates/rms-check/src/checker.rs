@@ -1,9 +1,9 @@
 use crate::{
-    parser::Atom,
+    parser::{Atom, Parser},
     tokens::{TokenType, TOKENS},
     wordize::Word,
 };
-use codespan::{ByteIndex, ByteSpan};
+use codespan::{ByteIndex, ByteSpan, CodeMap, FileName};
 pub use codespan_reporting::{Diagnostic, Label, Severity};
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
@@ -310,6 +310,8 @@ pub trait Lint {
 pub struct ParseState<'a> {
     /// The target compatibility for this map script.
     pub compatibility: Compatibility,
+    /// Whether this map should be treated as a builtin map. If true, #include and #include_drs should be made available.
+    pub is_builtin_map: bool,
     /// Whether we're currently inside a comment.
     pub is_comment: bool,
     /// The amount of nested statements we entered, like `if`, `start_random`.
@@ -322,12 +324,63 @@ pub struct ParseState<'a> {
     expect: Expect<'a>,
     /// The current <SECTION>, as well as its opening token.
     pub current_section: Option<Atom<'a>>,
-    /// List of #const definitions we've seen so far.
+    /// List of builtin #const definitions.
+    builtin_consts: HashSet<String>,
+    /// List of builtin #define definitions.
+    builtin_defines: HashSet<String>,
+    /// List of user-mode #const definitions we've seen so far.
     pub seen_consts: HashSet<String>,
-    /// List of #define definitions we've seen so far.
+    /// List of user-mode #define definitions we've seen so far.
     pub seen_defines: HashSet<String>,
     /// List of builtin optional definitions.
     pub option_defines: HashSet<String>,
+}
+
+fn get_builtin_consts(compatibility: Compatibility) -> (HashSet<String>, HashSet<String>) {
+    let mut consts = HashSet::new();
+    let mut defines = HashSet::new();
+
+    let mut codemap = CodeMap::new();
+    match compatibility {
+        Compatibility::WololoKingdoms => {
+            codemap.add_filemap(
+                FileName::virtual_("random_map.def"),
+                include_str!("def_wk.rms"),
+            );
+        }
+        Compatibility::UserPatch15 => {
+            codemap.add_filemap(
+                FileName::virtual_("random_map.def"),
+                include_str!("def_aoc.rms"),
+            );
+            codemap.add_filemap(
+                FileName::virtual_("UserPatchConst.rms"),
+                include_str!("def_up15.rms"),
+            );
+        }
+        _ => {
+            codemap.add_filemap(
+                FileName::virtual_("random_map.def"),
+                include_str!("def_aoc.rms"),
+            );
+        }
+    };
+
+    for filemap in codemap.iter() {
+        for (atom, _) in Parser::new(filemap) {
+            match atom {
+                Atom::Const(_, name, _) => {
+                    consts.insert(name.value.to_string());
+                }
+                Atom::Define(_, name) => {
+                    defines.insert(name.value.to_string());
+                }
+                _ => (),
+            }
+        }
+    }
+
+    (consts, defines)
 }
 
 impl<'a> ParseState<'a> {
@@ -341,13 +394,22 @@ impl<'a> ParseState<'a> {
         self.seen_consts.insert(name.to_string());
     }
     pub fn has_define(&self, name: &str) -> bool {
-        self.seen_defines.contains(name)
+        self.seen_defines.contains(name) || self.builtin_defines.contains(name)
     }
     pub fn may_have_define(&self, name: &str) -> bool {
         self.has_define(name) || self.option_defines.contains(name)
     }
     pub fn has_const(&self, name: &str) -> bool {
-        self.seen_consts.contains(name)
+        self.seen_consts.contains(name) || self.builtin_consts.contains(name)
+    }
+    pub fn compatibility(&self) -> Compatibility {
+        self.compatibility
+    }
+    pub fn set_compatibility(&mut self, compatibility: Compatibility) {
+        self.compatibility = compatibility;
+        let (consts, defines) = get_builtin_consts(compatibility);
+        self.builtin_consts = consts;
+        self.builtin_defines = defines;
     }
     fn expect(&mut self, expect: Expect<'a>) {
         self.expect = expect;
@@ -429,7 +491,9 @@ impl<'a> Checker<'a> {
     }
 
     pub fn compatibility(mut self, compatibility: Compatibility) -> Self {
-        self.state.compatibility = compatibility;
+        if self.state.compatibility != compatibility {
+            self.state.set_compatibility(compatibility);
+        }
         self
     }
 
