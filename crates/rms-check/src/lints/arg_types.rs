@@ -31,7 +31,11 @@ impl ArgTypesLint {
     }
 
     /// Check if a constant was ever defined with a value (using #const)
-    fn check_defined_with_value(&self, state: &ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
+    fn check_defined_with_value(
+        &self,
+        state: &ParseState<'_>,
+        token: &Word<'_>,
+    ) -> Option<Warning> {
         // 1. Check if this may or may not be defined—else warn
         if !state.has_const(token.value) {
             if state.has_define(token.value) {
@@ -55,7 +59,12 @@ impl ArgTypesLint {
         }
     }
 
-    fn check_number(&self, _state: &ParseState<'_>, cmd: &Word<'_>, arg: &Word<'_>) -> Option<Warning> {
+    fn check_number(
+        &self,
+        _state: &ParseState<'_>,
+        cmd: &Word<'_>,
+        arg: &Word<'_>,
+    ) -> Option<Warning> {
         // This may be a valued (#const) constant,
         // or a number (12, -35),
         arg.value
