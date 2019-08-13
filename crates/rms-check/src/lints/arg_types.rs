@@ -15,16 +15,14 @@ impl ArgTypesLint {
                 "Token `{}` is never defined, this condition will always fail",
                 token.value
             ));
-            Some(
-                if let Some(similar) = meant(token.value, state.seen_defines.iter()) {
-                    warn.suggest(
-                        Suggestion::from(token, format!("Did you mean `{}`?", similar))
-                            .replace_unsafe(similar.to_string()),
-                    )
-                } else {
-                    warn
-                },
-            )
+            Some(if let Some(similar) = meant(token.value, state.defines()) {
+                warn.suggest(
+                    Suggestion::from(token, format!("Did you mean `{}`?", similar))
+                        .replace_unsafe(similar.to_string()),
+                )
+            } else {
+                warn
+            })
         } else {
             None
         }
@@ -43,16 +41,14 @@ impl ArgTypesLint {
                 Some(token.warning(format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
             } else {
                 let warn = token.warning(format!("Token `{}` is never defined", token.value));
-                Some(
-                    if let Some(similar) = meant(token.value, state.seen_consts.iter()) {
-                        warn.suggest(
-                            Suggestion::from(token, format!("Did you mean `{}`?", similar))
-                                .replace_unsafe(similar.to_string()),
-                        )
-                    } else {
-                        warn
-                    },
-                )
+                Some(if let Some(similar) = meant(token.value, state.consts()) {
+                    warn.suggest(
+                        Suggestion::from(token, format!("Did you mean `{}`?", similar))
+                            .replace_unsafe(similar.to_string()),
+                    )
+                } else {
+                    warn
+                })
             }
         } else {
             None
@@ -173,7 +169,7 @@ impl Lint for ArgTypesLint {
     }
 }
 
-fn meant<'a>(actual: &str, possible: impl Iterator<Item = &'a String>) -> Option<&'a String> {
+fn meant<'a>(actual: &str, possible: impl Iterator<Item = &'a str>) -> Option<&'a str> {
     let mut lowest = 10000;
     let mut result = None;
 

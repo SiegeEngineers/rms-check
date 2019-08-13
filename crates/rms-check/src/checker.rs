@@ -353,7 +353,7 @@ fn get_builtin_consts(compatibility: Compatibility) -> (HashSet<String>, HashSet
                 FileName::virtual_("random_map.def"),
                 include_str!("def_hd.rms"),
             );
-        },
+        }
         Compatibility::UserPatch15 => {
             codemap.add_filemap(
                 FileName::virtual_("random_map.def"),
@@ -407,6 +407,18 @@ impl<'a> ParseState<'a> {
     }
     pub fn has_const(&self, name: &str) -> bool {
         self.seen_consts.contains(name) || self.builtin_consts.contains(name)
+    }
+    pub fn consts(&self) -> impl Iterator<Item = &str> {
+        self.seen_consts
+            .iter()
+            .map(|string| string.as_ref())
+            .chain(self.builtin_consts.iter().map(|string| string.as_ref()))
+    }
+    pub fn defines(&self) -> impl Iterator<Item = &str> {
+        self.seen_defines
+            .iter()
+            .map(|string| string.as_ref())
+            .chain(self.builtin_defines.iter().map(|string| string.as_ref()))
     }
     pub fn compatibility(&self) -> Compatibility {
         self.compatibility
