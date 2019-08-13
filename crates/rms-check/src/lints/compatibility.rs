@@ -1,4 +1,4 @@
-use super::super::{Atom, Compatibility, Lint, ParseState, TokenType, Warning, Word};
+use crate::{Atom, Compatibility, Lint, ParseState, Warning};
 
 pub struct CompatibilityLint {
     is_header_comment: bool,
@@ -92,7 +92,7 @@ impl Lint for CompatibilityLint {
                     if !self.has_up_extension(state) {
                         warnings.push(atom.warning("RMS Effects require UserPatch 1.5").note_at(
                             atom.span(),
-                            "Wrap this command in an `if UP_EXTENSION` statement",
+                            "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file",
                         ))
                     }
                 }
@@ -102,8 +102,8 @@ impl Lint for CompatibilityLint {
                             atom.warning("Direct placement requires UserPatch 1.5")
                                 .note_at(
                                     atom.span(),
-                                    "Wrap this command in an `if UP_EXTENSION` statement",
-                                ),
+                                    "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file",
+                                )
                         )
                     }
                 }
@@ -113,8 +113,8 @@ impl Lint for CompatibilityLint {
                             atom.warning("Nomad resources requires UserPatch 1.4")
                                 .note_at(
                                     atom.span(),
-                                    "Wrap this command in an `if UP_AVAILABLE` statement",
-                                ),
+                                    "Wrap this command in an `if UP_AVAILABLE` statement or add a /* Compatibility: UserPatch 1.4 */ comment at the top of the file",
+                                )
                         )
                     }
                 }
