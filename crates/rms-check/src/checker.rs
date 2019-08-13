@@ -348,6 +348,12 @@ fn get_builtin_consts(compatibility: Compatibility) -> (HashSet<String>, HashSet
                 include_str!("def_wk.rms"),
             );
         }
+        Compatibility::HDEdition => {
+            codemap.add_filemap(
+                FileName::virtual_("random_map.def"),
+                include_str!("def_hd.rms"),
+            );
+        },
         Compatibility::UserPatch15 => {
             codemap.add_filemap(
                 FileName::virtual_("random_map.def"),
