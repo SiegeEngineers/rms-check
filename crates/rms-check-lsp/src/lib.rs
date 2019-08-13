@@ -1,3 +1,6 @@
+//! Transport-agnostic language server protocol implementation for Age of Empires 2 random map
+//! scripts, using rms-check.
+
 #![deny(future_incompatible)]
 #![deny(nonstandard_style)]
 #![deny(rust_2018_idioms)]
@@ -27,6 +30,7 @@ mod folds;
 
 type RpcResult = jsonrpc_core::Result<serde_json::Value>;
 
+/// Sync state holder, so only the outer layer has to deal with Arcs.
 struct Inner<Emit>
 where
     Emit: Fn(serde_json::Value) + Send + 'static,
@@ -39,7 +43,8 @@ impl<Emit> Inner<Emit>
 where
     Emit: Fn(serde_json::Value) + Send + 'static,
 {
-    fn codemap_name_to_file(&self, filename: &FileName) -> Result<Url, ()> {
+    /// Convert a CodeMap file name to an LSP file URL.
+    fn codemap_name_to_url(&self, filename: &FileName) -> Result<Url, ()> {
         let filename = match filename {
             FileName::Virtual(filename) => filename.to_string(),
             // should not be any real filenames when using the language server
@@ -53,9 +58,10 @@ where
         Err(())
     }
 
+    /// Convert an rms-check warning to an LSP diagnostic.
     fn make_lsp_diagnostic(&self, codemap: &CodeMap, warn: &Warning) -> Diagnostic {
         let diag = codespan_lsp::make_lsp_diagnostic(codemap, warn.diagnostic().clone(), |f| {
-            self.codemap_name_to_file(f)
+            self.codemap_name_to_url(f)
         })
         .unwrap();
 
@@ -70,6 +76,7 @@ where
         }
     }
 
+    /// Initialize the language server.
     fn initialize(&mut self, _params: InitializeParams) -> RpcResult {
         let mut capabilities = ServerCapabilities::default();
         capabilities.code_action_provider = Some(CodeActionProviderCapability::Simple(true));
@@ -80,6 +87,7 @@ where
         serde_json::to_value(result).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
 
+    /// A document was opened, lint.
     fn opened(&mut self, params: DidOpenTextDocumentParams) {
         let uri = params.text_document.uri.clone();
         self.documents.insert(uri.clone(), params.text_document);
@@ -87,6 +95,7 @@ where
         self.check_and_publish(uri);
     }
 
+    /// A document changed, re-lint.
     fn changed(&mut self, mut params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri.clone();
 
@@ -99,10 +108,12 @@ where
         };
     }
 
+    /// A document was closed, clean up.
     fn closed(&mut self, params: DidCloseTextDocumentParams) {
         self.documents.remove(&params.text_document.uri);
     }
 
+    /// Retrieve code actions for a cursor position.
     fn code_action(&mut self, params: CodeActionParams) -> RpcResult {
         let doc = self.documents.get(&params.text_document.uri).unwrap();
         let result = self.check(&doc);
@@ -165,6 +176,7 @@ where
             .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
 
+    /// Retrieve folding ranges for the document.
     fn folding_ranges(&self, params: FoldingRangeParams) -> RpcResult {
         let doc = self.documents.get(&params.text_document.uri).unwrap();
         let mut map = CodeMap::new();
@@ -176,6 +188,7 @@ where
         serde_json::to_value(folds).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
 
+    /// Run rms-check.
     fn check(&self, doc: &TextDocumentItem) -> RMSCheckResult {
         RMSCheck::default()
             .compatibility(Compatibility::Conquerors)
@@ -183,6 +196,7 @@ where
             .check()
     }
 
+    /// Run rms-check for a file and publish the resulting diagnostics.
     fn check_and_publish(&self, uri: Url) {
         let mut diagnostics = vec![];
         let doc = match self.documents.get(&uri) {
@@ -205,12 +219,17 @@ where
 }
 
 type Emit = Box<dyn Fn(serde_json::Value) + Send + 'static>;
+
+/// LSP wrapper that handles JSON-RPC.
 pub struct RMSCheckLSP {
     inner: Arc<Mutex<Inner<Emit>>>,
     handler: IoHandler,
 }
 
 impl RMSCheckLSP {
+    /// Create a new rms-check language server.
+    ///
+    /// The callback is called whenever the language server emits a JSON-RPC message.
     pub fn new(emit: impl Fn(serde_json::Value) + Send + 'static + Sized) -> RMSCheckLSP {
         let mut instance = RMSCheckLSP {
             inner: Arc::new(Mutex::new(Inner {
@@ -223,6 +242,7 @@ impl RMSCheckLSP {
         instance
     }
 
+    /// Install JSON-RPC methods and notification handlers.
     fn install_handlers(&mut self) {
         {
             let inner = Arc::clone(&self.inner);
@@ -291,6 +311,7 @@ impl RMSCheckLSP {
         }
     }
 
+    /// Handle a JSON-RPC message.
     pub fn handle_sync(&mut self, message: serde_json::Value) -> Option<serde_json::Value> {
         self.handler
             .handle_request_sync(&message.to_string())
