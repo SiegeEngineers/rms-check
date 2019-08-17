@@ -179,7 +179,7 @@ lazy_static! {
         m.insert(token!("create_land", TokenContext::Command(Some("<LAND_GENERATION>"))));
         m.insert(token!("create_player_lands", TokenContext::Command(Some("<LAND_GENERATION>"))));
         m.insert(token!("land_percent", land_attribute_context, [Number]));
-        m.insert(token!("land_position", land_attribute_context, [Number]));
+        m.insert(token!("land_position", land_attribute_context, [Number, Number]));
         m.insert(token!("land_id", land_attribute_context, [Number]));
         m.insert(token!("terrain_type", TokenContext::AnyOf(&[
            TokenContext::Attribute(Some("create_land")),
@@ -214,7 +214,6 @@ lazy_static! {
         m.insert(token!("cliff_curliness", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));
         m.insert(token!("min_distance_cliffs", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));
         m.insert(token!("min_terrain_distance", TokenContext::TopLevelAttribute(Some("<CLIFF_GENERATION>")), [Number]));
-
 
         m.insert(token!("create_terrain", TokenContext::Command(Some("<TERRAIN_GENERATION>")), [Token]));
         m.insert(token!("percent_of_land", TokenContext::Attribute(Some("create_terrain")), [Number]));
