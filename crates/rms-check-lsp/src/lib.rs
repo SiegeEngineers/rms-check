@@ -15,8 +15,8 @@ use lsp_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
     FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams,
     InitializeResult, NumberOrString, PublishDiagnosticsParams, ServerCapabilities,
-    TextDocumentItem, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
-    WorkspaceEdit,
+    TextDocumentItem, TextDocumentPositionParams,TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
+    WorkspaceEdit, SignatureHelpOptions,
 };
 use rms_check::{AutoFixReplacement, Compatibility, RMSCheck, RMSCheckResult, Warning};
 use serde_json::{self, json};
@@ -24,7 +24,9 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
+use help::find_signature_help;
 
+mod help;
 mod folds;
 
 type RpcResult = jsonrpc_core::Result<serde_json::Value>;
@@ -75,6 +77,9 @@ where
         capabilities.text_document_sync =
             Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::Full));
         capabilities.folding_range_provider = Some(FoldingRangeProviderCapability::Simple(true));
+        capabilities.signature_help_provider = Some(SignatureHelpOptions {
+            trigger_characters: Some(vec![" ".to_string(), "\t".to_string()]),
+        });
         let result = InitializeResult { capabilities };
         serde_json::to_value(result).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
@@ -170,6 +175,16 @@ where
         let folds: Vec<FoldingRange> = folder.collect();
 
         serde_json::to_value(folds).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
+    }
+
+    /// Get signature help.
+    fn signature_help(&self, params: TextDocumentPositionParams) -> RpcResult {
+        let doc = self.documents.get(&params.text_document.uri).unwrap();
+        let mut files = Files::new();
+        let file_id = files.add(doc.uri.as_str(), &doc.text);
+        let help = help::find_signature_help(&files, file_id, codespan_lsp::position_to_byte_index(&files, file_id, &params.position).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?);
+
+        serde_json::to_value(help).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
 
     /// Run rms-check.
@@ -291,6 +306,18 @@ impl RMSCheckLSP {
                         .lock()
                         .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
                         .folding_ranges(params)
+                });
+        }
+
+        {
+            let inner = Arc::clone(&self.inner);
+            self.handler
+                .add_method("textDocument/signatureHelp", move |params: Params| {
+                    let params: TextDocumentPositionParams = params.parse().unwrap();
+                    inner
+                        .lock()
+                        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
+                        .signature_help(params)
                 });
         }
     }
