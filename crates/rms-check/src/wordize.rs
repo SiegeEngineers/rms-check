@@ -1,4 +1,4 @@
-use codespan::{FileId, ByteIndex, Span};
+use codespan::{ByteIndex, FileId, Span};
 use std::iter::Iterator;
 use std::str::CharIndices;
 
@@ -72,7 +72,11 @@ impl<'a> Iterator for Wordize<'a> {
         if saw_word {
             let span = Span::new(start, end);
             let value = &self.source[span.start().to_usize()..span.end().to_usize()];
-            Some(Word { file: self.file, span, value })
+            Some(Word {
+                file: self.file,
+                span,
+                value,
+            })
         } else {
             None
         }
@@ -124,10 +128,7 @@ mod tests {
     #[test]
     fn split_words_with_chars() {
         let mut files = Files::new();
-        let file_id = files.add(
-            "words.txt",
-            "n/*ot \n \t  a*/comment",
-        );
+        let file_id = files.add("words.txt", "n/*ot \n \t  a*/comment");
         let mut wordize = Wordize::new(file_id, files.source(file_id));
         let word = wordize.next().unwrap();
         assert_eq!(word.value, "n/*ot");

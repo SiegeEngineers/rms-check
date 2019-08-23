@@ -1,6 +1,6 @@
+use super::Signature;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
-use super::Signature;
 
 lazy_static! {
     pub static ref SIGNATURES: HashMap<&'static str, Signature> = {

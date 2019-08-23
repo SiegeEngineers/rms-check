@@ -211,7 +211,7 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
 mod tests {
     use super::*;
     use crate::{RMSCheck, Severity};
-    use codespan::{Location,ColumnIndex, LineIndex};
+    use codespan::{ColumnIndex, LineIndex, Location};
     use std::path::PathBuf;
 
     #[test]

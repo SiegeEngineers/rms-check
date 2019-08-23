@@ -30,7 +30,11 @@ impl Lint for IncorrectSectionLint {
                                     "Command is invalid in section {}, it can only appear in {}",
                                     name.value, expected_section
                                 ))
-                                .note_at(current_section.file_id(), current_section.span(), "Section started here")];
+                                .note_at(
+                                    current_section.file_id(),
+                                    current_section.span(),
+                                    "Section started here",
+                                )];
                         }
                     }
                     None => {

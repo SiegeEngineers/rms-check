@@ -1,8 +1,8 @@
 use ansi_term::Colour::Cyan;
 use ansi_term::Style;
+use codespan_reporting::term::{emit, Config};
 use rms_check::{AutoFixReplacement, RMSCheckResult, Severity, Suggestion};
 use termcolor::{ColorChoice, StandardStream};
-use codespan_reporting::term::{Config, emit};
 
 fn format_suggestion(suggestion: &Suggestion) -> String {
     let mut string = format!("{}: {}", Cyan.paint("suggestion"), suggestion.message());

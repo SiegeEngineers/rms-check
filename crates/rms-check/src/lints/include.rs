@@ -19,7 +19,9 @@ impl Lint for IncludeLint {
                 vec![atom.error("#include_drs can only be used by builtin maps")]
             }
             Atom::Command(cmd, _) if cmd.value == "#include" => {
-                let suggestion = Suggestion::new(atom.file_id(),atom.span(),
+                let suggestion = Suggestion::new(
+                    atom.file_id(),
+                    atom.span(),
                     "If you're trying to make a map pack, use a map pack generator instead.",
                 );
                 vec![atom

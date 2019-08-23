@@ -8,15 +8,16 @@
 #![warn(missing_docs)]
 #![warn(unused)]
 
-use codespan::{FileId,Files};
+use codespan::{FileId, Files};
+use help::find_signature_help;
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use lsp_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
     FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams,
     InitializeResult, NumberOrString, PublishDiagnosticsParams, ServerCapabilities,
-    TextDocumentItem, TextDocumentPositionParams,TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
-    WorkspaceEdit, SignatureHelpOptions,
+    SignatureHelpOptions, TextDocumentItem, TextDocumentPositionParams, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextEdit, Url, WorkspaceEdit,
 };
 use rms_check::{AutoFixReplacement, Compatibility, RMSCheck, RMSCheckResult, Warning};
 use serde_json::{self, json};
@@ -24,10 +25,9 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-use help::find_signature_help;
 
-mod help;
 mod folds;
+mod help;
 
 type RpcResult = jsonrpc_core::Result<serde_json::Value>;
 
@@ -55,9 +55,12 @@ where
 
     /// Convert an rms-check warning to an LSP diagnostic.
     fn make_lsp_diagnostic(&self, (_, files): (&[FileId], &Files), warn: &Warning) -> Diagnostic {
-        let diag = codespan_lsp::make_lsp_diagnostic(files, "rms-check".to_string(), warn.diagnostic().clone(), |f| {
-            self.codespan_name_to_url(files.name(f))
-        })
+        let diag = codespan_lsp::make_lsp_diagnostic(
+            files,
+            "rms-check".to_string(),
+            warn.diagnostic().clone(),
+            |f| self.codespan_name_to_url(files.name(f)),
+        )
         .unwrap();
 
         Diagnostic {
@@ -116,7 +119,11 @@ where
         let result = self.check(&doc);
         let filename = doc.uri.to_string();
         let (file_ids, files) = result.files();
-        let file_id = file_ids.iter().cloned().find(|&id| files.name(id) == &filename).ok_or(jsonrpc_core::Error::new(ErrorCode::InternalError))?;
+        let file_id = file_ids
+            .iter()
+            .cloned()
+            .find(|&id| files.name(id) == &filename)
+            .ok_or(jsonrpc_core::Error::new(ErrorCode::InternalError))?;
         let start = codespan_lsp::position_to_byte_index(files, file_id, &params.range.start)
             .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
         let end = codespan_lsp::position_to_byte_index(files, file_id, &params.range.end)
@@ -144,8 +151,12 @@ where
                             map.insert(
                                 doc.uri.clone(),
                                 vec![TextEdit {
-                                    range: codespan_lsp::byte_span_to_range(files, file_id, sugg.span())
-                                        .unwrap(),
+                                    range: codespan_lsp::byte_span_to_range(
+                                        files,
+                                        file_id,
+                                        sugg.span(),
+                                    )
+                                    .unwrap(),
                                     new_text: match sugg.replacement() {
                                         AutoFixReplacement::Safe(s) => s.clone(),
                                         _ => unreachable!(),
@@ -182,7 +193,12 @@ where
         let doc = self.documents.get(&params.text_document.uri).unwrap();
         let mut files = Files::new();
         let file_id = files.add(doc.uri.as_str(), &doc.text);
-        let help = help::find_signature_help(&files, file_id, codespan_lsp::position_to_byte_index(&files, file_id, &params.position).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?);
+        let help = help::find_signature_help(
+            &files,
+            file_id,
+            codespan_lsp::position_to_byte_index(&files, file_id, &params.position)
+                .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?,
+        );
 
         serde_json::to_value(help).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }

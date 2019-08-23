@@ -14,15 +14,19 @@ mod wordize;
 use crate::{checker::Checker, wordize::Wordize};
 pub use crate::{
     checker::{
-        AutoFixReplacement, Compatibility, Lint, Nesting, ParseState, Severity, Suggestion, Warning,
-        CheckerBuilder,
+        AutoFixReplacement, CheckerBuilder, Compatibility, Lint, Nesting, ParseState, Severity,
+        Suggestion, Warning,
     },
     parser::{Atom, Parser, WarningKind},
     tokens::{ArgType, TokenContext, TokenType, TOKENS},
     wordize::Word,
 };
-use codespan::{ByteIndex, Location, Files, FileId};
-use std::{collections::HashMap, io::{self, Result}, path::Path};
+use codespan::{ByteIndex, FileId, Files, Location};
+use std::{
+    collections::HashMap,
+    io::{self, Result},
+    path::Path,
+};
 
 pub struct RMSCheckResult {
     warnings: Vec<Warning>,
@@ -37,7 +41,10 @@ impl RMSCheckResult {
     }
 
     pub fn file_id(&self, name: &str) -> Option<FileId> {
-        self.file_ids.iter().cloned().find(|&id| self.files.name(id) == name)
+        self.file_ids
+            .iter()
+            .cloned()
+            .find(|&id| self.files.name(id) == name)
     }
 
     pub fn file(&self, name: &str) -> Option<&str> {
@@ -133,7 +140,8 @@ impl RMSCheck {
     #[inline]
     pub fn add_file(mut self, path: impl AsRef<Path>) -> Result<Self> {
         let bytes = std::fs::read(path.as_ref())?;
-        let source = std::str::from_utf8(&bytes).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+        let source =
+            std::str::from_utf8(&bytes).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let file_id = self.files.add(path.as_ref().to_string_lossy(), source);
         self.file_ids.push(file_id);
         Ok(self)
@@ -147,7 +155,11 @@ impl RMSCheck {
 
     /// Run the lints and get the result.
     pub fn check(self) -> RMSCheckResult {
-        let Self { mut files, file_ids, .. }  = self;
+        let Self {
+            mut files,
+            file_ids,
+            ..
+        } = self;
         let def_aoc = files.add("random_map.def", include_str!("def_aoc.rms"));
         let def_hd = files.add("random_map.def", include_str!("def_hd.rms"));
         let def_wk = files.add("random_map.def", include_str!("def_wk.rms"));
@@ -159,7 +171,9 @@ impl RMSCheck {
             .flatten();
 
         let mut warnings: Vec<Warning> = words.filter_map(|w| checker.write_token(&w)).collect();
-        let parsers = file_ids.iter().map(|&file_id| Parser::new(file_id, files.source(file_id)));
+        let parsers = file_ids
+            .iter()
+            .map(|&file_id| Parser::new(file_id, files.source(file_id)));
         for parser in parsers {
             for (atom, parse_warning) in parser {
                 warnings.extend(checker.write_atom(&atom));
@@ -168,7 +182,10 @@ impl RMSCheck {
                         // Handled by arg-types lint
                         continue;
                     }
-                    warnings.push(Warning::error(atom.file_id(), w.span, format!("{:?}", w.kind)).lint("parse"));
+                    warnings.push(
+                        Warning::error(atom.file_id(), w.span, format!("{:?}", w.kind))
+                            .lint("parse"),
+                    );
                 }
             }
         }

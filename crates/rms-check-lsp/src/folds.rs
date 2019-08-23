@@ -35,7 +35,11 @@ impl<'a> FoldingRanges<'a> {
     }
 
     fn line(&self, index: ByteIndex) -> u64 {
-        self.files.location(self.file_id, index).unwrap().line.to_usize() as u64
+        self.files
+            .location(self.file_id, index)
+            .unwrap()
+            .line
+            .to_usize() as u64
     }
 
     fn push(&mut self, range: FoldingRange) {
@@ -70,7 +74,10 @@ impl<'a> FoldingRanges<'a> {
                 (line.to_usize() as u64, column.to_usize() as u64)
             }
             Bound::Excluded(index) => {
-                let Location { line, column } = self.files.location(self.file_id, *index + ByteOffset(1)).unwrap();
+                let Location { line, column } = self
+                    .files
+                    .location(self.file_id, *index + ByteOffset(1))
+                    .unwrap();
                 (line.to_usize() as u64, column.to_usize() as u64)
             }
         };

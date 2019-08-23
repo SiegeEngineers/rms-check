@@ -1,8 +1,10 @@
 mod en;
 
-use codespan::{Files, FileId, ByteIndex};
+use codespan::{ByteIndex, FileId, Files};
+use lsp_types::{
+    Documentation, ParameterInformation, ParameterLabel, SignatureHelp, SignatureInformation,
+};
 use rms_check::{Atom, Parser};
-use lsp_types::{ParameterLabel, Documentation, SignatureInformation, ParameterInformation, SignatureHelp};
 
 #[derive(Debug, Clone)]
 pub struct Signature {
@@ -30,7 +32,9 @@ fn signature_to_lsp(sig: &Signature) -> SignatureInformation {
             Some(long) => format!("{}\n{}", sig.short, long),
             _ => sig.short.to_string(),
         })),
-        parameters: sig.args.iter()
+        parameters: sig
+            .args
+            .iter()
             .map(|name| ParameterInformation {
                 label: ParameterLabel::Simple(name.to_string()),
                 documentation: None,
@@ -40,20 +44,25 @@ fn signature_to_lsp(sig: &Signature) -> SignatureInformation {
     }
 }
 
-pub fn find_signature_help(files: &Files, file_id: FileId, position: ByteIndex) -> Option<SignatureHelp> {
+pub fn find_signature_help(
+    files: &Files,
+    file_id: FileId,
+    position: ByteIndex,
+) -> Option<SignatureHelp> {
     let parser = Parser::new(file_id, files.source(file_id));
     for (atom, _) in parser {
         if let Atom::Command(name, args) = &atom {
             let span = atom.span();
             if span.start() <= position && span.end() >= position {
-                let active_parameter = args.iter().position(|word|
-                    word.start() <= position && word.end() >= position
-                ).map(|index| index as i64);
+                let active_parameter = args
+                    .iter()
+                    .position(|word| word.start() <= position && word.end() >= position)
+                    .map(|index| index as i64);
                 return get_signature(name.value).map(|sig| SignatureHelp {
                     signatures: vec![signature_to_lsp(sig)],
                     active_signature: Some(0),
                     active_parameter,
-                })
+                });
             }
         }
     }

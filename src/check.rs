@@ -56,8 +56,12 @@ pub fn cli_fix(args: CheckArgs) -> Fallible<()> {
         for suggestion in warn.suggestions() {
             match suggestion.replacement() {
                 AutoFixReplacement::Safe(ref new_value) => {
-                    let start = result.resolve_position(suggestion.file_id(), suggestion.start()).unwrap();
-                    let end = result.resolve_position(suggestion.file_id(), suggestion.end()).unwrap();
+                    let start = result
+                        .resolve_position(suggestion.file_id(), suggestion.start())
+                        .unwrap();
+                    let end = result
+                        .resolve_position(suggestion.file_id(), suggestion.end())
+                        .unwrap();
                     eprintln!(
                         "autofix {}:{} → {}:{} to {}",
                         start.line.number(),
@@ -71,8 +75,12 @@ pub fn cli_fix(args: CheckArgs) -> Fallible<()> {
                     splicer.splice(start.to_usize(), end.to_usize(), new_value);
                 }
                 AutoFixReplacement::Unsafe(ref new_value) if args.fix_unsafe => {
-                    let start = result.resolve_position(suggestion.file_id(), suggestion.start()).unwrap();
-                    let end = result.resolve_position(suggestion.file_id(), suggestion.end()).unwrap();
+                    let start = result
+                        .resolve_position(suggestion.file_id(), suggestion.start())
+                        .unwrap();
+                    let end = result
+                        .resolve_position(suggestion.file_id(), suggestion.end())
+                        .unwrap();
                     eprintln!(
                         "UNSAFE autofix {}:{} → {}:{} to {}",
                         start.line.number(),

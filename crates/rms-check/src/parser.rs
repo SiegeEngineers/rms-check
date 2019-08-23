@@ -58,12 +58,10 @@ impl Atom<'_> {
         match self {
             Section(def) | Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def)
             | OpenBlock(def) | CloseBlock(def) | Other(def) => def.file,
-            Const(def, _,_) => def.file,
-            Define(def, _) | If(def, _) | ElseIf(def, _) | PercentChance(def, _) => {
-                def.file
-            }
+            Const(def, _, _) => def.file,
+            Define(def, _) | If(def, _) | ElseIf(def, _) | PercentChance(def, _) => def.file,
             Command(name, _) => name.file,
-            Comment(left, _,_) => left.file,
+            Comment(left, _, _) => left.file,
         }
     }
 
@@ -83,7 +81,10 @@ impl Atom<'_> {
             },
             Comment(left, content, right) => match right {
                 Some(right) => left.span.merge(right.span),
-                None => Span::new(left.span.start(), left.span.end() + ByteOffset(content.as_bytes().len() as i64)),
+                None => Span::new(
+                    left.span.start(),
+                    left.span.end() + ByteOffset(content.as_bytes().len() as i64),
+                ),
             },
         }
     }
@@ -126,8 +127,7 @@ impl Display for Atom<'_> {
 
 /// A forgiving random map script parser, turning a stream of words into a stream of atoms.
 #[derive(Debug)]
-pub struct Parser<'a>
-{
+pub struct Parser<'a> {
     source: &'a str,
     iter: MultiPeek<Wordize<'a>>,
 }
@@ -388,7 +388,8 @@ mod tests {
 
     #[test]
     fn command_noargs() {
-        let atoms = Parser::new(file_id(), "random_placement").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms =
+            Parser::new(file_id(), "random_placement").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 1);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "random_placement");
@@ -401,7 +402,8 @@ mod tests {
 
     #[test]
     fn command_1arg() {
-        let atoms = Parser::new(file_id(), "land_percent 10 grouped_by_team").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "land_percent 10 grouped_by_team")
+            .collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 2);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "land_percent");
@@ -423,7 +425,8 @@ mod tests {
     /// It should accept wrong casing, a linter can fix it up.
     #[test]
     fn command_wrong_case() {
-        let atoms = Parser::new(file_id(), "land_Percent 10 grouped_BY_team").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "land_Percent 10 grouped_BY_team")
+            .collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 2);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "land_Percent");
@@ -444,7 +447,8 @@ mod tests {
 
     #[test]
     fn command_block() {
-        let mut atoms = Parser::new(file_id(), "create_terrain SNOW { base_size 15 }").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let mut atoms = Parser::new(file_id(), "create_terrain SNOW { base_size 15 }")
+            .collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 4);
         if let (Atom::Command(name, args), _) = atoms.remove(0) {
             assert_eq!(name.value, "create_terrain");
@@ -474,7 +478,8 @@ mod tests {
 
     #[test]
     fn comment_basic() {
-        let mut atoms = Parser::new(file_id(), "create_terrain SNOW /* this is a comment */ { }").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let mut atoms = Parser::new(file_id(), "create_terrain SNOW /* this is a comment */ { }")
+            .collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 4);
         if let (Atom::Command(_, _), _) = atoms.remove(0) {
             // ok

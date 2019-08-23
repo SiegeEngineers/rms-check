@@ -3,7 +3,7 @@ use crate::{
     tokens::{TokenType, TOKENS},
     wordize::Word,
 };
-use codespan::{ByteIndex, Span, Files, FileId};
+use codespan::{ByteIndex, FileId, Files, Span};
 pub use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 use lazy_static::lazy_static;
 use std::collections::HashSet;
@@ -193,7 +193,10 @@ impl Warning {
     pub(crate) fn warning(file_id: FileId, span: Span, message: impl Into<String>) -> Self {
         let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_warning(message.clone(), Label::new(file_id, span, message)),
+            diagnostic: Diagnostic::new_warning(
+                message.clone(),
+                Label::new(file_id, span, message),
+            ),
             suggestions: vec![],
         }
     }
@@ -232,7 +235,10 @@ impl Word<'_> {
     pub(crate) fn warning(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_warning(message.clone(), Label::new(self.file, self.span, message)),
+            diagnostic: Diagnostic::new_warning(
+                message.clone(),
+                Label::new(self.file, self.span, message),
+            ),
             suggestions: vec![],
         }
     }
@@ -240,7 +246,10 @@ impl Word<'_> {
     pub(crate) fn error(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_error(message.clone(), Label::new(self.file, self.span, message)),
+            diagnostic: Diagnostic::new_error(
+                message.clone(),
+                Label::new(self.file, self.span, message),
+            ),
             suggestions: vec![],
         }
     }
@@ -251,7 +260,10 @@ impl Atom<'_> {
     pub(crate) fn warning(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_warning(message.clone(), Label::new(self.file_id(), self.span(), message)),
+            diagnostic: Diagnostic::new_warning(
+                message.clone(),
+                Label::new(self.file_id(), self.span(), message),
+            ),
             suggestions: vec![],
         }
     }
@@ -259,7 +271,10 @@ impl Atom<'_> {
     pub(crate) fn error(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_error(message.clone(), Label::new(self.file_id(), self.span(), message)),
+            diagnostic: Diagnostic::new_error(
+                message.clone(),
+                Label::new(self.file_id(), self.span(), message),
+            ),
             suggestions: vec![],
         }
     }
@@ -353,7 +368,11 @@ pub struct ParseState<'a> {
 }
 
 impl<'a> ParseState<'a> {
-    pub fn new(files: &'a Files, (def_aoc, def_hd, def_wk): (FileId, FileId, FileId), compatibility: Compatibility) -> Self {
+    pub fn new(
+        files: &'a Files,
+        (def_aoc, def_hd, def_wk): (FileId, FileId, FileId),
+        compatibility: Compatibility,
+    ) -> Self {
         let mut state = Self {
             files,
             compatibility,
@@ -502,7 +521,6 @@ pub struct CheckerBuilder {
 
 impl CheckerBuilder {
     pub fn build<'a>(self, files: &'a Files, def_files: (FileId, FileId, FileId)) -> Checker<'a> {
-
         let state = ParseState::new(files, def_files, self.compatibility);
         Checker {
             lints: self.lints,
@@ -522,8 +540,9 @@ impl CheckerBuilder {
 }
 
 impl<'a> Checker<'a> {
-    pub fn builder() -> CheckerBuilder
-    { CheckerBuilder::default() }
+    pub fn builder() -> CheckerBuilder {
+        CheckerBuilder::default()
+    }
 
     /// Check an incoming token.
     fn lint_token(&mut self, token: &Word<'a>) -> Option<Warning> {
@@ -593,13 +612,23 @@ impl<'a> Checker<'a> {
                 self.state.expect(Expect::None);
             }
             Expect::UnfinishedRnd(pos, val) => {
-                let suggestion = Suggestion::new(token.file, Span::new(pos, token.end()), "rnd() must not contain spaces");
+                let suggestion = Suggestion::new(
+                    token.file,
+                    Span::new(pos, token.end()),
+                    "rnd() must not contain spaces",
+                );
                 parse_error = Some(
-                    Warning::error(token.file, Span::new(pos, token.end()), "Incorrect rnd() call")
-                        .suggest(match is_valid_rnd(&format!("{} {}", val, token.value)).1 {
+                    Warning::error(
+                        token.file,
+                        Span::new(pos, token.end()),
+                        "Incorrect rnd() call",
+                    )
+                    .suggest(
+                        match is_valid_rnd(&format!("{} {}", val, token.value)).1 {
                             Some(replacement) => suggestion.replace(replacement),
                             None => suggestion,
-                        }),
+                        },
+                    ),
                 );
                 self.state.expect(Expect::None);
             }
@@ -662,20 +691,36 @@ impl<'a> Checker<'a> {
         fn unbalanced_error(name: &str, token: &Word<'_>, nest: Option<&Nesting>) -> Warning {
             let msg = format!("Unbalanced `{}`", name);
             match nest {
-                Some(Nesting::Brace(loc)) => token
-                    .error(msg)
-                    .note_at(token.file, *loc, "Matches this open brace `{`"),
-                Some(Nesting::If(loc)) => token.error(msg).note_at(token.file, *loc, "Matches this `if`"),
-                Some(Nesting::ElseIf(loc)) => {
-                    token.error(msg).note_at(token.file, *loc, "Matches this `elseif`")
+                Some(Nesting::Brace(loc)) => {
+                    token
+                        .error(msg)
+                        .note_at(token.file, *loc, "Matches this open brace `{`")
                 }
-                Some(Nesting::Else(loc)) => token.error(msg).note_at(token.file, *loc, "Matches this `else`"),
-                Some(Nesting::StartRandom(loc)) => token
-                    .error(msg)
-                    .note_at(token.file, *loc, "Matches this `start_random`"),
-                Some(Nesting::PercentChance(loc)) => token
-                    .error(msg)
-                    .note_at(token.file, *loc, "Matches this `percent_chance`"),
+                Some(Nesting::If(loc)) => {
+                    token
+                        .error(msg)
+                        .note_at(token.file, *loc, "Matches this `if`")
+                }
+                Some(Nesting::ElseIf(loc)) => {
+                    token
+                        .error(msg)
+                        .note_at(token.file, *loc, "Matches this `elseif`")
+                }
+                Some(Nesting::Else(loc)) => {
+                    token
+                        .error(msg)
+                        .note_at(token.file, *loc, "Matches this `else`")
+                }
+                Some(Nesting::StartRandom(loc)) => {
+                    token
+                        .error(msg)
+                        .note_at(token.file, *loc, "Matches this `start_random`")
+                }
+                Some(Nesting::PercentChance(loc)) => {
+                    token
+                        .error(msg)
+                        .note_at(token.file, *loc, "Matches this `percent_chance`")
+                }
                 None => token.error(format!("{}–nothing is open", msg)),
             }
         }
