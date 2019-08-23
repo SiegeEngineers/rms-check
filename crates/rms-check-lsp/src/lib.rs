@@ -8,9 +8,9 @@
 #![warn(missing_docs)]
 #![warn(unused)]
 
-use codespan::{CodeMap, FileName};
+use codespan::{FileId,Files};
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
-use languageserver_types::{
+use lsp_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
     FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams,
@@ -21,7 +21,6 @@ use languageserver_types::{
 use rms_check::{AutoFixReplacement, Compatibility, RMSCheck, RMSCheckResult, Warning};
 use serde_json::{self, json};
 use std::{
-    cmp::Ordering,
     collections::HashMap,
     sync::{Arc, Mutex},
 };
@@ -43,14 +42,8 @@ impl<Emit> Inner<Emit>
 where
     Emit: Fn(serde_json::Value) + Send + 'static,
 {
-    /// Convert a CodeMap file name to an LSP file URL.
-    fn codemap_name_to_url(&self, filename: &FileName) -> Result<Url, ()> {
-        let filename = match filename {
-            FileName::Virtual(filename) => filename.to_string(),
-            // should not be any real filenames when using the language server
-            FileName::Real(_) => return Err(()),
-        };
-
+    /// Convert a codespan file name to an LSP file URL.
+    fn codespan_name_to_url(&self, filename: &str) -> Result<Url, ()> {
         if filename.starts_with("file://") {
             return filename.parse().map_err(|_| ());
         }
@@ -59,9 +52,9 @@ where
     }
 
     /// Convert an rms-check warning to an LSP diagnostic.
-    fn make_lsp_diagnostic(&self, codemap: &CodeMap, warn: &Warning) -> Diagnostic {
-        let diag = codespan_lsp::make_lsp_diagnostic(codemap, warn.diagnostic().clone(), |f| {
-            self.codemap_name_to_url(f)
+    fn make_lsp_diagnostic(&self, (_, files): (&[FileId], &Files), warn: &Warning) -> Diagnostic {
+        let diag = codespan_lsp::make_lsp_diagnostic(files, "rms-check".to_string(), warn.diagnostic().clone(), |f| {
+            self.codespan_name_to_url(files.name(f))
         })
         .unwrap();
 
@@ -71,7 +64,6 @@ where
                 .code
                 .as_ref()
                 .map(|code| NumberOrString::String(code.to_string())),
-            source: Some("rms-check".to_string()),
             ..diag
         }
     }
@@ -118,25 +110,17 @@ where
         let doc = self.documents.get(&params.text_document.uri).unwrap();
         let result = self.check(&doc);
         let filename = doc.uri.to_string();
-        let file_map = result
-            .codemap()
-            .iter()
-            .find(|map| match map.name() {
-                FileName::Virtual(n) => *n == filename,
-                _ => false,
-            })
-            .unwrap();
-        let start = codespan_lsp::position_to_byte_index(file_map, &params.range.start)
+        let (file_ids, files) = result.files();
+        let file_id = file_ids.iter().cloned().find(|&id| files.name(id) == &filename).ok_or(jsonrpc_core::Error::new(ErrorCode::InternalError))?;
+        let start = codespan_lsp::position_to_byte_index(files, file_id, &params.range.start)
             .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
-        let end = codespan_lsp::position_to_byte_index(file_map, &params.range.end)
+        let end = codespan_lsp::position_to_byte_index(files, file_id, &params.range.end)
             .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
 
         let warnings = result.iter().filter(|warn| {
-            if let Some(label) = warn.diagnostic().labels.first() {
-                return label.span.containment(start) == Ordering::Equal
-                    || label.span.containment(end) == Ordering::Equal;
-            }
-            return false;
+            let label = &warn.diagnostic().primary_label;
+            start >= label.span.start() && start <= label.span.end()
+                || end >= label.span.start() && end <= label.span.end()
         });
 
         let mut actions = vec![];
@@ -148,14 +132,14 @@ where
                 actions.push(CodeAction {
                     title: sugg.message().to_string(),
                     kind: Some("quickfix".to_string()),
-                    diagnostics: Some(vec![self.make_lsp_diagnostic(result.codemap(), warn)]),
+                    diagnostics: Some(vec![self.make_lsp_diagnostic(result.files(), warn)]),
                     edit: Some(WorkspaceEdit {
                         changes: Some({
                             let mut map = HashMap::new();
                             map.insert(
                                 doc.uri.clone(),
                                 vec![TextEdit {
-                                    range: codespan_lsp::byte_span_to_range(file_map, sugg.span())
+                                    range: codespan_lsp::byte_span_to_range(files, file_id, sugg.span())
                                         .unwrap(),
                                     new_text: match sugg.replacement() {
                                         AutoFixReplacement::Safe(s) => s.clone(),
@@ -179,9 +163,9 @@ where
     /// Retrieve folding ranges for the document.
     fn folding_ranges(&self, params: FoldingRangeParams) -> RpcResult {
         let doc = self.documents.get(&params.text_document.uri).unwrap();
-        let mut map = CodeMap::new();
-        let file = map.add_filemap(FileName::virtual_(doc.uri.to_string()), doc.text.clone());
-        let folder = folds::FoldingRanges::new(&file);
+        let mut files = Files::new();
+        let file_id = files.add(doc.uri.as_str(), &doc.text);
+        let folder = folds::FoldingRanges::new(&files, file_id);
 
         let folds: Vec<FoldingRange> = folder.collect();
 
@@ -205,7 +189,7 @@ where
         };
         let result = self.check(&doc);
         for warn in result.iter() {
-            let diag = self.make_lsp_diagnostic(result.codemap(), warn);
+            let diag = self.make_lsp_diagnostic(result.files(), warn);
             diagnostics.push(diag);
         }
 

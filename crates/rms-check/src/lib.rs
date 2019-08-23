@@ -15,23 +15,33 @@ use crate::{checker::Checker, wordize::Wordize};
 pub use crate::{
     checker::{
         AutoFixReplacement, Compatibility, Lint, Nesting, ParseState, Severity, Suggestion, Warning,
+        CheckerBuilder,
     },
     parser::{Atom, Parser, WarningKind},
     tokens::{ArgType, TokenContext, TokenType, TOKENS},
     wordize::Word,
 };
-use codespan::{ByteIndex, ByteOffset, CodeMap, ColumnIndex, FileMap, FileName, LineIndex};
-use std::{collections::HashMap, io::Result, path::PathBuf, sync::Arc};
+use codespan::{ByteIndex, Location, Files, FileId};
+use std::{collections::HashMap, io::{self, Result}, path::Path};
 
 pub struct RMSCheckResult {
     warnings: Vec<Warning>,
-    codemap: CodeMap,
+    files: Files,
+    file_ids: Vec<FileId>,
 }
 
 impl RMSCheckResult {
     #[inline]
-    pub fn codemap(&self) -> &CodeMap {
-        &self.codemap
+    pub fn files(&self) -> (&[FileId], &Files) {
+        (&self.file_ids, &self.files)
+    }
+
+    pub fn file_id(&self, name: &str) -> Option<FileId> {
+        self.file_ids.iter().cloned().find(|&id| self.files.name(id) == name)
+    }
+
+    pub fn file(&self, name: &str) -> Option<&str> {
+        self.file_id(name).map(|id| self.files.source(id))
     }
 
     #[inline]
@@ -40,19 +50,8 @@ impl RMSCheckResult {
     }
 
     #[inline]
-    pub fn resolve_position(&self, index: ByteIndex) -> Option<(LineIndex, ColumnIndex)> {
-        let file = self.codemap.find_file(index);
-        file.and_then(|f| f.location(index).ok())
-    }
-
-    #[inline]
-    pub fn resolve_offset(&self, index: ByteIndex) -> Option<ByteOffset> {
-        let file = self.codemap.find_file(index);
-        file.and_then(|f| {
-            f.location(index)
-                .ok()
-                .and_then(|(l, c)| f.offset(l, c).ok())
-        })
+    pub fn resolve_position(&self, file_id: FileId, index: ByteIndex) -> Option<Location> {
+        self.files.location(file_id, index).ok()
     }
 
     #[inline]
@@ -66,15 +65,15 @@ impl RMSCheckResult {
     }
 }
 
-pub struct RMSCheck<'a> {
-    checker: Checker<'a>,
-    codemap: CodeMap,
-    file_maps: Vec<Arc<FileMap>>,
+pub struct RMSCheck {
+    checker: CheckerBuilder,
+    files: Files,
+    file_ids: Vec<FileId>,
     binary_files: HashMap<String, Vec<u8>>,
 }
 
-impl<'a> Default for RMSCheck<'a> {
-    fn default() -> RMSCheck<'a> {
+impl Default for RMSCheck {
+    fn default() -> RMSCheck {
         RMSCheck::new()
             .with_lint(Box::new(lints::ArgTypesLint::new()))
             .with_lint(Box::new(lints::AttributeCaseLint {}))
@@ -88,13 +87,13 @@ impl<'a> Default for RMSCheck<'a> {
     }
 }
 
-impl<'a> RMSCheck<'a> {
+impl RMSCheck {
     #[inline]
     pub fn new() -> Self {
         RMSCheck {
-            checker: Checker::default(),
-            codemap: CodeMap::new(),
-            file_maps: Default::default(),
+            checker: Checker::builder(),
+            files: Files::new(),
+            file_ids: Default::default(),
             binary_files: Default::default(),
         }
     }
@@ -125,39 +124,42 @@ impl<'a> RMSCheck<'a> {
     /// Add a source string.
     #[inline]
     pub fn add_source(mut self, name: &str, source: &str) -> Self {
-        let map = self.codemap.add_filemap(
-            FileName::Virtual(name.to_string().into()),
-            source.to_string(),
-        );
-        self.file_maps.push(map);
+        let file_id = self.files.add(name, source);
+        self.file_ids.push(file_id);
         self
     }
 
     /// Add a source string from disk.
     #[inline]
-    pub fn add_file(mut self, path: PathBuf) -> Result<Self> {
-        let map = self.codemap.add_filemap_from_disk(path)?;
-        self.file_maps.push(map);
+    pub fn add_file(mut self, path: impl AsRef<Path>) -> Result<Self> {
+        let bytes = std::fs::read(path.as_ref())?;
+        let source = std::str::from_utf8(&bytes).map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+        let file_id = self.files.add(path.as_ref().to_string_lossy(), source);
+        self.file_ids.push(file_id);
         Ok(self)
     }
 
-    /// Get the internal CodeMap, useful for converting byte indices.
+    /// Get the internal Files, useful for converting byte indices.
     #[inline]
-    pub fn codemap(&self) -> &CodeMap {
-        &self.codemap
+    pub fn files(&self) -> &Files {
+        &self.files
     }
 
     /// Run the lints and get the result.
-    pub fn check(mut self) -> RMSCheckResult {
-        let mut checker = self.checker.build();
-        let words = self
-            .file_maps
+    pub fn check(self) -> RMSCheckResult {
+        let Self { mut files, file_ids, .. }  = self;
+        let def_aoc = files.add("random_map.def", include_str!("def_aoc.rms"));
+        let def_hd = files.add("random_map.def", include_str!("def_hd.rms"));
+        let def_wk = files.add("random_map.def", include_str!("def_wk.rms"));
+        let mut checker = self.checker.build(&files, (def_aoc, def_hd, def_wk));
+        let words = file_ids
             .iter()
-            .map(|map| Wordize::new(&map))
+            .cloned()
+            .map(|file_id| Wordize::new(file_id, files.source(file_id)))
             .flatten();
 
         let mut warnings: Vec<Warning> = words.filter_map(|w| checker.write_token(&w)).collect();
-        let parsers = self.file_maps.iter().map(|map| Parser::new(&map));
+        let parsers = file_ids.iter().map(|&file_id| Parser::new(file_id, files.source(file_id)));
         for parser in parsers {
             for (atom, parse_warning) in parser {
                 warnings.extend(checker.write_atom(&atom));
@@ -166,13 +168,14 @@ impl<'a> RMSCheck<'a> {
                         // Handled by arg-types lint
                         continue;
                     }
-                    warnings.push(Warning::error(w.span, format!("{:?}", w.kind)).lint("parse"));
+                    warnings.push(Warning::error(atom.file_id(), w.span, format!("{:?}", w.kind)).lint("parse"));
                 }
             }
         }
 
         RMSCheckResult {
-            codemap: self.codemap,
+            files,
+            file_ids,
             warnings,
         }
     }

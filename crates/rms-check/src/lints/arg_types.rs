@@ -106,10 +106,7 @@ impl ArgTypesLint {
         let arg = if let Some(arg) = arg {
             arg
         } else {
-            return Some(Warning::error(
-                atom.span(),
-                format!("Missing arguments to {}", cmd.value),
-            ));
+            return Some(atom.error(format!("Missing arguments to {}", cmd.value)));
         };
 
         fn unexpected_number_warning(arg: &Word<'_>) -> Option<Warning> {
@@ -214,7 +211,7 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
 mod tests {
     use super::*;
     use crate::{RMSCheck, Severity};
-    use codespan::{ColumnIndex, LineIndex};
+    use codespan::{Location,ColumnIndex, LineIndex};
     use std::path::PathBuf;
 
     #[test]
@@ -239,11 +236,13 @@ mod tests {
 
     #[test]
     fn arg_types() {
+        let filename = "./tests/rms/arg-types.rms";
         let result = RMSCheck::new()
             .with_lint(Box::new(ArgTypesLint::new()))
-            .add_file(PathBuf::from("./tests/rms/arg-types.rms"))
+            .add_file(PathBuf::from(filename))
             .unwrap()
             .check();
+        let file = result.file_id(filename).unwrap();
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
@@ -254,10 +253,10 @@ mod tests {
         assert_eq!(first.diagnostic().severity, Severity::Error);
         assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
         assert_eq!(first.message(), "Expected a const name, but got a number 0");
-        let first_span = first.diagnostic().labels[0].span;
+        let first_span = first.diagnostic().primary_label.span;
         assert_eq!(
-            result.resolve_position(first_span.start()).unwrap(),
-            (LineIndex(1), ColumnIndex(17))
+            result.resolve_position(file, first_span.start()).unwrap(),
+            Location::new(LineIndex(1), ColumnIndex(17))
         );
 
         assert_eq!(second.diagnostic().severity, Severity::Error);
@@ -266,10 +265,10 @@ mod tests {
             second.message(),
             "Expected a const name, but got a number 10"
         );
-        let second_span = second.diagnostic().labels[0].span;
+        let second_span = second.diagnostic().primary_label.span;
         assert_eq!(
-            result.resolve_position(second_span.start()).unwrap(),
-            (LineIndex(3), ColumnIndex(13))
+            result.resolve_position(file, second_span.start()).unwrap(),
+            Location::new(LineIndex(3), ColumnIndex(13))
         );
 
         assert_eq!(third.diagnostic().severity, Severity::Error);
@@ -278,19 +277,19 @@ mod tests {
             third.message(),
             "Expected a number argument to number_of_objects, but got SOMEVAL"
         );
-        let third_span = third.diagnostic().labels[0].span;
+        let third_span = third.diagnostic().primary_label.span;
         assert_eq!(
-            result.resolve_position(third_span.start()).unwrap(),
-            (LineIndex(7), ColumnIndex(18))
+            result.resolve_position(file, third_span.start()).unwrap(),
+            Location::new(LineIndex(7), ColumnIndex(18))
         );
 
         assert_eq!(fourth.diagnostic().severity, Severity::Error);
         assert_eq!(fourth.diagnostic().code, Some("arg-types".to_string()));
         assert_eq!(fourth.message(), "Missing arguments to create_object");
-        let fourth_span = fourth.diagnostic().labels[0].span;
+        let fourth_span = fourth.diagnostic().primary_label.span;
         assert_eq!(
-            result.resolve_position(fourth_span.start()).unwrap(),
-            (LineIndex(10), ColumnIndex(0))
+            result.resolve_position(file, fourth_span.start()).unwrap(),
+            Location::new(LineIndex(10), ColumnIndex(0))
         );
     }
 }

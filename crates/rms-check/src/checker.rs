@@ -3,10 +3,10 @@ use crate::{
     tokens::{TokenType, TOKENS},
     wordize::Word,
 };
-use codespan::{ByteIndex, ByteSpan, CodeMap, FileName};
-pub use codespan_reporting::{Diagnostic, Label, Severity};
+use codespan::{ByteIndex, Span, Files, FileId};
+pub use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 use lazy_static::lazy_static;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum Compatibility {
@@ -72,8 +72,10 @@ impl AutoFixReplacement {
 /// A suggestion that may fix a warning.
 #[derive(Debug, Clone)]
 pub struct Suggestion {
+    /// The file this suggestion applies to.
+    file_id: FileId,
     /// The piece of source code that this suggestion would replace.
-    span: ByteSpan,
+    span: Span,
     /// Human-readable suggestion message.
     message: String,
     /// A replacement string that could fix the problem.
@@ -82,7 +84,11 @@ pub struct Suggestion {
 
 impl Suggestion {
     #[inline]
-    pub fn span(&self) -> ByteSpan {
+    pub fn file_id(&self) -> FileId {
+        self.file_id
+    }
+    #[inline]
+    pub fn span(&self) -> Span {
         self.span
     }
     /// Get the starting position this suggestion applies to.
@@ -108,10 +114,11 @@ impl Suggestion {
 
     /// Create a suggestion.
     #[inline]
-    pub fn new(start: ByteIndex, end: ByteIndex, message: impl ToString) -> Self {
+    pub fn new(file_id: FileId, span: Span, message: impl ToString) -> Self {
         let message = message.to_string();
         Suggestion {
-            span: ByteSpan::new(start, end),
+            file_id,
+            span,
             message,
             replacement: AutoFixReplacement::None,
         }
@@ -121,6 +128,7 @@ impl Suggestion {
     pub fn from(token: &Word<'_>, message: impl ToString) -> Self {
         let message = message.to_string();
         Suggestion {
+            file_id: token.file,
             span: token.span,
             message,
             replacement: AutoFixReplacement::None,
@@ -162,7 +170,7 @@ impl Warning {
     }
     #[inline]
     pub fn labels(&self) -> &Vec<Label> {
-        &self.diagnostic.labels
+        &self.diagnostic.secondary_labels
     }
     /// Get the human-readable error message.
     #[inline]
@@ -182,19 +190,19 @@ impl Warning {
 
     /// Create a new warning with severity "Warning".
     #[allow(unused)]
-    pub(crate) fn warning<S: AsRef<str>>(span: ByteSpan, message: S) -> Self {
+    pub(crate) fn warning(file_id: FileId, span: Span, message: impl Into<String>) -> Self {
+        let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_warning(message.as_ref().to_string())
-                .with_label(Label::new_primary(span)),
+            diagnostic: Diagnostic::new_warning(message.clone(), Label::new(file_id, span, message)),
             suggestions: vec![],
         }
     }
 
     /// Create a new warning with severity "Error".
-    pub(crate) fn error<S: AsRef<str>>(span: ByteSpan, message: S) -> Self {
+    pub(crate) fn error(file_id: FileId, span: Span, message: impl Into<String>) -> Self {
+        let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_error(message.as_ref().to_string())
-                .with_label(Label::new_primary(span)),
+            diagnostic: Diagnostic::new_error(message.clone(), Label::new(file_id, span, message)),
             suggestions: vec![],
         }
     }
@@ -206,10 +214,10 @@ impl Warning {
     }
 
     /// Add a note referencing a snippet of code.
-    pub(crate) fn note_at(mut self, span: ByteSpan, message: &str) -> Self {
+    pub(crate) fn note_at(mut self, file_id: FileId, span: Span, message: &str) -> Self {
         self.diagnostic = self
             .diagnostic
-            .with_label(Label::new_secondary(span).with_message(message));
+            .with_secondary_labels(vec![Label::new(file_id, span, message)]);
         self
     }
 
@@ -221,18 +229,18 @@ impl Warning {
 
 impl Word<'_> {
     /// Create a warning applying to this token.
-    pub(crate) fn warning<S: AsRef<str>>(&self, message: S) -> Warning {
+    pub(crate) fn warning(&self, message: impl Into<String>) -> Warning {
+        let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_warning(message.as_ref().to_string())
-                .with_label(Label::new_primary(self.span)),
+            diagnostic: Diagnostic::new_warning(message.clone(), Label::new(self.file, self.span, message)),
             suggestions: vec![],
         }
     }
     /// Create an error applying to this token.
-    pub(crate) fn error<S: AsRef<str>>(&self, message: S) -> Warning {
+    pub(crate) fn error(&self, message: impl Into<String>) -> Warning {
+        let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_error(message.as_ref().to_string())
-                .with_label(Label::new_primary(self.span)),
+            diagnostic: Diagnostic::new_error(message.clone(), Label::new(self.file, self.span, message)),
             suggestions: vec![],
         }
     }
@@ -240,18 +248,18 @@ impl Word<'_> {
 
 impl Atom<'_> {
     /// Create a warning applying to this token.
-    pub(crate) fn warning<S: AsRef<str>>(&self, message: S) -> Warning {
+    pub(crate) fn warning(&self, message: impl Into<String>) -> Warning {
+        let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_warning(message.as_ref().to_string())
-                .with_label(Label::new_primary(self.span())),
+            diagnostic: Diagnostic::new_warning(message.clone(), Label::new(self.file_id(), self.span(), message)),
             suggestions: vec![],
         }
     }
     /// Create an error applying to this token.
-    pub(crate) fn error<S: AsRef<str>>(&self, message: S) -> Warning {
+    pub(crate) fn error(&self, message: impl Into<String>) -> Warning {
+        let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_error(message.as_ref().to_string())
-                .with_label(Label::new_primary(self.span())),
+            diagnostic: Diagnostic::new_error(message.clone(), Label::new(self.file_id(), self.span(), message)),
             suggestions: vec![],
         }
     }
@@ -285,12 +293,12 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
 
 #[derive(Debug, Clone)]
 pub enum Nesting {
-    If(ByteSpan),
-    ElseIf(ByteSpan),
-    Else(ByteSpan),
-    StartRandom(ByteSpan),
-    PercentChance(ByteSpan),
-    Brace(ByteSpan),
+    If(Span),
+    ElseIf(Span),
+    Else(Span),
+    StartRandom(Span),
+    PercentChance(Span),
+    Brace(Span),
 }
 
 pub trait Lint {
@@ -306,8 +314,10 @@ pub trait Lint {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug)]
 pub struct ParseState<'a> {
+    /// The files.
+    pub files: &'a Files,
     /// The target compatibility for this map script.
     pub compatibility: Compatibility,
     /// Whether this map should be treated as a builtin map. If true, #include and #include_drs should be made available.
@@ -324,6 +334,12 @@ pub struct ParseState<'a> {
     expect: Expect<'a>,
     /// The current <SECTION>, as well as its opening token.
     pub current_section: Option<Atom<'a>>,
+    /// File ID of the AoC random_map.def file.
+    def_aoc: FileId,
+    /// File ID of the HD Edition random_map.def file.
+    def_hd: FileId,
+    /// File ID of the WololoKingdoms random_map.def file.
+    def_wk: FileId,
     /// List of builtin #const definitions.
     builtin_consts: HashSet<String>,
     /// List of builtin #define definitions.
@@ -336,60 +352,31 @@ pub struct ParseState<'a> {
     pub option_defines: HashSet<String>,
 }
 
-fn get_builtin_consts(compatibility: Compatibility) -> (HashSet<String>, HashSet<String>) {
-    let mut consts = HashSet::new();
-    let mut defines = HashSet::new();
-
-    let mut codemap = CodeMap::new();
-    match compatibility {
-        Compatibility::WololoKingdoms => {
-            codemap.add_filemap(
-                FileName::virtual_("random_map.def"),
-                include_str!("def_wk.rms"),
-            );
-        }
-        Compatibility::HDEdition => {
-            codemap.add_filemap(
-                FileName::virtual_("random_map.def"),
-                include_str!("def_hd.rms"),
-            );
-        }
-        Compatibility::UserPatch15 => {
-            codemap.add_filemap(
-                FileName::virtual_("random_map.def"),
-                include_str!("def_aoc.rms"),
-            );
-            codemap.add_filemap(
-                FileName::virtual_("UserPatchConst.rms"),
-                include_str!("def_up15.rms"),
-            );
-        }
-        _ => {
-            codemap.add_filemap(
-                FileName::virtual_("random_map.def"),
-                include_str!("def_aoc.rms"),
-            );
-        }
-    };
-
-    for filemap in codemap.iter() {
-        for (atom, _) in Parser::new(filemap) {
-            match atom {
-                Atom::Const(_, name, _) => {
-                    consts.insert(name.value.to_string());
-                }
-                Atom::Define(_, name) => {
-                    defines.insert(name.value.to_string());
-                }
-                _ => (),
-            }
-        }
+impl<'a> ParseState<'a> {
+    pub fn new(files: &'a Files, (def_aoc, def_hd, def_wk): (FileId, FileId, FileId), compatibility: Compatibility) -> Self {
+        let mut state = Self {
+            files,
+            compatibility,
+            def_aoc,
+            def_hd,
+            def_wk,
+            is_builtin_map: false,
+            is_comment: false,
+            nesting: vec![],
+            current_token: None,
+            token_arg_index: 0,
+            expect: Expect::None,
+            current_section: None,
+            builtin_consts: HashSet::new(),
+            builtin_defines: HashSet::new(),
+            seen_consts: HashSet::new(),
+            seen_defines: HashSet::new(),
+            option_defines: HashSet::new(),
+        };
+        state.set_compatibility(compatibility);
+        state
     }
 
-    (consts, defines)
-}
-
-impl<'a> ParseState<'a> {
     pub fn optional_define(&mut self, name: impl ToString) {
         self.option_defines.insert(name.to_string());
     }
@@ -423,20 +410,39 @@ impl<'a> ParseState<'a> {
     pub fn compatibility(&self) -> Compatibility {
         self.compatibility
     }
+
     pub fn set_compatibility(&mut self, compatibility: Compatibility) {
         self.compatibility = compatibility;
-        let (consts, defines) = get_builtin_consts(compatibility);
-        self.builtin_consts = consts;
-        self.builtin_defines = defines;
+
+        self.builtin_consts.clear();
+        self.builtin_defines.clear();
+
+        let (file_id, content) = match self.compatibility {
+            Compatibility::WololoKingdoms => (self.def_wk, self.files.source(self.def_wk)),
+            Compatibility::HDEdition => (self.def_hd, self.files.source(self.def_hd)),
+            _ => (self.def_aoc, self.files.source(self.def_aoc)),
+        };
+
+        for (atom, _) in Parser::new(file_id, content) {
+            match atom {
+                Atom::Const(_, name, _) => {
+                    self.builtin_consts.insert(name.value.to_string());
+                }
+                Atom::Define(_, name) => {
+                    self.builtin_defines.insert(name.value.to_string());
+                }
+                _ => (),
+            }
+        }
     }
+
     fn expect(&mut self, expect: Expect<'a>) {
         self.expect = expect;
     }
 }
 
-#[derive(Default)]
 pub struct Checker<'a> {
-    lints: HashMap<String, Box<dyn Lint>>,
+    lints: Vec<Box<dyn Lint>>,
     state: ParseState<'a>,
 }
 
@@ -488,32 +494,36 @@ lazy_static! {
     };
 }
 
-impl<'a> Checker<'a> {
-    pub fn build(mut self) -> Self {
-        if self.state.compatibility == Compatibility::UserPatch15 {
-            for name in UP_OPTION_DEFINES.iter() {
-                self.state.optional_define(name);
-            }
-        }
+#[derive(Default)]
+pub struct CheckerBuilder {
+    lints: Vec<Box<dyn Lint>>,
+    compatibility: Compatibility,
+}
 
-        for name in AOC_OPTION_DEFINES.iter() {
-            self.state.optional_define(name);
-        }
+impl CheckerBuilder {
+    pub fn build<'a>(self, files: &'a Files, def_files: (FileId, FileId, FileId)) -> Checker<'a> {
 
-        self
+        let state = ParseState::new(files, def_files, self.compatibility);
+        Checker {
+            lints: self.lints,
+            state,
+        }
     }
 
     pub fn with_lint(mut self, lint: Box<dyn Lint>) -> Self {
-        self.lints.insert(lint.name().to_string(), lint);
+        self.lints.push(lint);
         self
     }
 
     pub fn compatibility(mut self, compatibility: Compatibility) -> Self {
-        if self.state.compatibility != compatibility {
-            self.state.set_compatibility(compatibility);
-        }
+        self.compatibility = compatibility;
         self
     }
+}
+
+impl<'a> Checker<'a> {
+    pub fn builder() -> CheckerBuilder
+    { CheckerBuilder::default() }
 
     /// Check an incoming token.
     fn lint_token(&mut self, token: &Word<'a>) -> Option<Warning> {
@@ -522,10 +532,10 @@ impl<'a> Checker<'a> {
             let mut state = &mut self.state;
             self.lints
                 .iter_mut()
-                .filter(|(_, lint)| !is_comment || lint.run_inside_comments())
-                .find_map(|(name, lint)| {
+                .filter(|lint| !is_comment || lint.run_inside_comments())
+                .find_map(|lint| {
                     lint.lint_token(&mut state, token)
-                        .map(|warning| warning.lint(&name))
+                        .map(|warning| warning.lint(lint.name()))
                 })
         };
         if warning.is_some() {
@@ -545,11 +555,11 @@ impl<'a> Checker<'a> {
     pub fn write_atom(&mut self, atom: &Atom<'a>) -> Vec<Warning> {
         let mut state = &mut self.state;
         let mut warnings = vec![];
-        for (name, lint) in self.lints.iter_mut() {
+        for lint in self.lints.iter_mut() {
             warnings.extend(
                 lint.lint_atom(&mut state, atom)
                     .into_iter()
-                    .map(move |warning| warning.lint(&name)),
+                    .map(move |warning| warning.lint(lint.name())),
             );
         }
 
@@ -583,9 +593,9 @@ impl<'a> Checker<'a> {
                 self.state.expect(Expect::None);
             }
             Expect::UnfinishedRnd(pos, val) => {
-                let suggestion = Suggestion::new(pos, token.end(), "rnd() must not contain spaces");
+                let suggestion = Suggestion::new(token.file, Span::new(pos, token.end()), "rnd() must not contain spaces");
                 parse_error = Some(
-                    Warning::error(ByteSpan::new(pos, token.end()), "Incorrect rnd() call")
+                    Warning::error(token.file, Span::new(pos, token.end()), "Incorrect rnd() call")
                         .suggest(match is_valid_rnd(&format!("{} {}", val, token.value)).1 {
                             Some(replacement) => suggestion.replace(replacement),
                             None => suggestion,
@@ -654,18 +664,18 @@ impl<'a> Checker<'a> {
             match nest {
                 Some(Nesting::Brace(loc)) => token
                     .error(msg)
-                    .note_at(*loc, "Matches this open brace `{`"),
-                Some(Nesting::If(loc)) => token.error(msg).note_at(*loc, "Matches this `if`"),
+                    .note_at(token.file, *loc, "Matches this open brace `{`"),
+                Some(Nesting::If(loc)) => token.error(msg).note_at(token.file, *loc, "Matches this `if`"),
                 Some(Nesting::ElseIf(loc)) => {
-                    token.error(msg).note_at(*loc, "Matches this `elseif`")
+                    token.error(msg).note_at(token.file, *loc, "Matches this `elseif`")
                 }
-                Some(Nesting::Else(loc)) => token.error(msg).note_at(*loc, "Matches this `else`"),
+                Some(Nesting::Else(loc)) => token.error(msg).note_at(token.file, *loc, "Matches this `else`"),
                 Some(Nesting::StartRandom(loc)) => token
                     .error(msg)
-                    .note_at(*loc, "Matches this `start_random`"),
+                    .note_at(token.file, *loc, "Matches this `start_random`"),
                 Some(Nesting::PercentChance(loc)) => token
                     .error(msg)
-                    .note_at(*loc, "Matches this `percent_chance`"),
+                    .note_at(token.file, *loc, "Matches this `percent_chance`"),
                 None => token.error(format!("{}–nothing is open", msg)),
             }
         }
@@ -756,5 +766,9 @@ impl<'a> Checker<'a> {
         // A parse error is more important than a lint warning, probably…
         // chances are they're related anyway.
         parse_error.or(lint_warning)
+    }
+
+    pub(crate) fn files(&self) -> &Files {
+        &self.state.files
     }
 }

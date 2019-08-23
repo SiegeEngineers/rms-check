@@ -56,33 +56,33 @@ pub fn cli_fix(args: CheckArgs) -> Fallible<()> {
         for suggestion in warn.suggestions() {
             match suggestion.replacement() {
                 AutoFixReplacement::Safe(ref new_value) => {
-                    let start = result.resolve_position(suggestion.start()).unwrap();
-                    let end = result.resolve_position(suggestion.end()).unwrap();
+                    let start = result.resolve_position(suggestion.file_id(), suggestion.start()).unwrap();
+                    let end = result.resolve_position(suggestion.file_id(), suggestion.end()).unwrap();
                     eprintln!(
                         "autofix {}:{} → {}:{} to {}",
-                        start.0.number(),
-                        start.1.number(),
-                        end.0.number(),
-                        end.1.number(),
+                        start.line.number(),
+                        start.column.number(),
+                        end.line.number(),
+                        end.column.number(),
                         new_value
                     );
-                    let start = result.resolve_offset(suggestion.start()).unwrap();
-                    let end = result.resolve_offset(suggestion.end()).unwrap();
+                    let start = suggestion.start();
+                    let end = suggestion.end();
                     splicer.splice(start.to_usize(), end.to_usize(), new_value);
                 }
                 AutoFixReplacement::Unsafe(ref new_value) if args.fix_unsafe => {
-                    let start = result.resolve_position(suggestion.start()).unwrap();
-                    let end = result.resolve_position(suggestion.end()).unwrap();
+                    let start = result.resolve_position(suggestion.file_id(), suggestion.start()).unwrap();
+                    let end = result.resolve_position(suggestion.file_id(), suggestion.end()).unwrap();
                     eprintln!(
                         "UNSAFE autofix {}:{} → {}:{} to {}",
-                        start.0.number(),
-                        start.1.number(),
-                        end.0.number(),
-                        end.1.number(),
+                        start.line.number(),
+                        start.column.number(),
+                        end.line.number(),
+                        end.column.number(),
                         new_value
                     );
-                    let start = result.resolve_offset(suggestion.start()).unwrap();
-                    let end = result.resolve_offset(suggestion.end()).unwrap();
+                    let start = suggestion.start();
+                    let end = suggestion.end();
                     splicer.splice(start.to_usize(), end.to_usize(), new_value);
                 }
                 _ => (),

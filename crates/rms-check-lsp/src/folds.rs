@@ -1,5 +1,5 @@
-use codespan::{ByteIndex, ByteOffset, FileMap};
-use languageserver_types::FoldingRange;
+use codespan::{ByteIndex, ByteOffset, FileId, Files, Location};
+use lsp_types::FoldingRange;
 use rms_check::{Atom, Parser};
 use std::ops::{Bound, RangeBounds};
 
@@ -15,31 +15,27 @@ fn default_fold() -> FoldingRange {
 }
 
 #[derive(Debug)]
-pub struct FoldingRanges<'a, Source>
-where
-    Source: AsRef<str>,
-{
-    file_map: FileMap<&'a str>,
-    inner: Parser<'a, Source>,
+pub struct FoldingRanges<'a> {
+    file_id: FileId,
+    files: &'a Files,
+    inner: Parser<'a>,
     waiting_folds: Vec<Atom<'a>>,
     queued: Vec<FoldingRange>,
 }
 
-impl<'a, Source> FoldingRanges<'a, Source>
-where
-    Source: AsRef<str>,
-{
-    pub fn new(file_map: &'a FileMap<Source>) -> Self {
+impl<'a> FoldingRanges<'a> {
+    pub fn new(files: &'a Files, file_id: FileId) -> Self {
         Self {
-            file_map: FileMap::new(file_map.name().clone(), file_map.src()),
-            inner: Parser::new(&file_map),
+            file_id,
+            files,
+            inner: Parser::new(file_id, files.source(file_id)),
             waiting_folds: vec![],
             queued: vec![],
         }
     }
 
     fn line(&self, index: ByteIndex) -> u64 {
-        self.file_map.location(index).unwrap().0.to_usize() as u64
+        self.files.location(self.file_id, index).unwrap().line.to_usize() as u64
     }
 
     fn push(&mut self, range: FoldingRange) {
@@ -70,24 +66,24 @@ where
         let (start_line, start_character) = match range.start_bound() {
             Bound::Unbounded => (0u64, 0u64),
             Bound::Included(index) => {
-                let (line, col) = self.file_map.location(*index).unwrap();
-                (line.to_usize() as u64, col.to_usize() as u64)
+                let Location { line, column } = self.files.location(self.file_id, *index).unwrap();
+                (line.to_usize() as u64, column.to_usize() as u64)
             }
             Bound::Excluded(index) => {
-                let (line, col) = self.file_map.location(*index + ByteOffset(1)).unwrap();
-                (line.to_usize() as u64, col.to_usize() as u64)
+                let Location { line, column } = self.files.location(self.file_id, *index + ByteOffset(1)).unwrap();
+                (line.to_usize() as u64, column.to_usize() as u64)
             }
         };
         let (end_line, end_character) = match range.end_bound() {
             Bound::Unbounded => (0u64, 0u64),
             Bound::Included(index) => {
-                let (line, col) = self.file_map.location(*index).unwrap();
-                (line.to_usize() as u64, col.to_usize() as u64)
+                let Location { line, column } = self.files.location(self.file_id, *index).unwrap();
+                (line.to_usize() as u64, column.to_usize() as u64)
             }
             Bound::Excluded(index) => self
-                .file_map
-                .location(*index - ByteOffset(1))
-                .map(|(line, col)| (line.to_usize() as u64, col.to_usize() as u64))
+                .files
+                .location(self.file_id, *index - ByteOffset(1))
+                .map(|Location { line, column }| (line.to_usize() as u64, column.to_usize() as u64))
                 .unwrap_or((0, 0)),
         };
         self.push(FoldingRange {
@@ -100,10 +96,7 @@ where
     }
 }
 
-impl<Source> Iterator for FoldingRanges<'_, Source>
-where
-    Source: AsRef<str>,
-{
+impl Iterator for FoldingRanges<'_> {
     type Item = FoldingRange;
     fn next(&mut self) -> Option<Self::Item> {
         if !self.queued.is_empty() {

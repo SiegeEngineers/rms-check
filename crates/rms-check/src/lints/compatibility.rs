@@ -91,6 +91,7 @@ impl Lint for CompatibilityLint {
                 "effect_amount" | "effect_percent" => {
                     if !self.has_up_extension(state) {
                         warnings.push(atom.warning("RMS Effects require UserPatch 1.5").note_at(
+                            atom.file_id(),
                             atom.span(),
                             "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file",
                         ))
@@ -101,6 +102,7 @@ impl Lint for CompatibilityLint {
                         warnings.push(
                             atom.warning("Direct placement requires UserPatch 1.5")
                                 .note_at(
+                                    atom.file_id(),
                                     atom.span(),
                                     "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file",
                                 )
@@ -112,6 +114,7 @@ impl Lint for CompatibilityLint {
                         warnings.push(
                             atom.warning("Nomad resources requires UserPatch 1.4")
                                 .note_at(
+                                    atom.file_id(),
                                     atom.span(),
                                     "Wrap this command in an `if UP_AVAILABLE` statement or add a /* Compatibility: UserPatch 1.4 */ comment at the top of the file",
                                 )

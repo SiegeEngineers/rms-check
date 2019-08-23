@@ -2,7 +2,7 @@ use crate::{
     tokens::TOKENS,
     wordize::{Word, Wordize},
 };
-use codespan::{ByteIndex, ByteOffset, ByteSpan, FileMap};
+use codespan::{ByteIndex, ByteOffset, FileId, Span};
 use itertools::MultiPeek;
 use std::{
     fmt::{self, Display},
@@ -23,11 +23,11 @@ pub enum WarningKind {
 #[derive(Debug, Clone)]
 pub struct Warning {
     pub kind: WarningKind,
-    pub span: ByteSpan,
+    pub span: Span,
 }
 
 impl Warning {
-    fn new(span: ByteSpan, kind: WarningKind) -> Self {
+    fn new(span: Span, kind: WarningKind) -> Self {
         Self { kind, span }
     }
 }
@@ -52,24 +52,39 @@ pub enum Atom<'a> {
 }
 
 impl Atom<'_> {
+    /// Get the file this atom was parsed from.
+    pub fn file_id(&self) -> FileId {
+        use Atom::*;
+        match self {
+            Section(def) | Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def)
+            | OpenBlock(def) | CloseBlock(def) | Other(def) => def.file,
+            Const(def, _,_) => def.file,
+            Define(def, _) | If(def, _) | ElseIf(def, _) | PercentChance(def, _) => {
+                def.file
+            }
+            Command(name, _) => name.file,
+            Comment(left, _,_) => left.file,
+        }
+    }
+
     /// Get the full span for an atom.
-    pub fn span(&self) -> ByteSpan {
+    pub fn span(&self) -> Span {
         use Atom::*;
         match self {
             Section(def) | Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def)
             | OpenBlock(def) | CloseBlock(def) | Other(def) => def.span,
-            Const(def, name, val) => def.span.to(val.unwrap_or(*name).span),
+            Const(def, name, val) => def.span.merge(val.unwrap_or(*name).span),
             Define(def, arg) | If(def, arg) | ElseIf(def, arg) | PercentChance(def, arg) => {
-                def.span.to(arg.span)
+                def.span.merge(arg.span)
             }
             Command(name, args) => match args.last() {
-                Some(arg) => name.span.to(arg.span),
+                Some(arg) => name.span.merge(arg.span),
                 None => name.span,
             },
-            Comment(left, _, right) => left.span.to(match right {
-                Some(right) => right.span,
-                None => ByteSpan::new(left.span.start(), ByteIndex::none()),
-            }),
+            Comment(left, content, right) => match right {
+                Some(right) => left.span.merge(right.span),
+                None => Span::new(left.span.start(), left.span.end() + ByteOffset(content.as_bytes().len() as i64)),
+            },
         }
     }
 }
@@ -111,42 +126,34 @@ impl Display for Atom<'_> {
 
 /// A forgiving random map script parser, turning a stream of words into a stream of atoms.
 #[derive(Debug)]
-pub struct Parser<'a, Source>
-where
-    Source: AsRef<str>,
+pub struct Parser<'a>
 {
-    file_map: &'a FileMap<Source>,
-    iter: MultiPeek<Wordize<'a, Source>>,
+    source: &'a str,
+    iter: MultiPeek<Wordize<'a>>,
 }
 
-impl<'a, Source> Parser<'a, Source>
-where
-    Source: AsRef<str>,
-{
+impl<'a> Parser<'a> {
     #[inline]
-    pub fn new(file_map: &'a FileMap<Source>) -> Self {
+    pub fn new(file_id: FileId, source: &'a str) -> Self {
         Parser {
-            file_map,
-            iter: itertools::multipeek(Wordize::new(file_map)),
+            source,
+            iter: itertools::multipeek(Wordize::new(file_id, source)),
         }
     }
 
     fn slice(&self, range: impl RangeBounds<ByteIndex>) -> String {
         use std::ops::Bound::*;
         let start = match range.start_bound() {
-            Unbounded => self.file_map.span().start(),
+            Unbounded => ByteIndex(0),
             Included(n) => *n,
             Excluded(n) => *n + ByteOffset(1),
         };
         let end = match range.end_bound() {
-            Unbounded => self.file_map.span().end(),
+            Unbounded => ByteIndex(self.source.as_bytes().len() as u32),
             Included(n) => *n,
             Excluded(n) => *n - ByteOffset(1),
         };
-        self.file_map
-            .src_slice(ByteSpan::new(start, end))
-            .unwrap()
-            .to_string()
+        self.source[start.to_usize()..end.to_usize()].to_string()
     }
 
     fn peek_arg(&mut self) -> Option<&Word<'a>> {
@@ -195,7 +202,7 @@ where
                     return Some((
                         Atom::Comment(open_comment, self.slice(open_comment.end()..), None),
                         vec![Warning::new(
-                            open_comment.span.to(last_span),
+                            open_comment.span.merge(last_span),
                             WarningKind::UnclosedComment,
                         )],
                     ))
@@ -223,7 +230,7 @@ where
 
         if args.len() != token_type.arg_len() as usize {
             let span = match args.last() {
-                Some(arg) => command_name.span.to(arg.span),
+                Some(arg) => command_name.span.merge(arg.span),
                 _ => command_name.span,
             };
             warnings.push(Warning::new(span, WarningKind::MissingCommandArgs));
@@ -232,10 +239,7 @@ where
     }
 }
 
-impl<'a, Source> Iterator for Parser<'a, Source>
-where
-    Source: AsRef<str>,
-{
+impl<'a> Iterator for Parser<'a> {
     type Item = (Atom<'a>, Vec<Warning>);
     fn next(&mut self) -> Option<Self::Item> {
         let word = match self.iter.next() {
@@ -293,7 +297,7 @@ where
                 (Some(name), None) => Some((
                     Atom::Const(word, name, None),
                     vec![Warning::new(
-                        word.span.to(name.span),
+                        word.span.merge(name.span),
                         WarningKind::MissingConstValue,
                     )],
                 )),
@@ -313,15 +317,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codespan::{FileMap, FileName};
-    fn filemap(source: &str) -> FileMap {
-        FileMap::new(FileName::Virtual("test.rms".into()), source.to_string())
+
+    fn file_id() -> FileId {
+        codespan::Files::new().add("", "")
     }
 
     #[test]
     fn const_ok() {
-        let mut f = filemap("#const A B");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "#const A B").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         if let (Atom::Const(def, name, val), warnings) = &atoms[0] {
             assert_eq!(def.value, "#const");
             assert_eq!(name.value, "A");
@@ -335,8 +338,7 @@ mod tests {
 
     #[test]
     fn const_missing_value() {
-        let mut f = filemap("#const B");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "#const B").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         if let (Atom::Const(def, name, val), warnings) = &atoms[0] {
             assert_eq!(def.value, "#const");
             assert_eq!(name.value, "B");
@@ -350,8 +352,7 @@ mod tests {
 
     #[test]
     fn const_missing_name() {
-        let mut f = filemap("#const");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "#const").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         if let (Atom::Other(token), warnings) = &atoms[0] {
             assert_eq!(token.value, "#const");
             assert_eq!(warnings.len(), 1);
@@ -363,8 +364,7 @@ mod tests {
 
     #[test]
     fn define_ok() {
-        let mut f = filemap("#define B");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "#define B").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         if let (Atom::Define(def, name), warnings) = &atoms[0] {
             assert_eq!(def.value, "#define");
             assert_eq!(name.value, "B");
@@ -376,8 +376,7 @@ mod tests {
 
     #[test]
     fn define_missing_name() {
-        let mut f = filemap("#define");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "#define").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         if let (Atom::Other(token), warnings) = &atoms[0] {
             assert_eq!(token.value, "#define");
             assert_eq!(warnings.len(), 1);
@@ -389,8 +388,7 @@ mod tests {
 
     #[test]
     fn command_noargs() {
-        let mut f = filemap("random_placement");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "random_placement").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 1);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "random_placement");
@@ -403,8 +401,7 @@ mod tests {
 
     #[test]
     fn command_1arg() {
-        let mut f = filemap("land_percent 10 grouped_by_team");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "land_percent 10 grouped_by_team").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 2);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "land_percent");
@@ -426,8 +423,7 @@ mod tests {
     /// It should accept wrong casing, a linter can fix it up.
     #[test]
     fn command_wrong_case() {
-        let mut f = filemap("land_Percent 10 grouped_BY_team");
-        let atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "land_Percent 10 grouped_BY_team").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 2);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "land_Percent");
@@ -448,8 +444,7 @@ mod tests {
 
     #[test]
     fn command_block() {
-        let mut f = filemap("create_terrain SNOW { base_size 15 }");
-        let mut atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let mut atoms = Parser::new(file_id(), "create_terrain SNOW { base_size 15 }").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 4);
         if let (Atom::Command(name, args), _) = atoms.remove(0) {
             assert_eq!(name.value, "create_terrain");
@@ -479,8 +474,7 @@ mod tests {
 
     #[test]
     fn comment_basic() {
-        let mut f = filemap("create_terrain SNOW /* this is a comment */ { }");
-        let mut atoms = Parser::new(&mut f).collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let mut atoms = Parser::new(file_id(), "create_terrain SNOW /* this is a comment */ { }").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
         assert_eq!(atoms.len(), 4);
         if let (Atom::Command(_, _), _) = atoms.remove(0) {
             // ok
@@ -510,8 +504,8 @@ mod tests {
     #[ignore]
     fn dry_arabia() {
         let f = std::fs::read("tests/rms/Dry Arabia.rms").unwrap();
-        let mut f = filemap(std::str::from_utf8(&f).unwrap());
-        for (atom, _) in Parser::new(&mut f) {
+        let source = std::str::from_utf8(&f).unwrap();
+        for (atom, _) in Parser::new(file_id(), source) {
             println!("{}", atom);
         }
     }
