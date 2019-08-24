@@ -1,5 +1,6 @@
 use ansi_term::Colour::Cyan;
 use ansi_term::Style;
+use codespan_reporting::term::{emit, Config};
 use rms_check::{AutoFixReplacement, RMSCheckResult, Severity, Suggestion};
 use termcolor::{ColorChoice, StandardStream};
 
@@ -17,9 +18,10 @@ pub fn report(result: RMSCheckResult) {
     let mut fixable_warnings = 0;
     let mut fixable_errors = 0;
 
+    let config = Config::default();
     let mut stream = StandardStream::stdout(ColorChoice::Auto);
     for warn in result.iter() {
-        codespan_reporting::emit(&mut stream, result.codemap(), warn.diagnostic()).unwrap();
+        emit(&mut stream, &config, result.files().1, warn.diagnostic()).unwrap();
 
         match warn.severity() {
             Severity::Error => num_errors += 1,

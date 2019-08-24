@@ -1,9 +1,9 @@
 use crate::{Lint, ParseState, Suggestion, TokenType, Warning, Word, TOKENS};
-use codespan::ByteSpan;
+use codespan::Span;
 
 #[derive(Default)]
 pub struct CommentContentsLint {
-    current_command: Option<(ByteSpan, &'static TokenType, u8)>,
+    current_command: Option<(Span, &'static TokenType, u8)>,
 }
 
 impl CommentContentsLint {
@@ -36,13 +36,13 @@ impl Lint for CommentContentsLint {
         if let Some((span, tt, remaining)) = self.current_command {
             if token.value == "*/" {
                 let suggestion = Suggestion::new(
-                    span.start(),
-                    span.end(),
+                    token.file,
+                    span,
                     "Add `backticks` around the command to make the parser ignore it",
                 )
                 .replace(format!("`{}`", tt.name));
                 return Some(token.warning(format!("This close comment may be ignored because a previous command is expecting {} more argument(s)", remaining))
-                            .note_at(span, "Command started here")
+                            .note_at(token.file, span, "Command started here")
                             .suggest(suggestion));
             }
         }
@@ -87,13 +87,13 @@ mod tests {
         let first = warnings.next().unwrap();
         let second = warnings.next().unwrap();
         let third = warnings.next().unwrap();
-        assert!(dbg!(warnings.next()).is_none());
+        assert!(warnings.next().is_none());
         assert_eq!(first.diagnostic().severity, Severity::Warning);
         assert_eq!(
             first.diagnostic().code,
             Some("comment-contents".to_string())
         );
-        assert_eq!(first.message(), "This close comment may be ignored because a previous command is expecting 2 more argument(s)");
+        assert_eq!(first.message(), "This close comment may be ignored because a previous command is expecting 3 more argument(s)");
         assert_eq!(second.diagnostic().severity, Severity::Warning);
         assert_eq!(
             second.diagnostic().code,

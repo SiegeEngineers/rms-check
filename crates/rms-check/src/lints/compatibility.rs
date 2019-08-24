@@ -1,23 +1,26 @@
-use super::super::{Compatibility, Lint, ParseState, TokenType, Warning, Word};
+use crate::{Atom, Compatibility, Lint, ParseState, Warning};
 
-#[derive(Default)]
 pub struct CompatibilityLint {
+    is_header_comment: bool,
     conditions: Vec<String>,
 }
 
 impl CompatibilityLint {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            is_header_comment: true,
+            conditions: vec![],
+        }
     }
 
     fn has_up_extension(&self, state: &ParseState<'_>) -> bool {
-        if state.compatibility >= Compatibility::UserPatch15 {
+        if state.compatibility() >= Compatibility::UserPatch15 {
             return true;
         }
         self.conditions.iter().any(|item| item == "UP_EXTENSION")
     }
     fn has_up_available(&self, state: &ParseState<'_>) -> bool {
-        if state.compatibility >= Compatibility::UserPatch14 {
+        if state.compatibility() >= Compatibility::UserPatch14 {
             return true;
         }
         self.conditions.iter().any(|item| item == "UP_AVAILABLE")
@@ -27,44 +30,39 @@ impl CompatibilityLint {
         self.conditions.push(name.to_string());
     }
 
-    fn check_token(&mut self, state: &mut ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
-        match token.value {
-            "effect_amount" | "effect_percent" => {
-                if self.has_up_extension(state) {
-                    return None;
+    fn set_header(&mut self, state: &mut ParseState<'_>, name: &str, val: &str) {
+        match name {
+            "Compatibility" => {
+                let compat = match val.to_lowercase().trim() {
+                    "hd edition" | "hd" => Some(Compatibility::HDEdition),
+                    "conquerors" | "aoc" => Some(Compatibility::Conquerors),
+                    "userpatch 1.5" | "up 1.5" => Some(Compatibility::UserPatch15),
+                    "userpatch 1.4" | "up 1.4" | "userpatch" | "up" => {
+                        Some(Compatibility::UserPatch15)
+                    }
+                    "wololokingdoms" | "wk" => Some(Compatibility::WololoKingdoms),
+                    _ => None,
+                };
+                if let Some(compat) = compat {
+                    state.set_compatibility(compat);
                 }
-                Some(token.warning("RMS Effects require UserPatch 1.5").note_at(
-                    token.span,
-                    "Wrap this command in an `if UP_EXTENSION` statement",
-                ))
             }
-            "direct_placement" => {
-                if self.has_up_extension(state) {
-                    return None;
-                }
-                Some(
-                    token
-                        .warning("Direct placement requires UserPatch 1.5")
-                        .note_at(
-                            token.span,
-                            "Wrap this command in an `if UP_EXTENSION` statement",
-                        ),
-                )
+            _ => (),
+        }
+    }
+
+    fn parse_comment(&mut self, state: &mut ParseState<'_>, content: &str) {
+        for mut line in content.lines() {
+            line = line.trim();
+            if line.starts_with("* ") {
+                line = &line[2..];
             }
-            "nomad_resources" => {
-                if self.has_up_available(state) {
-                    return None;
-                }
-                Some(
-                    token
-                        .warning("Nomad resources requires UserPatch 1.4")
-                        .note_at(
-                            token.span,
-                            "Wrap this command in an `if UP_AVAILABLE` statement",
-                        ),
-                )
+
+            let mut parts = line.splitn(2, ": ");
+            match (parts.next(), parts.next()) {
+                (Some(name), Some(val)) => self.set_header(state, name, val),
+                _ => (),
             }
-            _ => None,
         }
     }
 }
@@ -74,15 +72,77 @@ impl Lint for CompatibilityLint {
         "compatibility"
     }
 
-    fn lint_token(&mut self, state: &mut ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
-        match state.current_token {
-            Some(TokenType { name, .. }) if *name == "if" => {
-                // `token` will be the arg to `if`
-                self.add_define_check(token.value);
-                None
+    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
+        use Atom::*;
+
+        match atom {
+            Comment(_, content, _) if self.is_header_comment => {
+                self.parse_comment(state, content);
             }
-            _ => self.check_token(state, token),
+            _ => {
+                self.is_header_comment = false;
+            }
         }
+
+        let mut warnings = vec![];
+
+        if let Command(name, _) = atom {
+            match name.value {
+                "effect_amount" | "effect_percent" => {
+                    if !self.has_up_extension(state) {
+                        warnings.push(atom.warning("RMS Effects require UserPatch 1.5").note_at(
+                            atom.file_id(),
+                            atom.span(),
+                            "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file",
+                        ))
+                    }
+                }
+                "direct_placement" => {
+                    if !self.has_up_extension(state) {
+                        warnings.push(
+                            atom.warning("Direct placement requires UserPatch 1.5")
+                                .note_at(
+                                    atom.file_id(),
+                                    atom.span(),
+                                    "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file",
+                                )
+                        )
+                    }
+                }
+                "nomad_resources" => {
+                    if !self.has_up_available(state) {
+                        warnings.push(
+                            atom.warning("Nomad resources requires UserPatch 1.4")
+                                .note_at(
+                                    atom.file_id(),
+                                    atom.span(),
+                                    "Wrap this command in an `if UP_AVAILABLE` statement or add a /* Compatibility: UserPatch 1.4 */ comment at the top of the file",
+                                )
+                        )
+                    }
+                }
+                _ => (),
+            }
+        };
+
+        match atom {
+            If(_, arg) => self.add_define_check(arg.value),
+            ElseIf(_, arg) => {
+                self.conditions.pop();
+                self.add_define_check(arg.value);
+            }
+            Else(_) => {
+                self.conditions.pop();
+                // Dummy argument to make nesting work right
+                self.add_define_check(" ");
+            }
+            EndIf(_) => {
+                self.conditions.pop();
+            }
+            _ => (),
+        }
+
+        warnings
     }
 }
 
@@ -95,7 +155,7 @@ mod tests {
     #[test]
     fn compatibility() {
         let result = RMSCheck::new()
-            .with_lint(Box::new(CompatibilityLint::default()))
+            .with_lint(Box::new(CompatibilityLint::new()))
             .add_file(PathBuf::from("./tests/rms/compatibility.rms"))
             .unwrap()
             .check();

@@ -15,23 +15,25 @@ impl ArgTypesLint {
                 "Token `{}` is never defined, this condition will always fail",
                 token.value
             ));
-            Some(
-                if let Some(similar) = meant(token.value, state.seen_defines.iter()) {
-                    warn.suggest(
-                        Suggestion::from(token, format!("Did you mean `{}`?", similar))
-                            .replace_unsafe(similar.to_string()),
-                    )
-                } else {
-                    warn
-                },
-            )
+            Some(if let Some(similar) = meant(token.value, state.defines()) {
+                warn.suggest(
+                    Suggestion::from(token, format!("Did you mean `{}`?", similar))
+                        .replace_unsafe(similar.to_string()),
+                )
+            } else {
+                warn
+            })
         } else {
             None
         }
     }
 
     /// Check if a constant was ever defined with a value (using #const)
-    fn check_defined_with_value(&self, state: &ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
+    fn check_defined_with_value(
+        &self,
+        state: &ParseState<'_>,
+        token: &Word<'_>,
+    ) -> Option<Warning> {
         // 1. Check if this may or may not be defined—else warn
         if !state.has_const(token.value) {
             if state.has_define(token.value) {
@@ -39,23 +41,26 @@ impl ArgTypesLint {
                 Some(token.warning(format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
             } else {
                 let warn = token.warning(format!("Token `{}` is never defined", token.value));
-                Some(
-                    if let Some(similar) = meant(token.value, state.seen_consts.iter()) {
-                        warn.suggest(
-                            Suggestion::from(token, format!("Did you mean `{}`?", similar))
-                                .replace_unsafe(similar.to_string()),
-                        )
-                    } else {
-                        warn
-                    },
-                )
+                Some(if let Some(similar) = meant(token.value, state.consts()) {
+                    warn.suggest(
+                        Suggestion::from(token, format!("Did you mean `{}`?", similar))
+                            .replace_unsafe(similar.to_string()),
+                    )
+                } else {
+                    warn
+                })
             }
         } else {
             None
         }
     }
 
-    fn check_number(&self, _state: &ParseState<'_>, cmd: &Word<'_>, arg: &Word<'_>) -> Option<Warning> {
+    fn check_number(
+        &self,
+        _state: &ParseState<'_>,
+        cmd: &Word<'_>,
+        arg: &Word<'_>,
+    ) -> Option<Warning> {
         // This may be a valued (#const) constant,
         // or a number (12, -35),
         arg.value
@@ -101,10 +106,7 @@ impl ArgTypesLint {
         let arg = if let Some(arg) = arg {
             arg
         } else {
-            return Some(Warning::error(
-                atom.span(),
-                format!("Missing arguments to {}", cmd.value),
-            ));
+            return Some(atom.error(format!("Missing arguments to {}", cmd.value)));
         };
 
         fn unexpected_number_warning(arg: &Word<'_>) -> Option<Warning> {
@@ -157,6 +159,36 @@ impl Lint for ArgTypesLint {
                     warnings.push(warning);
                 }
             }
+
+            match cmd.value {
+                "base_elevation" if args.len() > 0 => {
+                    let arg = args[0];
+                    if let Ok(n) = arg.value.parse::<i32>() {
+                        if n < 1 || n > 7 {
+                            warnings.push(arg.warning("Elevation value out of range (1-7)"));
+                        }
+                    }
+                },
+                "land_position" => {
+                    if let Some(Ok(first)) = args.get(0).map(|f| f.value.parse::<i32>()) {
+                        if first < 0 || first > 100 {
+                            warnings.push(args[0].warning("Land position out of range (0-100)"));
+                        }
+                    }
+                    if let Some(Ok(second)) = args.get(1).map(|f| f.value.parse::<i32>()) {
+                        if second < 0 || second > 99 {
+                            warnings.push(args[1].warning("Land position out of range (0-99)"));
+                        }
+                    }
+                },
+                "zone" if args.len() > 0 => {
+                    if args[0].value == "99" {
+                        warnings.push(args[0].warning("`zone 99` crashes the game"));
+                    }
+                },
+                _ => (),
+            }
+
             warnings
         } else {
             Default::default()
@@ -164,7 +196,7 @@ impl Lint for ArgTypesLint {
     }
 }
 
-fn meant<'a>(actual: &str, possible: impl Iterator<Item = &'a String>) -> Option<&'a String> {
+fn meant<'a>(actual: &str, possible: impl Iterator<Item = &'a str>) -> Option<&'a str> {
     let mut lowest = 10000;
     let mut result = None;
 
@@ -209,7 +241,7 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
 mod tests {
     use super::*;
     use crate::{RMSCheck, Severity};
-    use codespan::{ColumnIndex, LineIndex};
+    use codespan::{ColumnIndex, LineIndex, Location};
     use std::path::PathBuf;
 
     #[test]
@@ -234,11 +266,13 @@ mod tests {
 
     #[test]
     fn arg_types() {
+        let filename = "./tests/rms/arg-types.rms";
         let result = RMSCheck::new()
             .with_lint(Box::new(ArgTypesLint::new()))
-            .add_file(PathBuf::from("./tests/rms/arg-types.rms"))
+            .add_file(PathBuf::from(filename))
             .unwrap()
             .check();
+        let file = result.file_id(filename).unwrap();
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
@@ -249,10 +283,10 @@ mod tests {
         assert_eq!(first.diagnostic().severity, Severity::Error);
         assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
         assert_eq!(first.message(), "Expected a const name, but got a number 0");
-        let first_span = first.diagnostic().labels[0].span;
+        let first_span = first.diagnostic().primary_label.span;
         assert_eq!(
-            result.resolve_position(first_span.start()).unwrap(),
-            (LineIndex(1), ColumnIndex(17))
+            result.resolve_position(file, first_span.start()).unwrap(),
+            Location::new(LineIndex(1), ColumnIndex(17))
         );
 
         assert_eq!(second.diagnostic().severity, Severity::Error);
@@ -261,10 +295,10 @@ mod tests {
             second.message(),
             "Expected a const name, but got a number 10"
         );
-        let second_span = second.diagnostic().labels[0].span;
+        let second_span = second.diagnostic().primary_label.span;
         assert_eq!(
-            result.resolve_position(second_span.start()).unwrap(),
-            (LineIndex(3), ColumnIndex(13))
+            result.resolve_position(file, second_span.start()).unwrap(),
+            Location::new(LineIndex(3), ColumnIndex(13))
         );
 
         assert_eq!(third.diagnostic().severity, Severity::Error);
@@ -273,19 +307,41 @@ mod tests {
             third.message(),
             "Expected a number argument to number_of_objects, but got SOMEVAL"
         );
-        let third_span = third.diagnostic().labels[0].span;
+        let third_span = third.diagnostic().primary_label.span;
         assert_eq!(
-            result.resolve_position(third_span.start()).unwrap(),
-            (LineIndex(7), ColumnIndex(18))
+            result.resolve_position(file, third_span.start()).unwrap(),
+            Location::new(LineIndex(7), ColumnIndex(18))
         );
 
         assert_eq!(fourth.diagnostic().severity, Severity::Error);
         assert_eq!(fourth.diagnostic().code, Some("arg-types".to_string()));
         assert_eq!(fourth.message(), "Missing arguments to create_object");
-        let fourth_span = fourth.diagnostic().labels[0].span;
+        let fourth_span = fourth.diagnostic().primary_label.span;
         assert_eq!(
-            result.resolve_position(fourth_span.start()).unwrap(),
-            (LineIndex(10), ColumnIndex(0))
+            result.resolve_position(file, fourth_span.start()).unwrap(),
+            Location::new(LineIndex(10), ColumnIndex(0))
+        );
+    }
+
+    #[test]
+    fn base_elevation() {
+        let filename = "base_elevation.rms";
+        let result = RMSCheck::new()
+            .with_lint(Box::new(ArgTypesLint::new()))
+            .add_source(filename, "create_land { base_elevation 8 }")
+            .check();
+        let file = result.file_id(filename).unwrap();
+
+        let mut warnings = result.iter();
+        let first = warnings.next().unwrap();
+        assert!(warnings.next().is_none());
+        assert_eq!(first.diagnostic().severity, Severity::Warning);
+        assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(first.message(), "Elevation value out of range (1-7)");
+        let first_span = first.diagnostic().primary_label.span;
+        assert_eq!(
+            result.resolve_position(file, first_span.start()).unwrap(),
+            Location::new(LineIndex(0), ColumnIndex(29))
         );
     }
 }

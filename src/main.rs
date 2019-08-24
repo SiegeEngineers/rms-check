@@ -9,9 +9,8 @@ mod cli_reporter;
 mod language_server;
 
 use check::{cli_check, cli_fix, CheckArgs};
-use failure::Fallible;
+use failure::{Fallible, bail};
 use language_server::cli_server;
-use quicli::prelude::*;
 use rms_check::Compatibility;
 use structopt::StructOpt;
 

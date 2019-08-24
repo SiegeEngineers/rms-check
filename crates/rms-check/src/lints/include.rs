@@ -20,8 +20,8 @@ impl Lint for IncludeLint {
             }
             Atom::Command(cmd, _) if cmd.value == "#include" => {
                 let suggestion = Suggestion::new(
-                    atom.span().start(),
-                    atom.span().end(),
+                    atom.file_id(),
+                    atom.span(),
                     "If you're trying to make a map pack, use a map pack generator instead.",
                 );
                 vec![atom
@@ -37,16 +37,18 @@ impl Lint for IncludeLint {
 mod tests {
     use super::IncludeLint;
     use crate::{RMSCheck, Severity};
-    use codespan::{ColumnIndex, LineIndex};
+    use codespan::Location;
     use std::path::PathBuf;
 
     #[test]
     fn include() {
+        let filename = "./tests/rms/include.rms";
         let result = RMSCheck::new()
             .with_lint(Box::new(IncludeLint::new()))
-            .add_file(PathBuf::from("./tests/rms/include.rms"))
+            .add_file(PathBuf::from(filename))
             .unwrap()
             .check();
+        let file = result.file_id(filename).unwrap();
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
@@ -58,14 +60,10 @@ mod tests {
             first.message(),
             "#include_drs can only be used by builtin maps"
         );
-        let first_span = first.diagnostic().labels[0].span;
+        let first_span = first.diagnostic().primary_label.span;
         assert_eq!(
-            result.resolve_position(first_span.start()).unwrap().0,
-            LineIndex(0)
-        );
-        assert_eq!(
-            result.resolve_position(first_span.start()).unwrap().1,
-            ColumnIndex(0)
+            result.resolve_position(file, first_span.start()).unwrap(),
+            Location::new(0, 0)
         );
         assert_eq!(second.diagnostic().severity, Severity::Error);
         assert_eq!(second.diagnostic().code, Some("include".to_string()));
@@ -73,14 +71,10 @@ mod tests {
             second.message(),
             "#include can only be used by builtin maps"
         );
-        let second_span = second.diagnostic().labels[0].span;
+        let second_span = second.diagnostic().primary_label.span;
         assert_eq!(
-            result.resolve_position(second_span.start()).unwrap().0,
-            LineIndex(2)
-        );
-        assert_eq!(
-            result.resolve_position(second_span.start()).unwrap().1,
-            ColumnIndex(0)
+            result.resolve_position(file, second_span.start()).unwrap(),
+            Location::new(2, 0)
         );
     }
 }

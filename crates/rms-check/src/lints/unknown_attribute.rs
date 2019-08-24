@@ -1,4 +1,4 @@
-use super::super::{Lint, ParseState, Warning, Word, TOKENS};
+use super::super::{Atom, Lint, ParseState, Warning};
 
 #[allow(unused)]
 pub struct UnknownAttributeLint {}
@@ -6,10 +6,17 @@ impl Lint for UnknownAttributeLint {
     fn name(&self) -> &'static str {
         "unknown-attribute"
     }
-    fn lint_token(&mut self, state: &mut ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
-        if state.current_token.is_none() && !TOKENS.contains_key(&token.value.to_lowercase()) {
-            return Some(token.error(format!("Unknown attribute `{}`", token.value)));
+    fn lint_atom(&mut self, _state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
+        match atom {
+            // Treat unrecognised tokens as attributes, if they are not numbers
+            Atom::Other(word) => {
+                if !word.value.chars().all(|c| c.is_ascii_digit()) {
+                    vec![word.error(format!("Unknown attribute `{}`", word.value))]
+                } else {
+                    Default::default()
+                }
+            }
+            _ => Default::default(),
         }
-        None
     }
 }
