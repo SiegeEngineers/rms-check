@@ -1,47 +1,74 @@
 mod en;
 
 use codespan::{ByteIndex, FileId, Files};
+use rms_check::{ArgType, TOKENS};
 use lsp_types::{
     Documentation, ParameterInformation, ParameterLabel, SignatureHelp, SignatureInformation,
 };
 use rms_check::{Atom, Parser};
 
 #[derive(Debug, Clone)]
-pub struct Signature {
-    pub name: &'static str,
-    pub args: &'static [&'static str],
-    pub short: &'static str,
-    pub long: Option<&'static str>,
+struct SignatureBuilder {
+    name: &'static str,
+    description: Option<String>,
+    args: Vec<ParameterInformation>,
 }
 
-fn get_signature(command_name: &str) -> Option<&Signature> {
+impl SignatureBuilder {
+    fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            description: None,
+            args: vec![],
+        }
+    }
+
+    fn description(&mut self, description: &str) -> &mut Self {
+        self.description = Some(description.to_string());
+        self
+    }
+
+    fn arg(&mut self, name: &str, documentation: &str) -> &mut Self {
+        let mut label = name.to_string();
+        if let Some(ty) = TOKENS.get(self.name) {
+            if let Some(arg) = ty.arg_type(self.args.len() as u8) {
+                label += &format!(":{}", match arg {
+                    ArgType::Word => "Word",
+                    ArgType::Number => "Number",
+                    ArgType::Token => "Token",
+                    ArgType::OptionalToken => "OptionalToken",
+                    ArgType::Filename => "Filename",
+                });
+            }
+        }
+
+        self.args.push(ParameterInformation {
+            label: ParameterLabel::Simple(label),
+            documentation: Some(Documentation::String(documentation.to_string())),
+        });
+        self
+    }
+
+    #[must_use]
+    fn build(self) -> SignatureInformation {
+        let mut label = self.name.to_string();
+        for arg in &self.args {
+            if let ParameterLabel::Simple(arg_name) = &arg.label {
+                label += &format!(" {}", arg_name);
+            } else {
+                unreachable!();
+            }
+        }
+        SignatureInformation {
+            label,
+            documentation: self.description.map(Documentation::String),
+            parameters: Some(self.args),
+        }
+    }
+}
+
+fn get_signature(command_name: &str) -> Option<&SignatureInformation> {
     en::SIGNATURES.get(command_name)
-}
-
-fn signature_to_lsp(sig: &Signature) -> SignatureInformation {
-    let mut label = sig.name.to_string();
-
-    for arg in sig.args {
-        label.push(' ');
-        label.push_str(arg);
-    }
-
-    SignatureInformation {
-        label,
-        documentation: Some(Documentation::String(match sig.long {
-            Some(long) => format!("{}\n{}", sig.short, long),
-            _ => sig.short.to_string(),
-        })),
-        parameters: sig
-            .args
-            .iter()
-            .map(|name| ParameterInformation {
-                label: ParameterLabel::Simple(name.to_string()),
-                documentation: None,
-            })
-            .map(Some)
-            .collect(),
-    }
 }
 
 pub fn find_signature_help(
@@ -59,7 +86,7 @@ pub fn find_signature_help(
                     .position(|word| word.start() <= position && word.end() >= position)
                     .map(|index| index as i64);
                 return get_signature(name.value).map(|sig| SignatureHelp {
-                    signatures: vec![signature_to_lsp(sig)],
+                    signatures: vec![sig.clone()],
                     active_signature: Some(0),
                     active_parameter,
                 });

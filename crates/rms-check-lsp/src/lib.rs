@@ -9,7 +9,6 @@
 #![warn(unused)]
 
 use codespan::{FileId, Files};
-use help::find_signature_help;
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use lsp_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,

@@ -55,10 +55,7 @@ impl TokenType {
     /// Get the number of arguments required by this token type.
     #[inline]
     pub fn arg_len(&self) -> u8 {
-        match self.arg_types.iter().position(Option::is_none) {
-            Some(index) => index as u8,
-            None => 4u8,
-        }
+        self.arg_types.iter().position(Option::is_none).unwrap_or(4) as u8
     }
 
     /// Get the context for this type, describing where it can appear.
