@@ -164,7 +164,7 @@ lazy_static! {
         m.insert(token!("<OBJECTS_GENERATION>", TokenContext::Section));
         m.insert(token!("<CONNECTION_GENERATION>", TokenContext::Section));
 
-        m.insert(token!("ai_info_map_type", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Token, Number, Number]));
+        m.insert(token!("ai_info_map_type", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Token, Number, Number, Number]));
         m.insert(token!("random_placement", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>"))));
         m.insert(token!("grouped_by_team", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>"))));
 
@@ -184,6 +184,7 @@ lazy_static! {
            TokenContext::Attribute(Some("create_terrain")),
         ]), [Token]));
         m.insert(token!("base_size", land_attribute_context, [Number]));
+        m.insert(token!("base_elevation", land_attribute_context, [Number]));
         m.insert(token!("left_border", land_attribute_context, [Number]));
         m.insert(token!("right_border", land_attribute_context, [Number]));
         m.insert(token!("top_border", land_attribute_context, [Number]));

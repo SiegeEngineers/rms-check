@@ -87,13 +87,13 @@ mod tests {
         let first = warnings.next().unwrap();
         let second = warnings.next().unwrap();
         let third = warnings.next().unwrap();
-        assert!(dbg!(warnings.next()).is_none());
+        assert!(warnings.next().is_none());
         assert_eq!(first.diagnostic().severity, Severity::Warning);
         assert_eq!(
             first.diagnostic().code,
             Some("comment-contents".to_string())
         );
-        assert_eq!(first.message(), "This close comment may be ignored because a previous command is expecting 2 more argument(s)");
+        assert_eq!(first.message(), "This close comment may be ignored because a previous command is expecting 3 more argument(s)");
         assert_eq!(second.diagnostic().severity, Severity::Warning);
         assert_eq!(
             second.diagnostic().code,
