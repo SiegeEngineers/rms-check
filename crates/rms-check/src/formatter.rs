@@ -5,8 +5,12 @@ use crate::{
 use codespan::Files;
 use std::iter::Peekable;
 
-#[derive(Default)]
+#[derive(Clone)]
 pub struct Formatter<'atom> {
+    /// The tab size.
+    tab_size: u32,
+    /// The tab size.
+    use_spaces: bool,
     /// The current indentation level.
     indent: u32,
     /// Whether this line still needs indentation. A line needs indentation if no text has been
@@ -22,6 +26,21 @@ pub struct Formatter<'atom> {
     prev: Option<Atom<'atom>>,
 }
 
+impl Default for Formatter<'_> {
+    fn default() -> Self {
+        Self {
+            tab_size: 2,
+            use_spaces: true,
+            indent: Default::default(),
+            needs_indent: Default::default(),
+            command_width: Default::default(),
+            inside_block: Default::default(),
+            result: Default::default(),
+            prev: Default::default(),
+        }
+    }
+}
+
 impl<'atom> Formatter<'atom> {
     /// Write a newline (Windows-style).
     fn newline(&mut self) {
@@ -32,8 +51,14 @@ impl<'atom> Formatter<'atom> {
     /// Indent the current line if it still needs it.
     fn maybe_indent(&mut self) {
         if self.needs_indent {
-            for _ in 0..self.indent {
-                self.result.push(' ');
+            if self.use_spaces {
+                for _ in 0..self.indent * self.tab_size {
+                    self.result.push(' ');
+                }
+            } else {
+                for _ in 0..self.indent {
+                    self.result.push('\t');
+                }
             }
             self.needs_indent = false;
         }
@@ -90,13 +115,13 @@ impl<'atom> Formatter<'atom> {
         let mut indent = 0;
         for atom in input.by_ref().take_while(|atom| !is_end(atom)) {
             longest = match &atom {
-                Command(cmd, _) => longest.max(cmd.value.len() + indent),
+                Command(cmd, _) => longest.max(cmd.value.len() + indent * self.tab_size as usize),
                 If(_, _) => {
-                    indent += 2;
+                    indent += 1;
                     longest
                 }
                 EndIf(_) => {
-                    indent -= 2;
+                    indent -= 1;
                     longest
                 }
                 _ => longest,
@@ -105,7 +130,7 @@ impl<'atom> Formatter<'atom> {
         }
         self.text("{");
         self.newline();
-        self.indent += 2;
+        self.indent += 1;
 
         let old = self.command_width;
         self.command_width = longest;
@@ -117,7 +142,7 @@ impl<'atom> Formatter<'atom> {
 
         self.inside_block -= 1;
 
-        self.indent -= 2;
+        self.indent -= 1;
         self.text("}");
         self.newline();
 
@@ -133,7 +158,7 @@ impl<'atom> Formatter<'atom> {
         self.text("if ");
         self.text(cond.value);
         self.newline();
-        self.indent += 2;
+        self.indent += 1;
 
         // reset command width so an if block within a command block
         // does not over-indent.
@@ -161,17 +186,17 @@ impl<'atom> Formatter<'atom> {
         while let Some(atom) = sub_input.next() {
             match atom {
                 Atom::ElseIf(_, cond) => {
-                    self.indent -= 2;
+                    self.indent -= 1;
                     self.text("elseif ");
                     self.text(cond.value);
                     self.newline();
-                    self.indent += 2;
+                    self.indent += 1;
                 }
                 Atom::Else(_) => {
-                    self.indent -= 2;
+                    self.indent -= 1;
                     self.text("else");
                     self.newline();
-                    self.indent += 2;
+                    self.indent += 1;
                 }
                 _ => {
                     sub_input = self.write_atom(atom, sub_input);
@@ -181,7 +206,7 @@ impl<'atom> Formatter<'atom> {
 
         self.command_width = old_command_width;
 
-        self.indent -= 2;
+        self.indent -= 1;
         self.text("endif");
         self.newline();
 
@@ -200,7 +225,7 @@ impl<'atom> Formatter<'atom> {
 
         self.text("start_random");
         self.newline();
-        self.indent += 2;
+        self.indent += 1;
 
         // reset command width so a start_random within a command block
         // does not over-indent.
@@ -271,7 +296,7 @@ impl<'atom> Formatter<'atom> {
 
         self.command_width = old_command_width;
 
-        self.indent -= 2;
+        self.indent -= 1;
         self.text("end_random");
         self.newline();
 
