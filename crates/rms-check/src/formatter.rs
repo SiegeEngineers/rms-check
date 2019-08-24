@@ -120,6 +120,22 @@ impl<'atom> Formatter<'atom> {
         self.newline();
     }
 
+    fn define(&mut self, name: &Word<'_>) {
+        self.text("#define ");
+        self.text(name.value);
+        self.newline();
+    }
+
+    fn const_(&mut self, name: &Word<'_>, value: &Option<Word<'_>>) {
+        self.text("#const ");
+        self.text(name.value);
+        self.text(" ");
+        if let Some(value) = value {
+            self.text(value.value);
+        }
+        self.newline();
+    }
+
     pub fn format(mut self, input: impl Iterator<Item = Atom<'atom>>) -> String {
         use Atom::*;
         let mut input = input.peekable();
@@ -131,6 +147,8 @@ impl<'atom> Formatter<'atom> {
 
             match &atom {
                 Section(name) => self.section(name),
+                Define(_, name) => self.define(name),
+                Const(_, name, value) => self.const_(name, value),
                 Command(name, args) => {
                     let is_block = if let Some(OpenBlock(_)) = input.peek() {
                         true
