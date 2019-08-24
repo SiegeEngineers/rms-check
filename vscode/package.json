@@ -1,6 +1,7 @@
 {
   "name": "rms-check-vscode",
-  "description": "A language server example",
+  "displayName": "rms-check",
+  "description": "Language server for linting and manipulating Age of Empires 2 Random Map Scripts.",
   "version": "0.0.0",
   "author": "Renée Kooi <renee@kooi.me>",
   "activationEvents": [
@@ -10,14 +11,8 @@
   "contributes": {
     "configuration": {
       "type": "object",
-      "title": "Example configuration",
+      "title": "rms-check",
       "properties": {
-        "rmsCheck.maxNumberOfProblems": {
-          "scope": "resource",
-          "type": "number",
-          "default": 100,
-          "description": "Controls the maximum number of problems produced by the server."
-        },
         "rmsCheck.trace.server": {
           "scope": "window",
           "type": "string",
@@ -41,6 +36,9 @@
     "vsce": "^1.66.0",
     "vscode": "^1.1.34"
   },
+  "extensionDependencies": [
+    "deltaidea.aoe2-rms"
+  ],
   "engines": {
     "vscode": "^1.23.0"
   },
