@@ -7,6 +7,7 @@ use lsp_types::{
 };
 use rms_check::{Atom, Parser};
 
+/// Helper struct to create SignatureInformation structures.
 #[derive(Debug, Clone)]
 struct SignatureBuilder {
     name: &'static str,
@@ -15,6 +16,7 @@ struct SignatureBuilder {
 }
 
 impl SignatureBuilder {
+    /// Create a new signature builder for the command with the given name.
     fn new(name: &'static str) -> Self {
         Self {
             name,
@@ -23,11 +25,13 @@ impl SignatureBuilder {
         }
     }
 
+    /// Set the description of this command.
     fn description(&mut self, description: &str) -> &mut Self {
         self.description = Some(description.to_string());
         self
     }
 
+    /// Add an argument to the command.
     fn arg(&mut self, name: &str, documentation: &str) -> &mut Self {
         let mut label = name.to_string();
         if let Some(ty) = TOKENS.get(self.name) {
@@ -49,6 +53,7 @@ impl SignatureBuilder {
         self
     }
 
+    /// Consume the builder and create a SignatureInformation instance.
     #[must_use]
     fn build(self) -> SignatureInformation {
         let mut label = self.name.to_string();
@@ -67,6 +72,7 @@ impl SignatureBuilder {
     }
 }
 
+/// Get the language server SignatureInformation for a given command name.
 fn get_signature(command_name: &str) -> Option<&SignatureInformation> {
     en::SIGNATURES.get(command_name)
 }
@@ -78,19 +84,24 @@ pub fn find_signature_help(
 ) -> Option<SignatureHelp> {
     let parser = Parser::new(file_id, files.source(file_id));
     for (atom, _) in parser {
-        if let Atom::Command(name, args) = &atom {
-            let span = atom.span();
-            if span.start() <= position && span.end() >= position {
-                let active_parameter = args
-                    .iter()
-                    .position(|word| word.start() <= position && word.end() >= position)
-                    .map(|index| index as i64);
-                return get_signature(name.value).map(|sig| SignatureHelp {
-                    signatures: vec![sig.clone()],
-                    active_signature: Some(0),
-                    active_parameter,
-                });
-            }
+        let (name, args) = match &atom {
+            // Turn args from a Vec<Word> into a Vec<&Word>
+            Atom::Command(name, args) => (name, args.iter().collect()),
+            Atom::Define(def, name) | Atom::Const(def, name, None) => (def, vec![name]),
+            Atom::Const(def, name, Some(value)) => (def, vec![name, value]),
+            _ => continue,
+        };
+        let span = atom.span();
+        if span.start() <= position && span.end() >= position {
+            let active_parameter = args
+                .iter()
+                .position(|word| word.start() <= position && word.end() >= position)
+                .map(|index| index as i64);
+            return get_signature(name.value).map(|sig| SignatureHelp {
+                signatures: vec![sig.clone()],
+                active_signature: Some(0),
+                active_parameter,
+            });
         }
     }
     None

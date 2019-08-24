@@ -3,16 +3,20 @@ use lazy_static::lazy_static;
 use lsp_types::SignatureInformation;
 use std::collections::HashMap;
 
+/// Helper to build a HashMap of signatures.
 #[derive(Default)]
 struct SignatureCollector {
     list: Vec<SignatureBuilder>,
 }
+
 impl SignatureCollector {
+    /// Add a new signature. Returns a signature builder.
     fn new(&mut self, name: &'static str) -> &mut SignatureBuilder {
         self.list.push(SignatureBuilder::new(name));
         self.list.last_mut().unwrap()
     }
 
+    /// Complete all signatures and collect them into a HashMap.
     fn collect(self) -> HashMap<&'static str, SignatureInformation> {
         self.list
             .into_iter()
@@ -25,6 +29,23 @@ lazy_static! {
     pub static ref SIGNATURES: HashMap<&'static str, SignatureInformation> = {
         let mut s = SignatureCollector::default();
 
+        // Global commands.
+        s.new("#define")
+            .description("Declare a token without a value, for use in `if TOKEN` statements.")
+            .arg("Name", "The name of the new token.");
+        s.new("#const")
+            .description("Declare a token with a numeric value.")
+            .arg("Name", "The name of the new token.")
+            .arg("Value", "The value of the new token.");
+        s.new("#undefine")
+            .description("Undeclare a token.")
+            .arg("Name", "The name of the token to delete.");
+        s.new("if")
+            .description("Start a conditional block.")
+            .arg("Condition", "Token name to check the existence of.");
+        s.new("elseif")
+            .description("Start a conditional block.")
+            .arg("Condition", "Token name to check the existence of.");
         s.new("random_placement")
             .description("Players are positioned in a circle/oval around the map.");
 
