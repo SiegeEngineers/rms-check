@@ -1,5 +1,6 @@
 const path = require('path')
-const { window, workspace } = require('vscode')
+const zip = require('./store-zip')
+const { commands, window, workspace } = require('vscode')
 const { LanguageClient, TransportKind } = require('vscode-languageclient')
 
 let client = null
@@ -44,6 +45,37 @@ function getNativeServerOptions () {
   }
 }
 
+const openedZrMaps = new Map()
+
+async function editZrMap (uri) {
+  window.showInformationMessage(uri.fsPath)
+  const file = uri.fsPath
+
+  const panel = window.createWebviewPanel('rms-check.zr-map', path.basename(file), -1, {
+    enableFindWidget: true,
+    enableCommandUris: true,
+    enableScripts: true
+  })
+
+  const bytes = await workspace.fs.readFile(uri)
+  const files = zip.read(bytes)
+  openedZrMaps.set(uri.toString(), files)
+
+  const mainFile = files.find((f) => /\.rms$/.test(f.header.name))
+  if (mainFile) {
+    workspace.openTextDocument(uri.with({ fragment: mainFile.header.name, scheme: 'aoe2-rms-zr' }))
+  }
+
+  panel.webview.html = `
+    <!DOCTYPE html>
+    <body>
+      <ul>
+        ${files.map(f => `<li>${f.header.name}</li>`).join('')}
+      </ul>
+    </body>
+  `
+}
+
 exports.activate = function activate (context) {
   const serverOptions = useWasm ? getWasmServerOptions() : getNativeServerOptions()
   const clientOptions = {
@@ -52,6 +84,27 @@ exports.activate = function activate (context) {
 
   client = new LanguageClient('rmsCheck', 'rms-check', serverOptions, clientOptions)
   client.start()
+
+  context.subscriptions.push(commands.registerCommand('rms-check.edit-zr-map', editZrMap))
+  context.subscriptions.push(workspace.registerTextDocumentContentProvider('aoe2-rms-zr', {
+    provideTextDocumentContent (uri, cancelToken) {
+      const zrUri = uri.with({
+        fragment: null,
+        scheme: 'file'
+      })
+      const zr = openedZrMaps.get(zrUri.toString())
+      if (!zr) {
+        throw new Error('ZR@ map was not opened.')
+      }
+
+      const file = zr.find((f) => f.header.name == uri.fragment)
+      if (!file) {
+        throw new Error('ZR@ map does not contain a .rms file.')
+      }
+
+      return String.fromCharCode(...file.data)
+    }
+  }))
 }
 
 exports.deactivate = function deactivate () {

@@ -5,7 +5,9 @@
   "version": "0.0.0",
   "author": "Renée Kooi <renee@kooi.me>",
   "activationEvents": [
-    "onLanguage:aoe2-rms"
+    "onLanguage:aoe2-rms",
+    "onCommand:rms-check.edit-zr-map",
+    "onWebviewPanel:rms-check.zr-map"
   ],
   "categories": [],
   "contributes": {
@@ -55,6 +57,29 @@
           "description": "Optionally use the native Rust language server"
         }
       }
+    },
+    "commands": [
+      {
+        "command": "rms-check.edit-zr-map",
+        "category": "rms-check",
+        "title": "Edit ZR@ map"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "when": "resourceLangId == aoe2-rms",
+          "command": "rms-check.edit-zr-map",
+          "group": "7_modification"
+        }
+      ],
+      "editor/title": [
+        {
+          "when": "resourceLangId == aoe2-rms",
+          "command": "rms-check.edit-zr-map",
+          "group": "7_modification"
+        }
+      ]
     }
   },
   "dependencies": {
