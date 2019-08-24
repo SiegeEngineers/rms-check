@@ -1,3 +1,9 @@
+.vscode
+.gitignore
+.npmignore
 node_modules
 client
 !client/bundle.js
+server/pkg/.gitignore
+server/pkg/**.ts
+server/src

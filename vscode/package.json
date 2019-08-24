@@ -51,7 +51,7 @@
     "rms"
   ],
   "license": "MIT",
-  "main": "./client/extension",
+  "main": "./client/bundle",
   "publisher": "goto-bus-stop",
   "repository": {
     "type": "git",
