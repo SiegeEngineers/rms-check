@@ -33,6 +33,7 @@
     "which": "^1.3.1"
   },
   "devDependencies": {
+    "browserify": "^16.5.0",
     "vsce": "^1.66.0",
     "vscode": "^1.1.34"
   },
@@ -58,7 +59,9 @@
     "directory": "vscode"
   },
   "scripts": {
-    "prepare": "cd .. && wasm-pack build vscode/server --release --target nodejs",
+    "build-client": "browserify --node -x vscode client/extension.js -o client/bundle.js",
+    "build-server": "cd .. && wasm-pack build vscode/server --release --target nodejs",
+    "prepare": "npm run build-server && npm run build-client",
     "package": "npm run prepare && vsce package"
   }
 }
