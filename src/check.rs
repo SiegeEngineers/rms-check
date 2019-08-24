@@ -1,10 +1,9 @@
 use crate::cli_reporter::report as cli_report;
-use failure::Fallible;
+use failure::{Fallible, bail};
 use multisplice::Multisplice;
-use quicli::prelude::*;
 use rms_check::{AutoFixReplacement, Compatibility, RMSCheck};
 use std::{
-    fs::{remove_file, File},
+    fs::{write, remove_file, File},
     io::Read,
     path::PathBuf,
 };
@@ -100,7 +99,7 @@ pub fn cli_fix(args: CheckArgs) -> Fallible<()> {
 
     if args.dry_run {
         let temp = format!("{}.tmp", args.file.to_string_lossy());
-        write_to_file(&temp, &splicer.to_string())?;
+        write(&temp, &splicer.to_string())?;
         let result = cli_check(CheckArgs {
             file: temp.clone().into(),
             ..args
@@ -109,8 +108,8 @@ pub fn cli_fix(args: CheckArgs) -> Fallible<()> {
         result
     } else {
         let backup = format!("{}.bak", args.file.to_string_lossy());
-        write_to_file(&backup, &source)?;
-        write_to_file(&args.file, &splicer.to_string())?;
+        write(&backup, source.as_ref())?;
+        write(&args.file, &splicer.to_string())?;
         remove_file(&backup)?;
         cli_check(args)
     }
