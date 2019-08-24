@@ -159,6 +159,36 @@ impl Lint for ArgTypesLint {
                     warnings.push(warning);
                 }
             }
+
+            match cmd.value {
+                "base_elevation" if args.len() > 0 => {
+                    let arg = args[0];
+                    if let Ok(n) = arg.value.parse::<i32>() {
+                        if n < 1 || n > 7 {
+                            warnings.push(arg.warning("Elevation value out of range (1-7)"));
+                        }
+                    }
+                },
+                "land_position" => {
+                    if let Some(Ok(first)) = args.get(0).map(|f| f.value.parse::<i32>()) {
+                        if first < 0 || first > 100 {
+                            warnings.push(args[0].warning("Land position out of range (0-100)"));
+                        }
+                    }
+                    if let Some(Ok(second)) = args.get(1).map(|f| f.value.parse::<i32>()) {
+                        if second < 0 || second > 99 {
+                            warnings.push(args[1].warning("Land position out of range (0-99)"));
+                        }
+                    }
+                },
+                "zone" if args.len() > 0 => {
+                    if args[0].value == "99" {
+                        warnings.push(args[0].warning("`zone 99` crashes the game"));
+                    }
+                },
+                _ => (),
+            }
+
             warnings
         } else {
             Default::default()
@@ -290,6 +320,28 @@ mod tests {
         assert_eq!(
             result.resolve_position(file, fourth_span.start()).unwrap(),
             Location::new(LineIndex(10), ColumnIndex(0))
+        );
+    }
+
+    #[test]
+    fn base_elevation() {
+        let filename = "base_elevation.rms";
+        let result = RMSCheck::new()
+            .with_lint(Box::new(ArgTypesLint::new()))
+            .add_source(filename, "create_land { base_elevation 8 }")
+            .check();
+        let file = result.file_id(filename).unwrap();
+
+        let mut warnings = result.iter();
+        let first = warnings.next().unwrap();
+        assert!(warnings.next().is_none());
+        assert_eq!(first.diagnostic().severity, Severity::Warning);
+        assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(first.message(), "Elevation value out of range (1-7)");
+        let first_span = first.diagnostic().primary_label.span;
+        assert_eq!(
+            result.resolve_position(file, first_span.start()).unwrap(),
+            Location::new(LineIndex(0), ColumnIndex(29))
         );
     }
 }
