@@ -14,6 +14,8 @@ pub struct Formatter<'atom> {
     needs_indent: bool,
     /// Width of commands.
     command_width: usize,
+    /// Whether we are inside a command block.
+    inside_block: usize,
     /// The formatted text.
     result: String,
     /// The last-written atom.
@@ -81,6 +83,8 @@ impl<'atom> Formatter<'atom> {
             _ => false,
         };
 
+        self.inside_block += 1;
+
         let mut commands = vec![];
         let mut longest = 0;
         let mut indent = 0;
@@ -90,11 +94,11 @@ impl<'atom> Formatter<'atom> {
                 If(_, _) => {
                     indent += 2;
                     longest
-                },
+                }
                 EndIf(_) => {
                     indent -= 2;
                     longest
-                },
+                }
                 _ => longest,
             };
             commands.push(atom);
@@ -111,9 +115,80 @@ impl<'atom> Formatter<'atom> {
         }
         self.command_width = old;
 
+        self.inside_block -= 1;
+
         self.indent -= 2;
         self.text("}");
         self.newline();
+
+        input
+    }
+
+    fn condition<I>(&mut self, cond: &Word<'_>, mut input: Peekable<I>) -> Peekable<I>
+    where
+        I: Iterator<Item = Atom<'atom>>,
+    {
+        use Atom::*;
+
+        self.text("if ");
+        self.text(cond.value);
+        self.newline();
+        self.indent += 2;
+
+        // reset command width so an if block within a command block
+        // does not over-indent.
+        let old_command_width = self.command_width;
+        self.command_width = 0;
+
+        let mut depth = 1;
+        let content: Vec<Atom<'atom>> = input
+            .by_ref()
+            .take_while(|atom| {
+                match atom {
+                    If(_, _) => depth += 1,
+                    EndIf(_) => depth -= 1,
+                    _ => (),
+                }
+
+                match atom {
+                    EndIf(_) if depth == 0 => false,
+                    _ => true,
+                }
+            })
+            .collect();
+
+        let mut sub_input = content.into_iter().peekable();
+        while let Some(atom) = sub_input.next() {
+            match atom {
+                Atom::ElseIf(_, cond) => {
+                    self.indent -= 2;
+                    self.text("elseif ");
+                    self.text(cond.value);
+                    self.newline();
+                    self.indent += 2;
+                }
+                Atom::Else(_) => {
+                    self.indent -= 2;
+                    self.text("else");
+                    self.newline();
+                    self.indent += 2;
+                }
+                _ => {
+                    sub_input = self.write_atom(atom, sub_input);
+                }
+            }
+        }
+
+        self.command_width = old_command_width;
+
+        self.indent -= 2;
+        self.text("endif");
+        self.newline();
+
+        if self.inside_block == 0 {
+            self.newline();
+        }
+
         input
     }
 
@@ -140,16 +215,16 @@ impl<'atom> Formatter<'atom> {
                 PercentChance(_, arg) if depth == 1 => {
                     branches.push((arg.clone(), vec![]));
                     continue;
-                },
+                }
                 StartRandom(_) => {
                     depth += 1;
-                },
+                }
                 EndRandom(_) => {
                     depth -= 1;
                     if depth == 0 {
                         break;
                     }
-                },
+                }
                 _ => (),
             };
 
@@ -217,12 +292,19 @@ impl<'atom> Formatter<'atom> {
             self.newline();
             self.text(" * ");
             if line.trim().starts_with("* ") {
-                self.text(&line.chars().skip_while(|&c| char::is_whitespace(c)).collect::<String>());
+                self.text(
+                    &line
+                        .chars()
+                        .skip_while(|&c| char::is_whitespace(c))
+                        .collect::<String>(),
+                );
             } else {
                 self.text(line);
             }
         }
-        if is_multiline { self.newline(); }
+        if is_multiline {
+            self.newline();
+        }
         self.text(" */");
         self.newline();
     }
@@ -250,6 +332,11 @@ impl<'atom> Formatter<'atom> {
         I: Iterator<Item = Atom<'atom>>,
     {
         use Atom::*;
+
+        if let Some(CloseBlock(_)) = self.prev {
+            self.newline();
+        }
+
         match &atom {
             Section(name) => self.section(name),
             Define(_, name) => self.define(name),
@@ -264,6 +351,9 @@ impl<'atom> Formatter<'atom> {
             }
             OpenBlock(_) => {
                 input = self.block(input);
+            }
+            If(_, cond) => {
+                input = self.condition(cond, input);
             }
             StartRandom(_) => {
                 input = self.random(input);
@@ -285,6 +375,7 @@ impl<'atom> Formatter<'atom> {
     }
 }
 
+/// Format an rms source string.
 pub fn format(source: &str) -> String {
     let mut files = Files::new();
     let f = files.add("format.rms", source);
