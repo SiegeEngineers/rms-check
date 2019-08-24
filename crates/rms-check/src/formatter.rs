@@ -7,17 +7,25 @@ use std::iter::Peekable;
 
 #[derive(Default)]
 pub struct Formatter<'atom> {
+    /// The current indentation level.
     indent: u32,
+    /// Whether this line still needs indentation. A line needs indentation if no text has been
+    /// written to it yet.
     needs_indent: bool,
+    /// The formatted text.
     result: String,
+    /// The last-written atom.
     prev: Option<Atom<'atom>>,
 }
 
 impl<'atom> Formatter<'atom> {
+    /// Write a newline (Windows-style).
     fn newline(&mut self) {
         self.result.push_str("\r\n");
         self.needs_indent = true;
     }
+
+    /// Indent the current line if it still needs it.
     fn maybe_indent(&mut self) {
         if self.needs_indent {
             for _ in 0..self.indent {
@@ -26,11 +34,14 @@ impl<'atom> Formatter<'atom> {
             self.needs_indent = false;
         }
     }
+
+    /// Write some text to the current line.
     fn text(&mut self, text: &str) {
         self.maybe_indent();
         self.result.push_str(text);
     }
 
+    /// Write a command.
     fn command<'w>(&mut self, name: &Word<'w>, args: &[Word<'w>], is_block: bool) {
         self.text(name.value);
         for arg in args {
@@ -44,6 +55,7 @@ impl<'atom> Formatter<'atom> {
         }
     }
 
+    /// Write a section header.
     fn section<'w>(&mut self, name: &Word<'w>) {
         if let Some(_) = self.prev {
             self.newline();
@@ -52,6 +64,8 @@ impl<'atom> Formatter<'atom> {
         self.newline();
     }
 
+    /// Write a command block. This reads atoms from the iterator until the end of the block, and
+    /// writes both the command and any attributes it may contain.
     fn block<I>(&mut self, mut input: Peekable<I>) -> Peekable<I>
     where
         I: Iterator<Item = Atom<'atom>>,
@@ -98,6 +112,8 @@ impl<'atom> Formatter<'atom> {
         input
     }
 
+    /// Write a comment. Multiline comments are formatted Java-style, with a * at the start of each
+    /// line.
     fn comment(&mut self, content: &str) {
         self.text("/* ");
         let mut lines = content.lines();
@@ -120,12 +136,14 @@ impl<'atom> Formatter<'atom> {
         self.newline();
     }
 
+    /// Write a #define statement.
     fn define(&mut self, name: &Word<'_>) {
         self.text("#define ");
         self.text(name.value);
         self.newline();
     }
 
+    /// Write a #const statement.
     fn const_(&mut self, name: &Word<'_>, value: &Option<Word<'_>>) {
         self.text("#const ");
         self.text(name.value);
@@ -136,15 +154,11 @@ impl<'atom> Formatter<'atom> {
         self.newline();
     }
 
+    /// Format a script. Takes an iterator over atoms.
     pub fn format(mut self, input: impl Iterator<Item = Atom<'atom>>) -> String {
         use Atom::*;
         let mut input = input.peekable();
-        loop {
-            let atom = match input.next() {
-                Some(atom) => atom,
-                _ => break,
-            };
-
+        while let Some(atom) = input.next() {
             match &atom {
                 Section(name) => self.section(name),
                 Define(_, name) => self.define(name),
