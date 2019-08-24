@@ -2,7 +2,7 @@ use crate::{
     parser::{Atom, Parser},
     wordize::Word,
 };
-use codespan::{FileMap, FileName};
+use codespan::Files;
 use std::iter::Peekable;
 
 #[derive(Default)]
@@ -154,9 +154,10 @@ impl<'atom> Formatter<'atom> {
 }
 
 pub fn format(source: &str) -> String {
-    let f = FileMap::new(FileName::virtual_("format.rms"), source);
-    let parser = Parser::new(&f);
-    Formatter::default().format(parser.map(|(a, _)| a))
+    let mut files = Files::new();
+    let f = files.add("format.rms", source);
+    let parser = Parser::new(f, files.source(f));
+    Formatter::default().format(parser.map(|(atom, _)| atom))
 }
 
 #[cfg(test)]
