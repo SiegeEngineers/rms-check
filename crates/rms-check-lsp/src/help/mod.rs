@@ -1,10 +1,10 @@
 mod en;
 
 use codespan::{ByteIndex, FileId, Files};
-use rms_check::{ArgType, TOKENS};
 use lsp_types::{
     Documentation, ParameterInformation, ParameterLabel, SignatureHelp, SignatureInformation,
 };
+use rms_check::{ArgType, TOKENS};
 use rms_check::{Atom, Parser};
 
 /// Helper struct to create SignatureInformation structures.
@@ -36,13 +36,16 @@ impl SignatureBuilder {
         let mut label = name.to_string();
         if let Some(ty) = TOKENS.get(self.name) {
             if let Some(arg) = ty.arg_type(self.args.len() as u8) {
-                label += &format!(":{}", match arg {
-                    ArgType::Word => "Word",
-                    ArgType::Number => "Number",
-                    ArgType::Token => "Token",
-                    ArgType::OptionalToken => "OptionalToken",
-                    ArgType::Filename => "Filename",
-                });
+                label += &format!(
+                    ":{}",
+                    match arg {
+                        ArgType::Word => "Word",
+                        ArgType::Number => "Number",
+                        ArgType::Token => "Token",
+                        ArgType::OptionalToken => "OptionalToken",
+                        ArgType::Filename => "Filename",
+                    }
+                );
             }
         }
 

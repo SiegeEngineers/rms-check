@@ -8,16 +8,17 @@
 #![warn(missing_docs)]
 #![warn(unused)]
 
-use codespan::{FileId, Files};
+use codespan::{ByteIndex, ByteOffset, FileId, Files};
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use lsp_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
     FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams,
-    InitializeResult, NumberOrString, PublishDiagnosticsParams, ServerCapabilities,
+    InitializeResult, NumberOrString, Position, PublishDiagnosticsParams, ServerCapabilities,
     SignatureHelpOptions, TextDocumentItem, TextDocumentPositionParams, TextDocumentSyncCapability,
     TextDocumentSyncKind, TextEdit, Url, WorkspaceEdit,
 };
+use multisplice::Multisplice;
 use rms_check::{AutoFixReplacement, Compatibility, RMSCheck, RMSCheckResult, Warning};
 use serde_json::{self, json};
 use std::{
@@ -76,8 +77,9 @@ where
     fn initialize(&mut self, _params: InitializeParams) -> RpcResult {
         let mut capabilities = ServerCapabilities::default();
         capabilities.code_action_provider = Some(CodeActionProviderCapability::Simple(true));
-        capabilities.text_document_sync =
-            Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::Full));
+        capabilities.text_document_sync = Some(TextDocumentSyncCapability::Kind(
+            TextDocumentSyncKind::Incremental,
+        ));
         capabilities.folding_range_provider = Some(FoldingRangeProviderCapability::Simple(true));
         capabilities.signature_help_provider = Some(SignatureHelpOptions {
             trigger_characters: Some(vec![" ".to_string(), "\t".to_string()]),
@@ -95,12 +97,47 @@ where
     }
 
     /// A document changed, re-lint.
-    fn changed(&mut self, mut params: DidChangeTextDocumentParams) {
+    fn changed(&mut self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri.clone();
+
+        struct Lines {
+            indices: Vec<ByteIndex>,
+        }
+        impl Lines {
+            fn new(source: &str) -> Self {
+                Lines {
+                    indices: std::iter::once(ByteIndex::from(0))
+                        .chain(source.chars().enumerate().filter_map(|(index, c)| {
+                            if c == '\n' {
+                                Some(ByteIndex::from(index as u32 + 1))
+                            } else {
+                                None
+                            }
+                        }))
+                        .collect(),
+                }
+            }
+
+            fn map(&self, loc: &Position) -> ByteIndex {
+                self.indices[loc.line as usize] + ByteOffset(loc.character as i64)
+            }
+        }
 
         match self.documents.get_mut(&params.text_document.uri) {
             Some(doc) => {
-                doc.text = params.content_changes.remove(0).text;
+                let lines = Lines::new(&doc.text);
+                let mut splicer = Multisplice::new(&doc.text);
+                for change in &params.content_changes {
+                    let (start, end) = change
+                        .range
+                        .map(|r| (lines.map(&r.start), lines.map(&r.end)))
+                        .unwrap_or((
+                            ByteIndex::from(0),
+                            ByteIndex::from(doc.text.as_bytes().len() as u32),
+                        ));
+                    splicer.splice(start.to_usize(), end.to_usize(), &change.text);
+                }
+                doc.text = splicer.to_string();
                 self.check_and_publish(uri);
             }
             _ => (),
