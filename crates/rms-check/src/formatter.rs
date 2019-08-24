@@ -12,6 +12,8 @@ pub struct Formatter<'atom> {
     /// Whether this line still needs indentation. A line needs indentation if no text has been
     /// written to it yet.
     needs_indent: bool,
+    /// Width of commands.
+    command_width: usize,
     /// The formatted text.
     result: String,
     /// The last-written atom.
@@ -44,6 +46,9 @@ impl<'atom> Formatter<'atom> {
     /// Write a command.
     fn command<'w>(&mut self, name: &Word<'w>, args: &[Word<'w>], is_block: bool) {
         self.text(name.value);
+        for _ in 0..self.command_width.saturating_sub(name.value.len()) {
+            self.result.push(' ');
+        }
         for arg in args {
             self.result.push(' ');
             self.text(arg.value);
@@ -78,9 +83,18 @@ impl<'atom> Formatter<'atom> {
 
         let mut commands = vec![];
         let mut longest = 0;
+        let mut indent = 0;
         for atom in input.by_ref().take_while(|atom| !is_end(atom)) {
             longest = match &atom {
-                Command(cmd, _) => longest.max(cmd.value.len()),
+                Command(cmd, _) => longest.max(cmd.value.len() + indent),
+                If(_, _) => {
+                    indent += 2;
+                    longest
+                },
+                EndIf(_) => {
+                    indent -= 2;
+                    longest
+                },
                 _ => longest,
             };
             commands.push(atom);
@@ -88,27 +102,104 @@ impl<'atom> Formatter<'atom> {
         self.text("{");
         self.newline();
         self.indent += 2;
-        for atom in commands {
-            match atom {
-                Command(name, args) => {
-                    self.text(name.value);
-                    if !args.is_empty() {
-                        for _ in 0..(longest - name.value.len()) {
-                            self.result.push(' ');
-                        }
-                        for arg in args {
-                            self.result.push(' ');
-                            self.text(arg.value);
-                        }
-                    }
-                    self.newline();
-                }
-                _ => (),
-            }
+
+        let old = self.command_width;
+        self.command_width = longest;
+        let mut sub_input = commands.into_iter().peekable();
+        while let Some(atom) = sub_input.next() {
+            sub_input = self.write_atom(atom, sub_input);
         }
+        self.command_width = old;
+
         self.indent -= 2;
         self.text("}");
         self.newline();
+        input
+    }
+
+    fn random<I>(&mut self, mut input: Peekable<I>) -> Peekable<I>
+    where
+        I: Iterator<Item = Atom<'atom>>,
+    {
+        use Atom::*;
+
+        self.text("start_random");
+        self.newline();
+        self.indent += 2;
+
+        // reset command width so a start_random within a command block
+        // does not over-indent.
+        let old_command_width = self.command_width;
+        self.command_width = 0;
+
+        let mut null_branch = vec![];
+        let mut branches = vec![];
+        let mut depth = 1;
+        for atom in input.by_ref() {
+            match &atom {
+                PercentChance(_, arg) if depth == 1 => {
+                    branches.push((arg.clone(), vec![]));
+                    continue;
+                },
+                StartRandom(_) => {
+                    depth += 1;
+                },
+                EndRandom(_) => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                },
+                _ => (),
+            };
+
+            if branches.len() > 0 {
+                branches.last_mut().unwrap().1.push(atom);
+            } else {
+                null_branch.push(atom);
+            }
+        }
+
+        let has_simple_branches = branches.iter().all(|(_, stmts)| {
+            if stmts.len() > 1 {
+                return false;
+            }
+            if stmts.len() == 0 {
+                return true;
+            }
+            match stmts[0] {
+                Define(_, _) => true,
+                Const(_, _, _) => true,
+                // Include(_, _) => true,
+                // IncludeDrs(_, _) => true,
+                Command(_, _) => true,
+                _ => false,
+            }
+        });
+
+        if has_simple_branches {
+            let longest = branches.iter().fold(0, |acc, (chance, _)| {
+                acc.max(format!("percent_chance {}", chance.value).len())
+            });
+            for (chance, mut branch) in branches {
+                let mut chance = format!("percent_chance {}", chance.value);
+                while chance.len() < longest {
+                    chance.push(' ');
+                }
+                self.text(&chance);
+                if branch.len() > 0 {
+                    self.text(" ");
+                    input = self.write_atom(branch.remove(0), input);
+                }
+            }
+        }
+
+        self.command_width = old_command_width;
+
+        self.indent -= 2;
+        self.text("end_random");
+        self.newline();
+
         input
     }
 
@@ -154,33 +245,42 @@ impl<'atom> Formatter<'atom> {
         self.newline();
     }
 
+    fn write_atom<I>(&mut self, atom: Atom<'atom>, mut input: Peekable<I>) -> Peekable<I>
+    where
+        I: Iterator<Item = Atom<'atom>>,
+    {
+        use Atom::*;
+        match &atom {
+            Section(name) => self.section(name),
+            Define(_, name) => self.define(name),
+            Const(_, name, value) => self.const_(name, value),
+            Command(name, args) => {
+                let is_block = if let Some(OpenBlock(_)) = input.peek() {
+                    true
+                } else {
+                    false
+                };
+                self.command(name, args, is_block);
+            }
+            OpenBlock(_) => {
+                input = self.block(input);
+            }
+            StartRandom(_) => {
+                input = self.random(input);
+            }
+            Comment(_, content, _) => self.comment(content),
+            _ => (),
+        }
+        self.prev = Some(atom);
+        input
+    }
+
     /// Format a script. Takes an iterator over atoms.
     pub fn format(mut self, input: impl Iterator<Item = Atom<'atom>>) -> String {
-        use Atom::*;
         let mut input = input.peekable();
         while let Some(atom) = input.next() {
-            match &atom {
-                Section(name) => self.section(name),
-                Define(_, name) => self.define(name),
-                Const(_, name, value) => self.const_(name, value),
-                Command(name, args) => {
-                    let is_block = if let Some(OpenBlock(_)) = input.peek() {
-                        true
-                    } else {
-                        false
-                    };
-                    self.command(name, args, is_block);
-                }
-                OpenBlock(_) => {
-                    input = self.block(input);
-                }
-                Comment(_, content, _) => self.comment(content),
-                _ => (),
-            }
-
-            self.prev = Some(atom);
+            input = self.write_atom(atom, input);
         }
-
         self.result
     }
 }
