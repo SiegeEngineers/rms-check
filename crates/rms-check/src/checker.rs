@@ -320,13 +320,13 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
 }
 
 #[derive(Debug, Clone)]
-pub enum Nesting {
-    If(Span),
-    ElseIf(Span),
-    Else(Span),
-    StartRandom(Span),
-    PercentChance(Span),
-    Brace(Span),
+pub enum Nesting<'a> {
+    If(Atom<'a>),
+    ElseIf(Atom<'a>),
+    Else(Atom<'a>),
+    StartRandom(Atom<'a>),
+    PercentChance(Atom<'a>),
+    Brace(Atom<'a>),
 }
 
 pub trait Lint {
@@ -353,7 +353,7 @@ pub struct ParseState<'a> {
     /// Whether we're currently inside a comment.
     pub is_comment: bool,
     /// The amount of nested statements we entered, like `if`, `start_random`.
-    pub nesting: Vec<Nesting>,
+    pub nesting: Vec<Nesting<'a>>,
     /// The token type that we are currently reading arguments for.
     pub current_token: Option<&'static TokenType>,
     /// The amount of arguments we've read.
@@ -599,6 +599,119 @@ impl<'a> Checker<'a> {
             self.state.current_section = Some(atom.clone());
         }
 
+        fn unbalanced_error(name: &str, end: &Atom<'_>, nest: Option<&Nesting<'_>>) -> Warning {
+            let msg = format!("Unbalanced `{}`", name);
+            match nest {
+                Some(Nesting::Brace(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this open brace `{`")
+                }
+                Some(Nesting::If(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `if`")
+                }
+                Some(Nesting::ElseIf(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `elseif`")
+                }
+                Some(Nesting::Else(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `else`")
+                }
+                Some(Nesting::StartRandom(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `start_random`")
+                }
+                Some(Nesting::PercentChance(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `percent_chance`")
+                }
+                None => end.error(format!("{}–nothing is open", msg)),
+            }
+        }
+
+        use Atom::*;
+        match atom {
+            OpenBlock(_) => {
+                self.state.nesting.push(Nesting::Brace(atom.clone()));
+            }
+            CloseBlock(_) => match self.state.nesting.last() {
+                Some(Nesting::Brace(_)) => {
+                    self.state.nesting.pop();
+                }
+                nest => {
+                    warnings.push(unbalanced_error("}", atom, nest));
+                }
+            },
+            If(_, _) => self.state.nesting.push(Nesting::If(atom.clone())),
+            ElseIf(_, _) => {
+                match self.state.nesting.last() {
+                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
+                        self.state.nesting.pop();
+                    }
+                    nest => {
+                        warnings.push(unbalanced_error("elseif", atom, nest));
+                    }
+                }
+                self.state.nesting.push(Nesting::ElseIf(atom.clone()));
+            }
+            Else(_) => {
+                match self.state.nesting.last() {
+                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
+                        self.state.nesting.pop();
+                    }
+                    nest => {
+                        warnings.push(unbalanced_error("else", atom, nest));
+                    }
+                }
+                self.state.nesting.push(Nesting::Else(atom.clone()));
+            }
+            EndIf(_) => match self.state.nesting.last() {
+                Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
+                    self.state.nesting.pop();
+                }
+                nest => {
+                    warnings.push(unbalanced_error("endif", atom, nest));
+                }
+            },
+            StartRandom(_) => self.state.nesting.push(Nesting::StartRandom(atom.clone())),
+            PercentChance(_, _) => {
+                if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
+                    self.state.nesting.pop();
+                }
+
+                match self.state.nesting.last() {
+                    Some(Nesting::StartRandom(_)) => {}
+                    nest => {
+                        warnings.push(unbalanced_error("percent_chance", atom, nest));
+                    }
+                }
+
+                self.state.nesting.push(Nesting::PercentChance(atom.clone()));
+            }
+            EndRandom(_) => {
+                if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
+                    self.state.nesting.pop();
+                };
+
+                match self.state.nesting.last() {
+                    Some(Nesting::StartRandom(_)) => {
+                        self.state.nesting.pop();
+                    }
+                    nest => {
+                        warnings.push(unbalanced_error("end_random", atom, nest));
+                    }
+                }
+            }
+            _ => (),
+        }
+
         warnings
     }
 
@@ -698,117 +811,6 @@ impl<'a> Checker<'a> {
         // Before UP1.5 a parser bug could cause things inside comments to be parsed
         if self.state.is_comment {
             return parse_error.or(lint_warning);
-        }
-
-        fn unbalanced_error(name: &str, token: &Word<'_>, nest: Option<&Nesting>) -> Warning {
-            let msg = format!("Unbalanced `{}`", name);
-            match nest {
-                Some(Nesting::Brace(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this open brace `{`")
-                }
-                Some(Nesting::If(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this `if`")
-                }
-                Some(Nesting::ElseIf(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this `elseif`")
-                }
-                Some(Nesting::Else(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this `else`")
-                }
-                Some(Nesting::StartRandom(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this `start_random`")
-                }
-                Some(Nesting::PercentChance(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this `percent_chance`")
-                }
-                None => token.error(format!("{}–nothing is open", msg)),
-            }
-        }
-        match token.value {
-            "{" => self.state.nesting.push(Nesting::Brace(token.span)),
-            "}" => match self.state.nesting.last() {
-                Some(Nesting::Brace(_)) => {
-                    self.state.nesting.pop();
-                }
-                nest => {
-                    parse_error = Some(unbalanced_error("}", token, nest));
-                }
-            },
-            "if" => self.state.nesting.push(Nesting::If(token.span)),
-            "elseif" => {
-                match self.state.nesting.last() {
-                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
-                        self.state.nesting.pop();
-                    }
-                    nest => {
-                        parse_error = Some(unbalanced_error("elseif", token, nest));
-                    }
-                }
-                self.state.nesting.push(Nesting::ElseIf(token.span));
-            }
-            "else" => {
-                match self.state.nesting.last() {
-                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
-                        self.state.nesting.pop();
-                    }
-                    nest => {
-                        parse_error = Some(unbalanced_error("else", token, nest));
-                    }
-                }
-                self.state.nesting.push(Nesting::Else(token.span));
-            }
-            "endif" => match self.state.nesting.last() {
-                Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
-                    self.state.nesting.pop();
-                }
-                nest => {
-                    parse_error = Some(unbalanced_error("endif", token, nest));
-                }
-            },
-            "start_random" => self.state.nesting.push(Nesting::StartRandom(token.span)),
-            "percent_chance" => {
-                if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
-                    self.state.nesting.pop();
-                }
-
-                match self.state.nesting.last() {
-                    Some(Nesting::StartRandom(_)) => {}
-                    nest => {
-                        parse_error = Some(unbalanced_error("percent_chance", token, nest));
-                    }
-                }
-
-                self.state.nesting.push(Nesting::PercentChance(token.span));
-            }
-            "end_random" => {
-                if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
-                    self.state.nesting.pop();
-                };
-
-                match self.state.nesting.last() {
-                    Some(Nesting::StartRandom(_)) => {
-                        self.state.nesting.pop();
-                    }
-                    nest => {
-                        parse_error = Some(unbalanced_error("end_random", token, nest));
-                    }
-                }
-            }
-            "#const" => self.state.expect(Expect::ConstName),
-            "#define" => self.state.expect(Expect::DefineName),
-            _ => (),
         }
 
         if self.state.current_token.is_some() {
