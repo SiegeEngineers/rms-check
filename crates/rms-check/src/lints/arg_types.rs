@@ -95,7 +95,7 @@ impl ArgTypesLint {
         &self,
         state: &ParseState<'_>,
         atom: &Atom<'_>,
-        arg_type: &ArgType,
+        arg_type: ArgType,
         arg: Option<&Word<'_>>,
     ) -> Option<Warning> {
         let cmd = if let Atom::Command(cmd, _) = atom {
@@ -153,7 +153,7 @@ impl Lint for ArgTypesLint {
                 if let Some(warning) = self.check_arg(
                     state,
                     atom,
-                    &token_type.arg_type(i).unwrap(),
+                    token_type.arg_type(i).unwrap(),
                     args.get(i as usize),
                 ) {
                     warnings.push(warning);
@@ -161,14 +161,14 @@ impl Lint for ArgTypesLint {
             }
 
             match cmd.value {
-                "base_elevation" if args.len() > 0 => {
+                "base_elevation" if !args.is_empty() => {
                     let arg = args[0];
                     if let Ok(n) = arg.value.parse::<i32>() {
                         if n < 1 || n > 7 {
                             warnings.push(arg.warning("Elevation value out of range (1-7)"));
                         }
                     }
-                },
+                }
                 "land_position" => {
                     if let Some(Ok(first)) = args.get(0).map(|f| f.value.parse::<i32>()) {
                         if first < 0 || first > 100 {
@@ -180,12 +180,12 @@ impl Lint for ArgTypesLint {
                             warnings.push(args[1].warning("Land position out of range (0-99)"));
                         }
                     }
-                },
-                "zone" if args.len() > 0 => {
+                }
+                "zone" if !args.is_empty() => {
                     if args[0].value == "99" {
                         warnings.push(args[0].warning("`zone 99` crashes the game"));
                     }
-                },
+                }
                 _ => (),
             }
 

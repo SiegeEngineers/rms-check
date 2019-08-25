@@ -1,8 +1,9 @@
+//!
 #![deny(future_incompatible)]
 #![deny(nonstandard_style)]
 #![deny(rust_2018_idioms)]
 #![deny(unsafe_code)]
-#![warn(missing_docs)]
+// #![warn(missing_docs)]
 #![warn(unused)]
 
 mod checker;
@@ -17,7 +18,7 @@ pub use crate::{
         AutoFixReplacement, CheckerBuilder, Compatibility, Lint, Nesting, ParseState, Severity,
         Suggestion, Warning,
     },
-    parser::{Atom, Parser, WarningKind},
+    parser::{Atom, ParseErrorKind, Parser},
     tokens::{ArgType, TokenContext, TokenType, TOKENS},
     wordize::Word,
 };
@@ -28,6 +29,7 @@ use std::{
     path::Path,
 };
 
+/// The result of a lint run.
 pub struct RMSCheckResult {
     warnings: Vec<Warning>,
     files: Files,
@@ -35,11 +37,13 @@ pub struct RMSCheckResult {
 }
 
 impl RMSCheckResult {
+    /// The files that were linted, and a list of the file IDs so they can be iterated over.
     #[inline]
     pub fn files(&self) -> (&[FileId], &Files) {
         (&self.file_ids, &self.files)
     }
 
+    /// Get the codespan file ID for a given file name.
     pub fn file_id(&self, name: &str) -> Option<FileId> {
         self.file_ids
             .iter()
@@ -47,31 +51,41 @@ impl RMSCheckResult {
             .find(|&id| self.files.name(id) == name)
     }
 
+    /// Get a file's source code by the file name.
     pub fn file(&self, name: &str) -> Option<&str> {
         self.file_id(name).map(|id| self.files.source(id))
     }
 
+    /// Were there any warnings?
     #[inline]
     pub fn has_warnings(&self) -> bool {
         !self.warnings.is_empty()
     }
 
+    /// Resolve a file ID and byte index to a Line/Column location pair.
     #[inline]
     pub fn resolve_position(&self, file_id: FileId, index: ByteIndex) -> Option<Location> {
         self.files.location(file_id, index).ok()
     }
 
-    #[inline]
-    pub fn into_iter(self) -> impl IntoIterator<Item = Warning> {
-        self.warnings.into_iter()
-    }
-
+    /// Iterate over the warnings.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &Warning> {
         self.warnings.iter()
     }
 }
 
+impl IntoIterator for RMSCheckResult {
+    type Item = Warning;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+    /// Iterate over the warnings.
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.warnings.into_iter()
+    }
+}
+
+///
 pub struct RMSCheck {
     checker: CheckerBuilder,
     files: Files,
@@ -95,6 +109,7 @@ impl Default for RMSCheck {
 }
 
 impl RMSCheck {
+    /// Initialize an RMS checker.
     #[inline]
     pub fn new() -> Self {
         RMSCheck {
@@ -105,6 +120,9 @@ impl RMSCheck {
         }
     }
 
+    /// Configure the default compatibility for the script.
+    ///
+    /// The compatibility setting can be overridden by scripts using `Compatibility: ` comments.
     #[inline]
     pub fn compatibility(self, compatibility: Compatibility) -> Self {
         Self {
@@ -113,6 +131,7 @@ impl RMSCheck {
         }
     }
 
+    /// Add a lint rule.
     #[inline]
     pub fn with_lint(self, lint: Box<dyn Lint>) -> Self {
         Self {
@@ -178,7 +197,7 @@ impl RMSCheck {
             for (atom, parse_warning) in parser {
                 warnings.extend(checker.write_atom(&atom));
                 for w in parse_warning {
-                    if w.kind == WarningKind::MissingCommandArgs {
+                    if w.kind == ParseErrorKind::MissingCommandArgs {
                         // Handled by arg-types lint
                         continue;
                     }

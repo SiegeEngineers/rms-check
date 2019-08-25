@@ -59,9 +59,8 @@ impl CompatibilityLint {
             }
 
             let mut parts = line.splitn(2, ": ");
-            match (parts.next(), parts.next()) {
-                (Some(name), Some(val)) => self.set_header(state, name, val),
-                _ => (),
+            if let (Some(name), Some(val)) = (parts.next(), parts.next()) {
+                self.set_header(state, name, val);
             }
         }
     }

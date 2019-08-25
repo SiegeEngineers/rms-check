@@ -9,45 +9,71 @@ use std::{
     ops::RangeBounds,
 };
 
+/// The kind of error that generated a Parser warning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WarningKind {
+pub enum ParseErrorKind {
+    /// A #const token was found, but no constant name followed it.
     MissingConstName,
+    /// A #const token was found, but it was declared without a value.
     MissingConstValue,
+    /// A #define token was found, but no constant name followed it.
     MissingDefineName,
+    /// A command was found, but it is missing arguments.
     MissingCommandArgs,
+    /// An if token was found, but no condition followed it.
     MissingIfCondition,
+    /// A percent_chance token was found, but no number followed it.
     MissingPercentChance,
+    /// A comment was not closed before the end of the file.
     UnclosedComment,
 }
 
+/// An error that can occur during parsing. The Parser will keep going after encountering parse
+/// errors.
 #[derive(Debug, Clone)]
-pub struct Warning {
-    pub kind: WarningKind,
+pub struct ParseError {
+    pub kind: ParseErrorKind,
     pub span: Span,
 }
 
-impl Warning {
-    fn new(span: Span, kind: WarningKind) -> Self {
-        Self { kind, span }
+impl ParseError {
+    fn new(span: Span, kind: ParseErrorKind) -> Self {
+        ParseError { kind, span }
     }
 }
 
+/// A parsed piece of source code.
 #[derive(Debug, Clone)]
 pub enum Atom<'a> {
+    /// A #const definition, with an optional value for incomplete #const statements.
     Const(Word<'a>, Word<'a>, Option<Word<'a>>),
+    /// A #define definition.
     Define(Word<'a>, Word<'a>),
+    /// A <SECTION> token.
     Section(Word<'a>),
+    /// An if statement with a condition.
     If(Word<'a>, Word<'a>),
+    /// An elseif statement with a condition.
     ElseIf(Word<'a>, Word<'a>),
+    /// An else statement.
     Else(Word<'a>),
+    /// An endif statement.
     EndIf(Word<'a>),
+    /// A start_random statement.
     StartRandom(Word<'a>),
+    /// A percent_chance statement with a chance value.
     PercentChance(Word<'a>, Word<'a>),
+    /// An end_random statement.
     EndRandom(Word<'a>),
+    /// The start of a block, `{`.
     OpenBlock(Word<'a>),
+    /// The end of a block, `}`.
     CloseBlock(Word<'a>),
+    /// A command, with a name and arguments.
     Command(Word<'a>, Vec<Word<'a>>),
+    /// A comment, with an optional close token in case the comment was not closed.
     Comment(Word<'a>, String, Option<Word<'a>>),
+    /// An unrecognised token.
     Other(Word<'a>),
 }
 
@@ -133,6 +159,8 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    /// Create a new parser for the given source code. The FileId is stored on parsed `Atom`s so
+    /// their position in the source file can be resolved later on to generate warning messages.
     #[inline]
     pub fn new(file_id: FileId, source: &'a str) -> Self {
         Parser {
@@ -141,6 +169,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Take a slice of the source code.
     fn slice(&self, range: impl RangeBounds<ByteIndex>) -> String {
         use std::ops::Bound::*;
         let start = match range.start_bound() {
@@ -156,6 +185,7 @@ impl<'a> Parser<'a> {
         self.source[start.to_usize()..end.to_usize()].to_string()
     }
 
+    /// Check if the next word could be a command argument. If yes, return it; else return None.
     fn peek_arg(&mut self) -> Option<&Word<'a>> {
         let token = match self.iter.peek() {
             Some(token) => token,
@@ -174,6 +204,7 @@ impl<'a> Parser<'a> {
         Some(token)
     }
 
+    /// Read a command argument.
     fn read_arg(&mut self) -> Option<Word<'a>> {
         match self.peek_arg() {
             Some(_) => self.iter.next(),
@@ -181,7 +212,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn read_comment(&mut self, open_comment: Word<'a>) -> Option<(Atom<'a>, Vec<Warning>)> {
+    /// Read a comment.
+    fn read_comment(&mut self, open_comment: Word<'a>) -> Option<(Atom<'a>, Vec<ParseError>)> {
         let mut last_span = open_comment.span;
         loop {
             match self.iter.next() {
@@ -201,9 +233,9 @@ impl<'a> Parser<'a> {
                 None => {
                     return Some((
                         Atom::Comment(open_comment, self.slice(open_comment.end()..), None),
-                        vec![Warning::new(
+                        vec![ParseError::new(
                             open_comment.span.merge(last_span),
-                            WarningKind::UnclosedComment,
+                            ParseErrorKind::UnclosedComment,
                         )],
                     ))
                 }
@@ -211,11 +243,12 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Read a command with arguments.
     fn read_command(
         &mut self,
         command_name: Word<'a>,
         lower_name: &str,
-    ) -> Option<(Atom<'a>, Vec<Warning>)> {
+    ) -> Option<(Atom<'a>, Vec<ParseError>)> {
         let mut warnings = vec![];
 
         // token is guaranteed to exist at this point
@@ -233,14 +266,14 @@ impl<'a> Parser<'a> {
                 Some(arg) => command_name.span.merge(arg.span),
                 _ => command_name.span,
             };
-            warnings.push(Warning::new(span, WarningKind::MissingCommandArgs));
+            warnings.push(ParseError::new(span, ParseErrorKind::MissingCommandArgs));
         }
         Some((Atom::Command(command_name, args), warnings))
     }
 }
 
 impl<'a> Iterator for Parser<'a> {
-    type Item = (Atom<'a>, Vec<Warning>);
+    type Item = (Atom<'a>, Vec<ParseError>);
     fn next(&mut self) -> Option<Self::Item> {
         let word = match self.iter.next() {
             Some(word) => word,
@@ -264,14 +297,20 @@ impl<'a> Iterator for Parser<'a> {
                 Some(condition) => t(Atom::If(word, condition)),
                 None => Some((
                     Atom::Other(word),
-                    vec![Warning::new(word.span, WarningKind::MissingIfCondition)],
+                    vec![ParseError::new(
+                        word.span,
+                        ParseErrorKind::MissingIfCondition,
+                    )],
                 )),
             },
             "elseif" => match self.read_arg() {
                 Some(condition) => t(Atom::ElseIf(word, condition)),
                 None => Some((
                     Atom::Other(word),
-                    vec![Warning::new(word.span, WarningKind::MissingIfCondition)],
+                    vec![ParseError::new(
+                        word.span,
+                        ParseErrorKind::MissingIfCondition,
+                    )],
                 )),
             },
             "else" => t(Atom::Else(word)),
@@ -281,7 +320,10 @@ impl<'a> Iterator for Parser<'a> {
                 Some(chance) => t(Atom::PercentChance(word, chance)),
                 None => Some((
                     Atom::Other(word),
-                    vec![Warning::new(word.span, WarningKind::MissingPercentChance)],
+                    vec![ParseError::new(
+                        word.span,
+                        ParseErrorKind::MissingPercentChance,
+                    )],
                 )),
             },
             "end_random" => t(Atom::EndRandom(word)),
@@ -289,21 +331,24 @@ impl<'a> Iterator for Parser<'a> {
                 Some(name) => t(Atom::Define(word, name)),
                 None => Some((
                     Atom::Other(word),
-                    vec![Warning::new(word.span, WarningKind::MissingDefineName)],
+                    vec![ParseError::new(
+                        word.span,
+                        ParseErrorKind::MissingDefineName,
+                    )],
                 )),
             },
             "#const" => match (self.read_arg(), self.peek_arg()) {
                 (Some(name), Some(_)) => t(Atom::Const(word, name, self.iter.next())),
                 (Some(name), None) => Some((
                     Atom::Const(word, name, None),
-                    vec![Warning::new(
+                    vec![ParseError::new(
                         word.span.merge(name.span),
-                        WarningKind::MissingConstValue,
+                        ParseErrorKind::MissingConstValue,
                     )],
                 )),
                 (None, _) => Some((
                     Atom::Other(word),
-                    vec![Warning::new(word.span, WarningKind::MissingConstName)],
+                    vec![ParseError::new(word.span, ParseErrorKind::MissingConstName)],
                 )),
             },
             command_name if TOKENS.contains_key(command_name) => {
@@ -324,7 +369,8 @@ mod tests {
 
     #[test]
     fn const_ok() {
-        let atoms = Parser::new(file_id(), "#const A B").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms =
+            Parser::new(file_id(), "#const A B").collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
         if let (Atom::Const(def, name, val), warnings) = &atoms[0] {
             assert_eq!(def.value, "#const");
             assert_eq!(name.value, "A");
@@ -338,13 +384,14 @@ mod tests {
 
     #[test]
     fn const_missing_value() {
-        let atoms = Parser::new(file_id(), "#const B").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms =
+            Parser::new(file_id(), "#const B").collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
         if let (Atom::Const(def, name, val), warnings) = &atoms[0] {
             assert_eq!(def.value, "#const");
             assert_eq!(name.value, "B");
             assert!(val.is_none());
             assert_eq!(warnings.len(), 1);
-            assert_eq!(warnings[0].kind, WarningKind::MissingConstValue);
+            assert_eq!(warnings[0].kind, ParseErrorKind::MissingConstValue);
         } else {
             assert!(false);
         }
@@ -352,11 +399,11 @@ mod tests {
 
     #[test]
     fn const_missing_name() {
-        let atoms = Parser::new(file_id(), "#const").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "#const").collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
         if let (Atom::Other(token), warnings) = &atoms[0] {
             assert_eq!(token.value, "#const");
             assert_eq!(warnings.len(), 1);
-            assert_eq!(warnings[0].kind, WarningKind::MissingConstName);
+            assert_eq!(warnings[0].kind, ParseErrorKind::MissingConstName);
         } else {
             assert!(false);
         }
@@ -364,7 +411,8 @@ mod tests {
 
     #[test]
     fn define_ok() {
-        let atoms = Parser::new(file_id(), "#define B").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms =
+            Parser::new(file_id(), "#define B").collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
         if let (Atom::Define(def, name), warnings) = &atoms[0] {
             assert_eq!(def.value, "#define");
             assert_eq!(name.value, "B");
@@ -376,11 +424,11 @@ mod tests {
 
     #[test]
     fn define_missing_name() {
-        let atoms = Parser::new(file_id(), "#define").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "#define").collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
         if let (Atom::Other(token), warnings) = &atoms[0] {
             assert_eq!(token.value, "#define");
             assert_eq!(warnings.len(), 1);
-            assert_eq!(warnings[0].kind, WarningKind::MissingDefineName);
+            assert_eq!(warnings[0].kind, ParseErrorKind::MissingDefineName);
         } else {
             assert!(false);
         }
@@ -388,8 +436,8 @@ mod tests {
 
     #[test]
     fn command_noargs() {
-        let atoms =
-            Parser::new(file_id(), "random_placement").collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+        let atoms = Parser::new(file_id(), "random_placement")
+            .collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
         assert_eq!(atoms.len(), 1);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "random_placement");
@@ -403,7 +451,7 @@ mod tests {
     #[test]
     fn command_1arg() {
         let atoms = Parser::new(file_id(), "land_percent 10 grouped_by_team")
-            .collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+            .collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
         assert_eq!(atoms.len(), 2);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "land_percent");
@@ -426,7 +474,7 @@ mod tests {
     #[test]
     fn command_wrong_case() {
         let atoms = Parser::new(file_id(), "land_Percent 10 grouped_BY_team")
-            .collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+            .collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
         assert_eq!(atoms.len(), 2);
         if let (Atom::Command(name, args), warnings) = &atoms[0] {
             assert_eq!(name.value, "land_Percent");
@@ -448,7 +496,7 @@ mod tests {
     #[test]
     fn command_block() {
         let mut atoms = Parser::new(file_id(), "create_terrain SNOW { base_size 15 }")
-            .collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+            .collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
         assert_eq!(atoms.len(), 4);
         if let (Atom::Command(name, args), _) = atoms.remove(0) {
             assert_eq!(name.value, "create_terrain");
@@ -479,7 +527,7 @@ mod tests {
     #[test]
     fn comment_basic() {
         let mut atoms = Parser::new(file_id(), "create_terrain SNOW /* this is a comment */ { }")
-            .collect::<Vec<(Atom<'_>, Vec<Warning>)>>();
+            .collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
         assert_eq!(atoms.len(), 4);
         if let (Atom::Command(_, _), _) = atoms.remove(0) {
             // ok

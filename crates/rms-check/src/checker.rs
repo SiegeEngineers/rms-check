@@ -8,13 +8,21 @@ pub use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 
+/// The target compatibility for a map script.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum Compatibility {
+    /// The Conquerors.
     Conquerors = 1,
+    /// Target UserPatch 1.4, accept the features it added.
     UserPatch14 = 3,
+    /// Target UserPatch 1.5, accept the features it added.
     UserPatch15 = 4,
+    /// Target WololoKingdoms: use UserPatch 1.5, constants for HD Edition DLC units and terrains,
+    /// and auto-use UserPatch-specific constants.
     WololoKingdoms = 5,
+    /// Target HD Edition (assumes all DLCs).
     HDEdition = 2,
+    /// Try to be maximally compatible.
     All = 0,
 }
 
@@ -83,10 +91,12 @@ pub struct Suggestion {
 }
 
 impl Suggestion {
+    /// Get the codespan file ID that would be updated by this suggestion.
     #[inline]
     pub fn file_id(&self) -> FileId {
         self.file_id
     }
+    /// Get the span this suggestion applies to.
     #[inline]
     pub fn span(&self) -> Span {
         self.span
@@ -159,6 +169,7 @@ pub struct Warning {
 }
 
 impl Warning {
+    /// Get the diagnostic for this warning.
     #[inline]
     pub fn diagnostic(&self) -> &Diagnostic {
         &self.diagnostic
@@ -168,6 +179,7 @@ impl Warning {
     pub fn severity(&self) -> Severity {
         self.diagnostic.severity
     }
+    /// Get additional labels for this warning.
     #[inline]
     pub fn labels(&self) -> &Vec<Label> {
         &self.diagnostic.secondary_labels
@@ -224,6 +236,7 @@ impl Warning {
         self
     }
 
+    /// Set the lint that emitted this warning.
     pub(crate) fn lint(mut self, lint: &str) -> Self {
         self.diagnostic = self.diagnostic.with_code(lint);
         self
@@ -520,7 +533,7 @@ pub struct CheckerBuilder {
 }
 
 impl CheckerBuilder {
-    pub fn build<'a>(self, files: &'a Files, def_files: (FileId, FileId, FileId)) -> Checker<'a> {
+    pub fn build(self, files: &Files, def_files: (FileId, FileId, FileId)) -> Checker<'_> {
         let state = ParseState::new(files, def_files, self.compatibility);
         Checker {
             lints: self.lints,
@@ -582,9 +595,8 @@ impl<'a> Checker<'a> {
             );
         }
 
-        match atom {
-            Atom::Section(_) => self.state.current_section = Some(atom.clone()),
-            _ => (),
+        if let Atom::Section(_) = atom {
+            self.state.current_section = Some(atom.clone());
         }
 
         warnings
@@ -811,9 +823,5 @@ impl<'a> Checker<'a> {
         // A parse error is more important than a lint warning, probably…
         // chances are they're related anyway.
         parse_error.or(lint_warning)
-    }
-
-    pub(crate) fn files(&self) -> &Files {
-        &self.state.files
     }
 }

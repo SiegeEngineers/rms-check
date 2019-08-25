@@ -120,10 +120,11 @@ impl Iterator for FoldingRanges<'_> {
                 self.fold_lines(start.span.start()..=end.span.start());
             }
             OpenBlock(_) => self.waiting_folds.push(atom),
-            CloseBlock(end) => match self.waiting_folds.pop() {
-                Some(OpenBlock(start)) => self.fold(start.span.end()..end.span.start()),
-                _ => (),
-            },
+            CloseBlock(end) => {
+                if let Some(OpenBlock(start)) = self.waiting_folds.pop() {
+                    self.fold(start.span.end()..end.span.start());
+                }
+            }
             If(_, _) => self.waiting_folds.push(atom),
             ElseIf(end, _) | Else(end) => {
                 let start = match self.waiting_folds.pop() {
