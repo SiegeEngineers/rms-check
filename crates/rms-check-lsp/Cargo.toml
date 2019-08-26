@@ -11,7 +11,7 @@ edition = "2018"
 codespan = "^0.4.0"
 codespan-lsp = "^0.4.0"
 jsonrpc-core = "^13.0.0"
-lazy_static = "^1.1.0"
+lazy_static = "^1.4.0"
 lsp-types = "^0.60.0"
 multisplice = "^0.1.0"
 rms-check = { path = "../rms-check/" }
