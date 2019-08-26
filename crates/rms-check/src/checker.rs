@@ -8,13 +8,21 @@ pub use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 
+/// The target compatibility for a map script.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum Compatibility {
+    /// The Conquerors.
     Conquerors = 1,
+    /// Target UserPatch 1.4, accept the features it added.
     UserPatch14 = 3,
+    /// Target UserPatch 1.5, accept the features it added.
     UserPatch15 = 4,
+    /// Target WololoKingdoms: use UserPatch 1.5, constants for HD Edition DLC units and terrains,
+    /// and auto-use UserPatch-specific constants.
     WololoKingdoms = 5,
+    /// Target HD Edition (assumes all DLCs).
     HDEdition = 2,
+    /// Try to be maximally compatible.
     All = 0,
 }
 
@@ -22,26 +30,6 @@ impl Default for Compatibility {
     #[inline]
     fn default() -> Compatibility {
         Compatibility::Conquerors
-    }
-}
-
-/// Describes the next expected token.
-#[derive(Debug, Clone, Copy)]
-enum Expect<'a> {
-    /// No expectations!
-    None,
-    /// A #define name.
-    DefineName,
-    /// A #const name.
-    ConstName,
-    /// The second part of an incorrectly formatted `rnd(A,B)` call.
-    UnfinishedRnd(ByteIndex, &'a str),
-}
-
-impl<'a> Default for Expect<'a> {
-    #[inline]
-    fn default() -> Self {
-        Expect::None
     }
 }
 
@@ -83,12 +71,14 @@ pub struct Suggestion {
 }
 
 impl Suggestion {
+    /// Get the codespan file ID that would be updated by this suggestion.
     #[inline]
-    pub fn file_id(&self) -> FileId {
+    pub const fn file_id(&self) -> FileId {
         self.file_id
     }
+    /// Get the span this suggestion applies to.
     #[inline]
-    pub fn span(&self) -> Span {
+    pub const fn span(&self) -> Span {
         self.span
     }
     /// Get the starting position this suggestion applies to.
@@ -108,7 +98,7 @@ impl Suggestion {
     }
     /// Get the replacement string that could fix the problem.
     #[inline]
-    pub fn replacement(&self) -> &AutoFixReplacement {
+    pub const fn replacement(&self) -> &AutoFixReplacement {
         &self.replacement
     }
 
@@ -159,17 +149,19 @@ pub struct Warning {
 }
 
 impl Warning {
+    /// Get the diagnostic for this warning.
     #[inline]
-    pub fn diagnostic(&self) -> &Diagnostic {
+    pub const fn diagnostic(&self) -> &Diagnostic {
         &self.diagnostic
     }
     /// Get the severity of this warning.
     #[inline]
-    pub fn severity(&self) -> Severity {
+    pub const fn severity(&self) -> Severity {
         self.diagnostic.severity
     }
+    /// Get additional labels for this warning.
     #[inline]
-    pub fn labels(&self) -> &Vec<Label> {
+    pub const fn labels(&self) -> &Vec<Label> {
         &self.diagnostic.secondary_labels
     }
     /// Get the human-readable error message.
@@ -184,7 +176,7 @@ impl Warning {
     }
     /// Get any suggestions that may help to fix the problem.
     #[inline]
-    pub fn suggestions(&self) -> &Vec<Suggestion> {
+    pub const fn suggestions(&self) -> &Vec<Suggestion> {
         &self.suggestions
     }
 
@@ -224,6 +216,7 @@ impl Warning {
         self
     }
 
+    /// Set the lint that emitted this warning.
     pub(crate) fn lint(mut self, lint: &str) -> Self {
         self.diagnostic = self.diagnostic.with_code(lint);
         self
@@ -280,40 +273,14 @@ impl Atom<'_> {
     }
 }
 
-/// Check if a string is numeric.
-fn is_numeric(s: &str) -> bool {
-    s.parse::<i32>().is_ok()
-}
-
-/// Check if a string contains a valid rnd(1,10) call.
-///
-/// Returns a tuple with values:
-///
-///   0. whether the string was valid
-///   1. an optional valid replacement value
-fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
-    if s.starts_with("rnd(") && s.ends_with(')') && s[4..s.len() - 1].split(',').all(is_numeric) {
-        return (true, None);
-    } else if s.chars().any(char::is_whitespace) {
-        let no_ws = s
-            .chars()
-            .filter(|c| !char::is_whitespace(*c))
-            .collect::<String>();
-        if let (true, _) = is_valid_rnd(&no_ws) {
-            return (false, Some(no_ws));
-        }
-    }
-    (false, None)
-}
-
 #[derive(Debug, Clone)]
-pub enum Nesting {
-    If(Span),
-    ElseIf(Span),
-    Else(Span),
-    StartRandom(Span),
-    PercentChance(Span),
-    Brace(Span),
+pub enum Nesting<'a> {
+    If(Atom<'a>),
+    ElseIf(Atom<'a>),
+    Else(Atom<'a>),
+    StartRandom(Atom<'a>),
+    PercentChance(Atom<'a>),
+    Brace(Atom<'a>),
 }
 
 pub trait Lint {
@@ -340,13 +307,11 @@ pub struct ParseState<'a> {
     /// Whether we're currently inside a comment.
     pub is_comment: bool,
     /// The amount of nested statements we entered, like `if`, `start_random`.
-    pub nesting: Vec<Nesting>,
+    pub nesting: Vec<Nesting<'a>>,
     /// The token type that we are currently reading arguments for.
     pub current_token: Option<&'static TokenType>,
     /// The amount of arguments we've read.
     pub token_arg_index: u8,
-    /// The type of token we expect to see next.
-    expect: Expect<'a>,
     /// The current <SECTION>, as well as its opening token.
     pub current_section: Option<Atom<'a>>,
     /// File ID of the AoC random_map.def file.
@@ -384,7 +349,6 @@ impl<'a> ParseState<'a> {
             nesting: vec![],
             current_token: None,
             token_arg_index: 0,
-            expect: Expect::None,
             current_section: None,
             builtin_consts: HashSet::new(),
             builtin_defines: HashSet::new(),
@@ -426,7 +390,7 @@ impl<'a> ParseState<'a> {
             .map(|string| string.as_ref())
             .chain(self.builtin_defines.iter().map(|string| string.as_ref()))
     }
-    pub fn compatibility(&self) -> Compatibility {
+    pub const fn compatibility(&self) -> Compatibility {
         self.compatibility
     }
 
@@ -455,8 +419,136 @@ impl<'a> ParseState<'a> {
         }
     }
 
-    fn expect(&mut self, expect: Expect<'a>) {
-        self.expect = expect;
+    fn update(&mut self, atom: &Atom<'a>) {
+        match atom {
+            Atom::Section(_) => {
+                self.current_section = Some(atom.clone());
+            }
+            Atom::Define(_, name) => {
+                self.define(name.value);
+            },
+            Atom::Const(_, name, _) => {
+                self.define_const(name.value);
+            }
+            _ => (),
+        }
+    }
+
+    fn update_nesting(&mut self, atom: &Atom<'a>) -> Option<Warning> {
+        fn unbalanced_error(name: &str, end: &Atom<'_>, nest: Option<&Nesting<'_>>) -> Warning {
+            let msg = format!("Unbalanced `{}`", name);
+            match nest {
+                Some(Nesting::Brace(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this open brace `{`")
+                }
+                Some(Nesting::If(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `if`")
+                }
+                Some(Nesting::ElseIf(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `elseif`")
+                }
+                Some(Nesting::Else(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `else`")
+                }
+                Some(Nesting::StartRandom(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `start_random`")
+                }
+                Some(Nesting::PercentChance(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `percent_chance`")
+                }
+                None => end.error(format!("{}–nothing is open", msg)),
+            }
+        }
+
+        use Atom::*;
+        match atom {
+            OpenBlock(_) => {
+                self.nesting.push(Nesting::Brace(atom.clone()));
+            }
+            CloseBlock(_) => match self.nesting.last() {
+                Some(Nesting::Brace(_)) => {
+                    self.nesting.pop();
+                }
+                nest => {
+                    return Some(unbalanced_error("}", atom, nest));
+                }
+            },
+            If(_, _) => self.nesting.push(Nesting::If(atom.clone())),
+            ElseIf(_, _) => {
+                match self.nesting.last() {
+                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
+                        self.nesting.pop();
+                    }
+                    nest => {
+                        return Some(unbalanced_error("elseif", atom, nest));
+                    }
+                }
+                self.nesting.push(Nesting::ElseIf(atom.clone()));
+            }
+            Else(_) => {
+                match self.nesting.last() {
+                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
+                        self.nesting.pop();
+                    }
+                    nest => {
+                        return Some(unbalanced_error("else", atom, nest));
+                    }
+                }
+                self.nesting.push(Nesting::Else(atom.clone()));
+            }
+            EndIf(_) => match self.nesting.last() {
+                Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
+                    self.nesting.pop();
+                }
+                nest => {
+                    return Some(unbalanced_error("endif", atom, nest));
+                }
+            },
+            StartRandom(_) => self.nesting.push(Nesting::StartRandom(atom.clone())),
+            PercentChance(_, _) => {
+                if let Some(Nesting::PercentChance(_)) = self.nesting.last() {
+                    self.nesting.pop();
+                }
+
+                match self.nesting.last() {
+                    Some(Nesting::StartRandom(_)) => {}
+                    nest => {
+                        return Some(unbalanced_error("percent_chance", atom, nest));
+                    }
+                }
+
+                self.nesting.push(Nesting::PercentChance(atom.clone()));
+            }
+            EndRandom(_) => {
+                if let Some(Nesting::PercentChance(_)) = self.nesting.last() {
+                    self.nesting.pop();
+                };
+
+                match self.nesting.last() {
+                    Some(Nesting::StartRandom(_)) => {
+                        self.nesting.pop();
+                    }
+                    nest => {
+                        return Some(unbalanced_error("end_random", atom, nest));
+                    }
+                }
+            }
+            _ => (),
+        }
+
+        None
     }
 }
 
@@ -520,7 +612,7 @@ pub struct CheckerBuilder {
 }
 
 impl CheckerBuilder {
-    pub fn build<'a>(self, files: &'a Files, def_files: (FileId, FileId, FileId)) -> Checker<'a> {
+    pub fn build(self, files: &Files, def_files: (FileId, FileId, FileId)) -> Checker<'_> {
         let state = ParseState::new(files, def_files, self.compatibility);
         Checker {
             lints: self.lints,
@@ -533,7 +625,7 @@ impl CheckerBuilder {
         self
     }
 
-    pub fn compatibility(mut self, compatibility: Compatibility) -> Self {
+    pub const fn compatibility(mut self, compatibility: Compatibility) -> Self {
         self.compatibility = compatibility;
         self
     }
@@ -582,10 +674,11 @@ impl<'a> Checker<'a> {
             );
         }
 
-        match atom {
-            Atom::Section(_) => self.state.current_section = Some(atom.clone()),
-            _ => (),
+        self.state.update(atom);
+        if let Some(nest_warning) = self.state.update_nesting(atom) {
+            warnings.push(nest_warning);
         }
+
 
         warnings
     }
@@ -601,39 +694,6 @@ impl<'a> Checker<'a> {
         }
 
         let mut parse_error = None;
-
-        match self.state.expect {
-            Expect::ConstName => {
-                self.state.define_const(token.value);
-                self.state.expect(Expect::None);
-            }
-            Expect::DefineName => {
-                self.state.define(token.value);
-                self.state.expect(Expect::None);
-            }
-            Expect::UnfinishedRnd(pos, val) => {
-                let suggestion = Suggestion::new(
-                    token.file,
-                    Span::new(pos, token.end()),
-                    "rnd() must not contain spaces",
-                );
-                parse_error = Some(
-                    Warning::error(
-                        token.file,
-                        Span::new(pos, token.end()),
-                        "Incorrect rnd() call",
-                    )
-                    .suggest(
-                        match is_valid_rnd(&format!("{} {}", val, token.value)).1 {
-                            Some(replacement) => suggestion.replace(replacement),
-                            None => suggestion,
-                        },
-                    ),
-                );
-                self.state.expect(Expect::None);
-            }
-            _ => (),
-        }
 
         if token.value.starts_with("/*") {
             // Technically incorrect but the user most likely attempted to open a comment here,
@@ -688,117 +748,6 @@ impl<'a> Checker<'a> {
             return parse_error.or(lint_warning);
         }
 
-        fn unbalanced_error(name: &str, token: &Word<'_>, nest: Option<&Nesting>) -> Warning {
-            let msg = format!("Unbalanced `{}`", name);
-            match nest {
-                Some(Nesting::Brace(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this open brace `{`")
-                }
-                Some(Nesting::If(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this `if`")
-                }
-                Some(Nesting::ElseIf(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this `elseif`")
-                }
-                Some(Nesting::Else(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this `else`")
-                }
-                Some(Nesting::StartRandom(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this `start_random`")
-                }
-                Some(Nesting::PercentChance(loc)) => {
-                    token
-                        .error(msg)
-                        .note_at(token.file, *loc, "Matches this `percent_chance`")
-                }
-                None => token.error(format!("{}–nothing is open", msg)),
-            }
-        }
-        match token.value {
-            "{" => self.state.nesting.push(Nesting::Brace(token.span)),
-            "}" => match self.state.nesting.last() {
-                Some(Nesting::Brace(_)) => {
-                    self.state.nesting.pop();
-                }
-                nest => {
-                    parse_error = Some(unbalanced_error("}", token, nest));
-                }
-            },
-            "if" => self.state.nesting.push(Nesting::If(token.span)),
-            "elseif" => {
-                match self.state.nesting.last() {
-                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
-                        self.state.nesting.pop();
-                    }
-                    nest => {
-                        parse_error = Some(unbalanced_error("elseif", token, nest));
-                    }
-                }
-                self.state.nesting.push(Nesting::ElseIf(token.span));
-            }
-            "else" => {
-                match self.state.nesting.last() {
-                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
-                        self.state.nesting.pop();
-                    }
-                    nest => {
-                        parse_error = Some(unbalanced_error("else", token, nest));
-                    }
-                }
-                self.state.nesting.push(Nesting::Else(token.span));
-            }
-            "endif" => match self.state.nesting.last() {
-                Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
-                    self.state.nesting.pop();
-                }
-                nest => {
-                    parse_error = Some(unbalanced_error("endif", token, nest));
-                }
-            },
-            "start_random" => self.state.nesting.push(Nesting::StartRandom(token.span)),
-            "percent_chance" => {
-                if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
-                    self.state.nesting.pop();
-                }
-
-                match self.state.nesting.last() {
-                    Some(Nesting::StartRandom(_)) => {}
-                    nest => {
-                        parse_error = Some(unbalanced_error("percent_chance", token, nest));
-                    }
-                }
-
-                self.state.nesting.push(Nesting::PercentChance(token.span));
-            }
-            "end_random" => {
-                if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
-                    self.state.nesting.pop();
-                };
-
-                match self.state.nesting.last() {
-                    Some(Nesting::StartRandom(_)) => {
-                        self.state.nesting.pop();
-                    }
-                    nest => {
-                        parse_error = Some(unbalanced_error("end_random", token, nest));
-                    }
-                }
-            }
-            "#const" => self.state.expect(Expect::ConstName),
-            "#define" => self.state.expect(Expect::DefineName),
-            _ => (),
-        }
-
         if self.state.current_token.is_some() {
             self.state.token_arg_index += 1;
         }
@@ -811,9 +760,5 @@ impl<'a> Checker<'a> {
         // A parse error is more important than a lint warning, probably…
         // chances are they're related anyway.
         parse_error.or(lint_warning)
-    }
-
-    pub(crate) fn files(&self) -> &Files {
-        &self.state.files
     }
 }

@@ -123,25 +123,22 @@ where
             }
         }
 
-        match self.documents.get_mut(&params.text_document.uri) {
-            Some(doc) => {
-                let lines = Lines::new(&doc.text);
-                let mut splicer = Multisplice::new(&doc.text);
-                for change in &params.content_changes {
-                    let (start, end) = change
-                        .range
-                        .map(|r| (lines.map(&r.start), lines.map(&r.end)))
-                        .unwrap_or((
-                            ByteIndex::from(0),
-                            ByteIndex::from(doc.text.as_bytes().len() as u32),
-                        ));
-                    splicer.splice(start.to_usize(), end.to_usize(), &change.text);
-                }
-                doc.text = splicer.to_string();
-                self.check_and_publish(uri);
+        if let Some(doc) = self.documents.get_mut(&params.text_document.uri) {
+            let lines = Lines::new(&doc.text);
+            let mut splicer = Multisplice::new(&doc.text);
+            for change in &params.content_changes {
+                let (start, end) = change
+                    .range
+                    .map(|r| (lines.map(&r.start), lines.map(&r.end)))
+                    .unwrap_or((
+                        ByteIndex::from(0),
+                        ByteIndex::from(doc.text.as_bytes().len() as u32),
+                    ));
+                splicer.splice(start.to_usize(), end.to_usize(), &change.text);
             }
-            _ => (),
-        };
+            doc.text = splicer.to_string();
+            self.check_and_publish(uri);
+        }
     }
 
     /// A document was closed, clean up.
@@ -158,8 +155,8 @@ where
         let file_id = file_ids
             .iter()
             .cloned()
-            .find(|&id| files.name(id) == &filename)
-            .ok_or(jsonrpc_core::Error::new(ErrorCode::InternalError))?;
+            .find(|&id| files.name(id) == filename)
+            .ok_or_else(|| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
         let start = codespan_lsp::position_to_byte_index(files, file_id, &params.range.start)
             .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
         let end = codespan_lsp::position_to_byte_index(files, file_id, &params.range.end)

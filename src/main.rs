@@ -9,7 +9,7 @@ mod cli_reporter;
 mod language_server;
 
 use check::{cli_check, cli_fix, CheckArgs};
-use failure::{Fallible, bail};
+use failure::{bail, Fallible};
 use language_server::cli_server;
 use rms_check::Compatibility;
 use structopt::StructOpt;

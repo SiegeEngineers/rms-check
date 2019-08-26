@@ -1,4 +1,4 @@
-use super::super::{Lint, Nesting, ParseState, Suggestion, Warning, Word};
+use super::super::{Lint, Nesting, ParseState, Suggestion, Warning, Atom};
 
 pub struct DeadBranchCommentLint {}
 impl Lint for DeadBranchCommentLint {
@@ -8,19 +8,20 @@ impl Lint for DeadBranchCommentLint {
     fn run_inside_comments(&self) -> bool {
         true
     }
-    fn lint_token(&mut self, state: &mut ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
-        if token.value != "/*" {
-            return None;
+    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
+        let mut warnings = vec![];
+
+        if let Atom::Comment(_, _, _) = atom {
+            for nest in &state.nesting {
+                if let Nesting::StartRandom(start) = nest {
+                    let suggestion = Suggestion::new(atom.file_id(), atom.span(), "Only #define constants in the `start_random` group, and then use `if` branches for the actual code.");
+                    warnings.push(atom.warning("Using comments inside `start_random` groups is potentially dangerous.")
+                        .note_at(start.file_id(), start.span(), "`start_random` opened here")
+                        .suggest(suggestion));
+                }
+            }
         }
 
-        state.nesting.iter()
-            .find_map(|n| if let Nesting::StartRandom(loc) = n {
-                let suggestion = Suggestion::from(token, "Only #define constants in the `start_random` group, and then use `if` branches for the actual code.");
-                Some(token.warning("Using comments inside `start_random` groups is potentially dangerous.")
-                    .note_at(token.file, *loc, "`start_random` opened here")
-                    .suggest(suggestion))
-            } else {
-                None
-            })
+        warnings
     }
 }

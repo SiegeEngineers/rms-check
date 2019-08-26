@@ -1,9 +1,9 @@
 use crate::cli_reporter::report as cli_report;
-use failure::{Fallible, bail};
+use failure::{bail, Fallible};
 use multisplice::Multisplice;
 use rms_check::{AutoFixReplacement, Compatibility, RMSCheck};
 use std::{
-    fs::{write, remove_file, File},
+    fs::{remove_file, write, File},
     io::Read,
     path::PathBuf,
 };
