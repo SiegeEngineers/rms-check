@@ -33,26 +33,6 @@ impl Default for Compatibility {
     }
 }
 
-/// Describes the next expected token.
-#[derive(Debug, Clone, Copy)]
-enum Expect<'a> {
-    /// No expectations!
-    None,
-    /// A #define name.
-    DefineName,
-    /// A #const name.
-    ConstName,
-    /// The second part of an incorrectly formatted `rnd(A,B)` call.
-    UnfinishedRnd(ByteIndex, &'a str),
-}
-
-impl<'a> Default for Expect<'a> {
-    #[inline]
-    fn default() -> Self {
-        Expect::None
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum AutoFixReplacement {
     None,
@@ -93,12 +73,12 @@ pub struct Suggestion {
 impl Suggestion {
     /// Get the codespan file ID that would be updated by this suggestion.
     #[inline]
-    pub fn file_id(&self) -> FileId {
+    pub const fn file_id(&self) -> FileId {
         self.file_id
     }
     /// Get the span this suggestion applies to.
     #[inline]
-    pub fn span(&self) -> Span {
+    pub const fn span(&self) -> Span {
         self.span
     }
     /// Get the starting position this suggestion applies to.
@@ -118,7 +98,7 @@ impl Suggestion {
     }
     /// Get the replacement string that could fix the problem.
     #[inline]
-    pub fn replacement(&self) -> &AutoFixReplacement {
+    pub const fn replacement(&self) -> &AutoFixReplacement {
         &self.replacement
     }
 
@@ -171,17 +151,17 @@ pub struct Warning {
 impl Warning {
     /// Get the diagnostic for this warning.
     #[inline]
-    pub fn diagnostic(&self) -> &Diagnostic {
+    pub const fn diagnostic(&self) -> &Diagnostic {
         &self.diagnostic
     }
     /// Get the severity of this warning.
     #[inline]
-    pub fn severity(&self) -> Severity {
+    pub const fn severity(&self) -> Severity {
         self.diagnostic.severity
     }
     /// Get additional labels for this warning.
     #[inline]
-    pub fn labels(&self) -> &Vec<Label> {
+    pub const fn labels(&self) -> &Vec<Label> {
         &self.diagnostic.secondary_labels
     }
     /// Get the human-readable error message.
@@ -196,7 +176,7 @@ impl Warning {
     }
     /// Get any suggestions that may help to fix the problem.
     #[inline]
-    pub fn suggestions(&self) -> &Vec<Suggestion> {
+    pub const fn suggestions(&self) -> &Vec<Suggestion> {
         &self.suggestions
     }
 
@@ -293,32 +273,6 @@ impl Atom<'_> {
     }
 }
 
-/// Check if a string is numeric.
-fn is_numeric(s: &str) -> bool {
-    s.parse::<i32>().is_ok()
-}
-
-/// Check if a string contains a valid rnd(1,10) call.
-///
-/// Returns a tuple with values:
-///
-///   0. whether the string was valid
-///   1. an optional valid replacement value
-fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
-    if s.starts_with("rnd(") && s.ends_with(')') && s[4..s.len() - 1].split(',').all(is_numeric) {
-        return (true, None);
-    } else if s.chars().any(char::is_whitespace) {
-        let no_ws = s
-            .chars()
-            .filter(|c| !char::is_whitespace(*c))
-            .collect::<String>();
-        if let (true, _) = is_valid_rnd(&no_ws) {
-            return (false, Some(no_ws));
-        }
-    }
-    (false, None)
-}
-
 #[derive(Debug, Clone)]
 pub enum Nesting<'a> {
     If(Atom<'a>),
@@ -358,8 +312,6 @@ pub struct ParseState<'a> {
     pub current_token: Option<&'static TokenType>,
     /// The amount of arguments we've read.
     pub token_arg_index: u8,
-    /// The type of token we expect to see next.
-    expect: Expect<'a>,
     /// The current <SECTION>, as well as its opening token.
     pub current_section: Option<Atom<'a>>,
     /// File ID of the AoC random_map.def file.
@@ -397,7 +349,6 @@ impl<'a> ParseState<'a> {
             nesting: vec![],
             current_token: None,
             token_arg_index: 0,
-            expect: Expect::None,
             current_section: None,
             builtin_consts: HashSet::new(),
             builtin_defines: HashSet::new(),
@@ -439,7 +390,7 @@ impl<'a> ParseState<'a> {
             .map(|string| string.as_ref())
             .chain(self.builtin_defines.iter().map(|string| string.as_ref()))
     }
-    pub fn compatibility(&self) -> Compatibility {
+    pub const fn compatibility(&self) -> Compatibility {
         self.compatibility
     }
 
@@ -468,8 +419,136 @@ impl<'a> ParseState<'a> {
         }
     }
 
-    fn expect(&mut self, expect: Expect<'a>) {
-        self.expect = expect;
+    fn update(&mut self, atom: &Atom<'a>) {
+        match atom {
+            Atom::Section(_) => {
+                self.current_section = Some(atom.clone());
+            }
+            Atom::Define(_, name) => {
+                self.define(name.value);
+            },
+            Atom::Const(_, name, _) => {
+                self.define_const(name.value);
+            }
+            _ => (),
+        }
+    }
+
+    fn update_nesting(&mut self, atom: &Atom<'a>) -> Option<Warning> {
+        fn unbalanced_error(name: &str, end: &Atom<'_>, nest: Option<&Nesting<'_>>) -> Warning {
+            let msg = format!("Unbalanced `{}`", name);
+            match nest {
+                Some(Nesting::Brace(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this open brace `{`")
+                }
+                Some(Nesting::If(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `if`")
+                }
+                Some(Nesting::ElseIf(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `elseif`")
+                }
+                Some(Nesting::Else(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `else`")
+                }
+                Some(Nesting::StartRandom(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `start_random`")
+                }
+                Some(Nesting::PercentChance(start)) => {
+                    end
+                        .error(msg)
+                        .note_at(start.file_id(), start.span(), "Matches this `percent_chance`")
+                }
+                None => end.error(format!("{}–nothing is open", msg)),
+            }
+        }
+
+        use Atom::*;
+        match atom {
+            OpenBlock(_) => {
+                self.nesting.push(Nesting::Brace(atom.clone()));
+            }
+            CloseBlock(_) => match self.nesting.last() {
+                Some(Nesting::Brace(_)) => {
+                    self.nesting.pop();
+                }
+                nest => {
+                    return Some(unbalanced_error("}", atom, nest));
+                }
+            },
+            If(_, _) => self.nesting.push(Nesting::If(atom.clone())),
+            ElseIf(_, _) => {
+                match self.nesting.last() {
+                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
+                        self.nesting.pop();
+                    }
+                    nest => {
+                        return Some(unbalanced_error("elseif", atom, nest));
+                    }
+                }
+                self.nesting.push(Nesting::ElseIf(atom.clone()));
+            }
+            Else(_) => {
+                match self.nesting.last() {
+                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
+                        self.nesting.pop();
+                    }
+                    nest => {
+                        return Some(unbalanced_error("else", atom, nest));
+                    }
+                }
+                self.nesting.push(Nesting::Else(atom.clone()));
+            }
+            EndIf(_) => match self.nesting.last() {
+                Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
+                    self.nesting.pop();
+                }
+                nest => {
+                    return Some(unbalanced_error("endif", atom, nest));
+                }
+            },
+            StartRandom(_) => self.nesting.push(Nesting::StartRandom(atom.clone())),
+            PercentChance(_, _) => {
+                if let Some(Nesting::PercentChance(_)) = self.nesting.last() {
+                    self.nesting.pop();
+                }
+
+                match self.nesting.last() {
+                    Some(Nesting::StartRandom(_)) => {}
+                    nest => {
+                        return Some(unbalanced_error("percent_chance", atom, nest));
+                    }
+                }
+
+                self.nesting.push(Nesting::PercentChance(atom.clone()));
+            }
+            EndRandom(_) => {
+                if let Some(Nesting::PercentChance(_)) = self.nesting.last() {
+                    self.nesting.pop();
+                };
+
+                match self.nesting.last() {
+                    Some(Nesting::StartRandom(_)) => {
+                        self.nesting.pop();
+                    }
+                    nest => {
+                        return Some(unbalanced_error("end_random", atom, nest));
+                    }
+                }
+            }
+            _ => (),
+        }
+
+        None
     }
 }
 
@@ -546,7 +625,7 @@ impl CheckerBuilder {
         self
     }
 
-    pub fn compatibility(mut self, compatibility: Compatibility) -> Self {
+    pub const fn compatibility(mut self, compatibility: Compatibility) -> Self {
         self.compatibility = compatibility;
         self
     }
@@ -595,122 +674,11 @@ impl<'a> Checker<'a> {
             );
         }
 
-        if let Atom::Section(_) = atom {
-            self.state.current_section = Some(atom.clone());
+        self.state.update(atom);
+        if let Some(nest_warning) = self.state.update_nesting(atom) {
+            warnings.push(nest_warning);
         }
 
-        fn unbalanced_error(name: &str, end: &Atom<'_>, nest: Option<&Nesting<'_>>) -> Warning {
-            let msg = format!("Unbalanced `{}`", name);
-            match nest {
-                Some(Nesting::Brace(start)) => {
-                    end
-                        .error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this open brace `{`")
-                }
-                Some(Nesting::If(start)) => {
-                    end
-                        .error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this `if`")
-                }
-                Some(Nesting::ElseIf(start)) => {
-                    end
-                        .error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this `elseif`")
-                }
-                Some(Nesting::Else(start)) => {
-                    end
-                        .error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this `else`")
-                }
-                Some(Nesting::StartRandom(start)) => {
-                    end
-                        .error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this `start_random`")
-                }
-                Some(Nesting::PercentChance(start)) => {
-                    end
-                        .error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this `percent_chance`")
-                }
-                None => end.error(format!("{}–nothing is open", msg)),
-            }
-        }
-
-        use Atom::*;
-        match atom {
-            OpenBlock(_) => {
-                self.state.nesting.push(Nesting::Brace(atom.clone()));
-            }
-            CloseBlock(_) => match self.state.nesting.last() {
-                Some(Nesting::Brace(_)) => {
-                    self.state.nesting.pop();
-                }
-                nest => {
-                    warnings.push(unbalanced_error("}", atom, nest));
-                }
-            },
-            If(_, _) => self.state.nesting.push(Nesting::If(atom.clone())),
-            ElseIf(_, _) => {
-                match self.state.nesting.last() {
-                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
-                        self.state.nesting.pop();
-                    }
-                    nest => {
-                        warnings.push(unbalanced_error("elseif", atom, nest));
-                    }
-                }
-                self.state.nesting.push(Nesting::ElseIf(atom.clone()));
-            }
-            Else(_) => {
-                match self.state.nesting.last() {
-                    Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
-                        self.state.nesting.pop();
-                    }
-                    nest => {
-                        warnings.push(unbalanced_error("else", atom, nest));
-                    }
-                }
-                self.state.nesting.push(Nesting::Else(atom.clone()));
-            }
-            EndIf(_) => match self.state.nesting.last() {
-                Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
-                    self.state.nesting.pop();
-                }
-                nest => {
-                    warnings.push(unbalanced_error("endif", atom, nest));
-                }
-            },
-            StartRandom(_) => self.state.nesting.push(Nesting::StartRandom(atom.clone())),
-            PercentChance(_, _) => {
-                if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
-                    self.state.nesting.pop();
-                }
-
-                match self.state.nesting.last() {
-                    Some(Nesting::StartRandom(_)) => {}
-                    nest => {
-                        warnings.push(unbalanced_error("percent_chance", atom, nest));
-                    }
-                }
-
-                self.state.nesting.push(Nesting::PercentChance(atom.clone()));
-            }
-            EndRandom(_) => {
-                if let Some(Nesting::PercentChance(_)) = self.state.nesting.last() {
-                    self.state.nesting.pop();
-                };
-
-                match self.state.nesting.last() {
-                    Some(Nesting::StartRandom(_)) => {
-                        self.state.nesting.pop();
-                    }
-                    nest => {
-                        warnings.push(unbalanced_error("end_random", atom, nest));
-                    }
-                }
-            }
-            _ => (),
-        }
 
         warnings
     }
@@ -726,39 +694,6 @@ impl<'a> Checker<'a> {
         }
 
         let mut parse_error = None;
-
-        match self.state.expect {
-            Expect::ConstName => {
-                self.state.define_const(token.value);
-                self.state.expect(Expect::None);
-            }
-            Expect::DefineName => {
-                self.state.define(token.value);
-                self.state.expect(Expect::None);
-            }
-            Expect::UnfinishedRnd(pos, val) => {
-                let suggestion = Suggestion::new(
-                    token.file,
-                    Span::new(pos, token.end()),
-                    "rnd() must not contain spaces",
-                );
-                parse_error = Some(
-                    Warning::error(
-                        token.file,
-                        Span::new(pos, token.end()),
-                        "Incorrect rnd() call",
-                    )
-                    .suggest(
-                        match is_valid_rnd(&format!("{} {}", val, token.value)).1 {
-                            Some(replacement) => suggestion.replace(replacement),
-                            None => suggestion,
-                        },
-                    ),
-                );
-                self.state.expect(Expect::None);
-            }
-            _ => (),
-        }
 
         if token.value.starts_with("/*") {
             // Technically incorrect but the user most likely attempted to open a comment here,

@@ -5,6 +5,7 @@
 #![deny(unsafe_code)]
 // #![warn(missing_docs)]
 #![warn(unused)]
+#![warn(clippy::missing_const_for_fn)]
 
 mod checker;
 mod lints;
@@ -168,7 +169,7 @@ impl RMSCheck {
 
     /// Get the internal Files, useful for converting byte indices.
     #[inline]
-    pub fn files(&self) -> &Files {
+    pub const fn files(&self) -> &Files {
         &self.files
     }
 
