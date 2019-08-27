@@ -16,7 +16,7 @@ impl Lint for IncorrectSectionLint {
 
     fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
         if let Atom::Command(cmd, _) = atom {
-            let token_type = &TOKENS[&cmd.value.to_lowercase()];
+            let token_type = &TOKENS[&cmd.value.to_ascii_lowercase()];
             if let TokenContext::Command(Some(expected_section)) = token_type.context() {
                 match state.current_section {
                     Some(ref current_section) => {

@@ -147,7 +147,7 @@ impl Lint for ArgTypesLint {
     }
     fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
         if let Atom::Command(cmd, args) = atom {
-            let token_type = &TOKENS[&cmd.value.to_lowercase()];
+            let token_type = &TOKENS[&cmd.value.to_ascii_lowercase()];
             let mut warnings = vec![];
             for i in 0..token_type.arg_len() {
                 if let Some(warning) = self.check_arg(
