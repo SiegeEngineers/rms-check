@@ -384,7 +384,7 @@ impl<'atom> Formatter<'atom> {
                 input = self.random(input);
             }
             Comment(_, content, _) => self.comment(content),
-            _ => (),
+            _ => unimplemented!("{:?}", atom),
         }
         self.prev = Some(atom);
         input
