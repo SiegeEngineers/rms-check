@@ -5,9 +5,7 @@ impl Lint for DeadBranchCommentLint {
     fn name(&self) -> &'static str {
         "dead-comment"
     }
-    fn run_inside_comments(&self) -> bool {
-        true
-    }
+
     fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
         let mut warnings = vec![];
 
