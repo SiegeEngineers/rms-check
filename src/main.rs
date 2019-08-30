@@ -7,12 +7,14 @@
 mod check;
 mod cli_reporter;
 mod language_server;
+mod zip_rms;
 
 use check::{cli_check, cli_fix, CheckArgs};
 use failure::{bail, Fallible};
 use language_server::cli_server;
 use rms_check::Compatibility;
 use structopt::StructOpt;
+use zip_rms::{cli_pack, cli_unpack};
 
 #[derive(Debug, StructOpt)]
 pub struct Cli {
@@ -31,6 +33,16 @@ pub struct Cli {
     fix_unsafe: bool,
     /// The file to check.
     file: Option<String>,
+
+    /// Unpack a Zip-RMS map.
+    #[structopt(long = "unpack")]
+    unpack: bool,
+    /// Pack a Zip-RMS map.
+    #[structopt(long = "pack")]
+    pack: bool,
+    /// Output folder for Zip-RMS maps.
+    #[structopt(long = "outdir", short = "o")]
+    outdir: Option<String>,
 
     #[structopt(long = "aoc")]
     aoc: bool,
@@ -65,6 +77,14 @@ impl Cli {
 fn main() -> Fallible<()> {
     let args = Cli::from_args();
 
+    if args.unpack {
+        return cli_unpack(args.file.unwrap(), args.outdir.unwrap());
+    }
+
+    if args.pack {
+        return cli_pack(args.file.unwrap(), args.outdir.unwrap());
+    }
+
     if args.server {
         cli_server();
         unreachable!();
@@ -92,7 +112,5 @@ fn main() -> Fallible<()> {
         file: args.file.unwrap().into(),
         dry_run: args.dry_run,
         fix_unsafe: args.fix_unsafe,
-    })?;
-
-    Ok(())
+    })
 }
