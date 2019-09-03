@@ -13,47 +13,81 @@ use check::{cli_check, cli_fix, CheckArgs};
 use failure::{bail, Fallible};
 use language_server::cli_server;
 use rms_check::Compatibility;
+use std::path::PathBuf;
 use structopt::StructOpt;
 use zip_rms::{cli_pack, cli_unpack};
 
 #[derive(Debug, StructOpt)]
-pub struct Cli {
-    /// Start the language server.
-    #[structopt(long = "server")]
-    server: bool,
-
-    /// Auto-fix some problems.
-    #[structopt(long = "fix")]
-    fix: bool,
-    /// Auto-fix some problems, but don't actually write.
-    #[structopt(long = "dry-run")]
-    dry_run: bool,
-    /// Run unsafe autofixes. These may break your map!
-    #[structopt(long = "fix-unsafe")]
-    fix_unsafe: bool,
+struct CliCheck {
     /// The file to check.
-    file: Option<String>,
+    file: PathBuf,
+}
 
-    /// Unpack a Zip-RMS map.
-    #[structopt(long = "unpack")]
-    unpack: bool,
-    /// Pack a Zip-RMS map.
-    #[structopt(long = "pack")]
-    pack: bool,
-    /// Output folder for Zip-RMS maps.
-    #[structopt(long = "outdir", short = "o")]
-    outdir: Option<String>,
+#[derive(Debug, StructOpt)]
+enum CliCommand {
+    /// Pack a folder into an Zip-RMS map.
+    #[structopt(name = "pack")]
+    Pack {
+        output: PathBuf,
+        #[structopt(long, short = "d")]
+        indir: PathBuf,
+    },
+    /// Unpack a Zip-RMS map into a folder.
+    #[structopt(name = "unpack")]
+    Unpack {
+        #[structopt(long, short = "o")]
+        outdir: PathBuf,
+        input: PathBuf,
+    },
+    /// Auto-fix problems with a random map script.
+    #[structopt(name = "fix")]
+    Fix {
+        /// Don't write the results.
+        #[structopt(long = "dry-run")]
+        dry_run: bool,
+        /// Run unsafe autofixes. These may break your map!
+        #[structopt(long = "unsafe")]
+        fix_unsafe: bool,
+        /// The file to check.
+        file: PathBuf,
+    },
+    /// Syntax check and lint a random map script.
+    #[structopt(name = "check")]
+    Check(CliCheck),
+    /// Start the language server.
+    #[structopt(name = "server")]
+    Server,
+}
 
+#[derive(Debug, StructOpt)]
+#[structopt(name = "rms-check")]
+pub struct Cli {
+    /// Set the default compatibility to Age of Conquerors. Scripts can override this using
+    /// `/* Compatibility: */` comments.
     #[structopt(long = "aoc")]
     aoc: bool,
+    /// Set the default compatibility to UserPatch 1.4. Scripts can override this using
+    /// `/* Compatibility: */` comments.
     #[structopt(long = "up14")]
     userpatch14: bool,
+    /// Set the default compatibility to UserPatch 1.5. Scripts can override this using
+    /// `/* Compatibility: */` comments.
     #[structopt(long = "up15")]
     userpatch15: bool,
+    /// Set the default compatibility to HD Edition. Scripts can override this using
+    /// `/* Compatibility: */` comments.
     #[structopt(long = "hd")]
     hd_edition: bool,
+    /// Set the default compatibility to WololoKingdoms. Scripts can override this using
+    /// `/* Compatibility: */` comments.
     #[structopt(long = "wk")]
     wololo_kingdoms: bool,
+
+    #[structopt(subcommand)]
+    command: Option<CliCommand>,
+
+    /// The file to check, when not using any subcommand.
+    file: Option<String>,
 }
 
 impl Cli {
@@ -76,41 +110,37 @@ impl Cli {
 
 fn main() -> Fallible<()> {
     let args = Cli::from_args();
+    let compatibility = args.compat();
 
-    if args.unpack {
-        return cli_unpack(args.file.unwrap(), args.outdir.unwrap());
-    }
-
-    if args.pack {
-        return cli_pack(args.file.unwrap(), args.outdir.unwrap());
-    }
-
-    if args.server {
-        cli_server();
-        unreachable!();
-    }
-
-    if args.fix {
-        if args.file.is_none() {
-            bail!("must specify a file to fix");
+    match args.command {
+        Some(CliCommand::Unpack { outdir, input }) => cli_unpack(input, outdir),
+        Some(CliCommand::Pack { indir, output }) => cli_pack(indir, output),
+        Some(CliCommand::Fix {
+            dry_run,
+            fix_unsafe,
+            file,
+        }) => cli_fix(CheckArgs {
+            compatibility,
+            file,
+            dry_run,
+            fix_unsafe,
+        }),
+        Some(CliCommand::Server) => {
+            cli_server();
+            unreachable!();
         }
-
-        return cli_fix(CheckArgs {
-            compatibility: args.compat(),
-            file: args.file.unwrap().into(),
-            dry_run: args.dry_run,
-            fix_unsafe: args.fix_unsafe,
-        });
+        Some(CliCommand::Check(args)) => cli_check(CheckArgs {
+            compatibility,
+            file: args.file,
+            ..Default::default()
+        }),
+        None => {
+            let args = CliCheck::from_args();
+            cli_check(CheckArgs {
+                compatibility,
+                file: args.file,
+                ..Default::default()
+            })
+        }
     }
-
-    if args.file.is_none() {
-        bail!("must specify a file to check");
-    }
-
-    cli_check(CheckArgs {
-        compatibility: args.compat(),
-        file: args.file.unwrap().into(),
-        dry_run: args.dry_run,
-        fix_unsafe: args.fix_unsafe,
-    })
 }
