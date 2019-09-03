@@ -1,4 +1,4 @@
-use super::super::{Lint, Nesting, ParseState, Suggestion, Warning, Atom};
+use super::super::{Atom, Lint, Nesting, ParseState, Suggestion, Warning};
 
 pub struct DeadBranchCommentLint {}
 impl Lint for DeadBranchCommentLint {
@@ -13,9 +13,13 @@ impl Lint for DeadBranchCommentLint {
             for nest in &state.nesting {
                 if let Nesting::StartRandom(start) = nest {
                     let suggestion = Suggestion::new(atom.file_id(), atom.span(), "Only #define constants in the `start_random` group, and then use `if` branches for the actual code.");
-                    warnings.push(atom.warning("Using comments inside `start_random` groups is potentially dangerous.")
+                    warnings.push(
+                        atom.warning(
+                            "Using comments inside `start_random` groups is potentially dangerous.",
+                        )
                         .note_at(start.file_id(), start.span(), "`start_random` opened here")
-                        .suggest(suggestion));
+                        .suggest(suggestion),
+                    );
                 }
             }
         }
