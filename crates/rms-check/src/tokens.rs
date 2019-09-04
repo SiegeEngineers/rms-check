@@ -234,6 +234,7 @@ lazy_static! {
         m.insert(token!("spacing_to_other_terrain_types", TokenContext::Attribute(Some("create_terrain")), [Number]));
         m.insert(token!("height_limits", TokenContext::Attribute(Some("create_terrain")), [Number, Number]));
         m.insert(token!("set_flat_terrain_only", TokenContext::Attribute(Some("create_terrain"))));
+        m.insert(token!("set_avoid_player_start_areas", TokenContext::Attribute(Some("create_terrain"))));
         m.insert(token!("clumping_factor", TokenContext::Attribute(Some("create_terrain")), [Number]));
 
         m.insert(token!("create_object", TokenContext::Command(Some("<OBJECTS_GENERATION>")), [Token]));
@@ -259,7 +260,7 @@ lazy_static! {
         ]);
 
         m.insert(token!("create_connect_all_players_land", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
-        m.insert(token!("create_connect_teams_land", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
+        m.insert(token!("create_connect_teams_lands", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
         m.insert(token!("create_connect_same_land_zones", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
         m.insert(token!("create_connect_all_lands", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
         m.insert(token!("replace_terrain", connect_attribute_context, [Token, Token]));
