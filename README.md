@@ -7,25 +7,35 @@ A linter and language server for Age of Empires 2 random map scripts.
 ## Usage
 
 ```
-Detect common problems with AoE Random Map Scripts
+rms-check 0.1.0
 
 USAGE:
-    rms-check [FLAGS] [file]
+    rms-check [FLAGS] [file] [SUBCOMMAND]
 
 FLAGS:
-        --aoc
-        --dry-run       Auto-fix some problems, but don't actually write.
-        --fix           Auto-fix some problems.
-        --fix-unsafe    Run unsafe autofixes. These may break your map!
-    -h, --help          Prints help information
-        --hd
-        --server        Start the language server.
-        --up14
-        --up15
-    -V, --version       Prints version information
+        --aoc        Set the default compatibility to Age of Conquerors. Scripts can override this using `/*
+                     Compatibility: */` comments.
+    -h, --help       Prints help information
+        --hd         Set the default compatibility to HD Edition. Scripts can override this using `/* Compatibility: */`
+                     comments.
+        --up14       Set the default compatibility to UserPatch 1.4. Scripts can override this using `/* Compatibility:
+                     */` comments.
+        --up15       Set the default compatibility to UserPatch 1.5. Scripts can override this using `/* Compatibility:
+                     */` comments.
+    -V, --version    Prints version information
+        --wk         Set the default compatibility to WololoKingdoms. Scripts can override this using `/* Compatibility:
+                     */` comments.
 
 ARGS:
-    <file>    The file to check.
+    <file>    The file to check, when not using any subcommand.
+
+SUBCOMMANDS:
+    check     Syntax check and lint a random map script.
+    fix       Auto-fix problems with a random map script.
+    help      Prints this message or the help of the given subcommand(s)
+    pack      Pack a folder into an Zip-RMS map.
+    server    Start the language server.
+    unpack    Unpack a Zip-RMS map into a folder.
 ```
 
 ```bash

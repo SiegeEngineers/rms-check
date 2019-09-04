@@ -10,7 +10,7 @@ mod language_server;
 mod zip_rms;
 
 use check::{cli_check, cli_fix, CheckArgs};
-use failure::{bail, Fallible};
+use failure::Fallible;
 use language_server::cli_server;
 use rms_check::Compatibility;
 use std::path::PathBuf;
@@ -18,9 +18,53 @@ use structopt::StructOpt;
 use zip_rms::{cli_pack, cli_unpack};
 
 #[derive(Debug, StructOpt)]
+struct CliCompat {
+    /// Set the default compatibility to Age of Conquerors. Scripts can override this using
+    /// `/* Compatibility: */` comments.
+    #[structopt(long = "aoc")]
+    aoc: bool,
+    /// Set the default compatibility to UserPatch 1.4. Scripts can override this using
+    /// `/* Compatibility: */` comments.
+    #[structopt(long = "up14")]
+    userpatch14: bool,
+    /// Set the default compatibility to UserPatch 1.5. Scripts can override this using
+    /// `/* Compatibility: */` comments.
+    #[structopt(long = "up15")]
+    userpatch15: bool,
+    /// Set the default compatibility to HD Edition. Scripts can override this using
+    /// `/* Compatibility: */` comments.
+    #[structopt(long = "hd")]
+    hd_edition: bool,
+    /// Set the default compatibility to WololoKingdoms. Scripts can override this using
+    /// `/* Compatibility: */` comments.
+    #[structopt(long = "wk")]
+    wololo_kingdoms: bool,
+}
+
+impl CliCompat {
+    fn to_compatibility(&self) -> Compatibility {
+        if self.wololo_kingdoms {
+            Compatibility::WololoKingdoms
+        } else if self.hd_edition {
+            Compatibility::HDEdition
+        } else if self.userpatch14 {
+            Compatibility::UserPatch14
+        } else if self.userpatch15 {
+            Compatibility::UserPatch15
+        } else if self.aoc {
+            Compatibility::Conquerors
+        } else {
+            Compatibility::All
+        }
+    }
+}
+
+#[derive(Debug, StructOpt)]
 struct CliCheck {
     /// The file to check.
     file: PathBuf,
+    #[structopt(flatten)]
+    compat_flags: CliCompat,
 }
 
 #[derive(Debug, StructOpt)]
@@ -50,6 +94,8 @@ enum CliCommand {
         fix_unsafe: bool,
         /// The file to check.
         file: PathBuf,
+        #[structopt(flatten)]
+        compat_flags: CliCompat,
     },
     /// Syntax check and lint a random map script.
     #[structopt(name = "check")]
@@ -62,55 +108,17 @@ enum CliCommand {
 #[derive(Debug, StructOpt)]
 #[structopt(name = "rms-check")]
 pub struct Cli {
-    /// Set the default compatibility to Age of Conquerors. Scripts can override this using
-    /// `/* Compatibility: */` comments.
-    #[structopt(long = "aoc")]
-    aoc: bool,
-    /// Set the default compatibility to UserPatch 1.4. Scripts can override this using
-    /// `/* Compatibility: */` comments.
-    #[structopt(long = "up14")]
-    userpatch14: bool,
-    /// Set the default compatibility to UserPatch 1.5. Scripts can override this using
-    /// `/* Compatibility: */` comments.
-    #[structopt(long = "up15")]
-    userpatch15: bool,
-    /// Set the default compatibility to HD Edition. Scripts can override this using
-    /// `/* Compatibility: */` comments.
-    #[structopt(long = "hd")]
-    hd_edition: bool,
-    /// Set the default compatibility to WololoKingdoms. Scripts can override this using
-    /// `/* Compatibility: */` comments.
-    #[structopt(long = "wk")]
-    wololo_kingdoms: bool,
-
     #[structopt(subcommand)]
     command: Option<CliCommand>,
-
+    // Compatibility flags for implicit `check`, when not using any subcommand.
+    #[structopt(flatten)]
+    compat_flags: CliCompat,
     /// The file to check, when not using any subcommand.
     file: Option<String>,
 }
 
-impl Cli {
-    pub fn compat(&self) -> Compatibility {
-        if self.wololo_kingdoms {
-            Compatibility::WololoKingdoms
-        } else if self.hd_edition {
-            Compatibility::HDEdition
-        } else if self.userpatch14 {
-            Compatibility::UserPatch14
-        } else if self.userpatch15 {
-            Compatibility::UserPatch15
-        } else if self.aoc {
-            Compatibility::Conquerors
-        } else {
-            Compatibility::All
-        }
-    }
-}
-
 fn main() -> Fallible<()> {
     let args = Cli::from_args();
-    let compatibility = args.compat();
 
     match args.command {
         Some(CliCommand::Unpack { outdir, input }) => cli_unpack(input, outdir),
@@ -119,8 +127,9 @@ fn main() -> Fallible<()> {
             dry_run,
             fix_unsafe,
             file,
+            compat_flags,
         }) => cli_fix(CheckArgs {
-            compatibility,
+            compatibility: compat_flags.to_compatibility(),
             file,
             dry_run,
             fix_unsafe,
@@ -130,14 +139,14 @@ fn main() -> Fallible<()> {
             unreachable!();
         }
         Some(CliCommand::Check(args)) => cli_check(CheckArgs {
-            compatibility,
+            compatibility: args.compat_flags.to_compatibility(),
             file: args.file,
             ..Default::default()
         }),
         None => {
             let args = CliCheck::from_args();
             cli_check(CheckArgs {
-                compatibility,
+                compatibility: args.compat_flags.to_compatibility(),
                 file: args.file,
                 ..Default::default()
             })
