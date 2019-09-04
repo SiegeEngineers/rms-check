@@ -97,27 +97,90 @@ lazy_static! {
 
         // <ELEVATION_GENERATION>
         s.add("create_elevation")
-            .arg("ElevationLevel", "");
+            .arg("ElevationLevel", "The highest elevation level.");
         s.add("set_scale_by_size");
         s.add("set_scale_by_group");
         s.add("spacing")
-            .arg("ElevationSpacing", "");
+            .arg("ElevationSpacing", "The distance between changes in tile elevation.");
 
         // <CLIFF_GENERATION>
         s.add("min_number_of_cliffs")
-            .arg("Number", "");
+            .description("Set the minimum number of cliffs for the entire map, regardless of map size.")
+            .arg("Number", "The minimum number of cliffs.");
         s.add("max_number_of_cliffs")
-            .arg("Number", "");
+            .description("Set the maximum number of cliffs for the entire map, regardless of map size.")
+            .arg("Number", "The maximum number of cliffs.");
         s.add("min_length_of_cliffs")
-            .arg("Length", "");
+            .description("Set the minimum length of each cliff in tiles.")
+            .arg("Length", "Minimum number of tiles in a single cliff.");
         s.add("max_length_of_cliffs")
-            .arg("Length", "");
+            .description("Set the maximum length of each cliff in tiles.")
+            .arg("Length", "Maximum number of tiles in a single cliff.");
         s.add("cliff_curliness")
             .arg("Curliness", "The percent chance of the cliff direction changing at any given tile.");
         s.add("min_distance_cliffs")
-            .arg("Distance", "");
+            .description("Set the minimum distance between cliffs.")
+            .arg("Distance", "Minimum distance between cliffs.");
         s.add("min_terrain_distance")
             .arg("Distance", "");
+
+        // <TERRAIN_GENERATION>
+        s.add("create_terrain")
+            .arg("TerrainType", "");
+        s.add("percent_of_land")
+            .arg("Percent", "");
+        s.add("number_of_clumps")
+            .arg("Clumps", "");
+        s.add("set_scale_by_groups");
+        s.add("spacing_to_other_terrain_types")
+            .arg("Spacing", "");
+        s.add("height_limits")
+            .arg("MinHeight", "")
+            .arg("MaxHeight", "");
+        s.add("set_flat_terrain_only");
+
+        // <OBJECTS_GENERATION>
+        s.add("create_object")
+            .arg("UnitType", "");
+        s.add("set_scaling_to_map_size");
+        s.add("number_of_groups")
+            .arg("Groups", "");
+        s.add("number_of_objects")
+            .arg("Number", "");
+        s.add("group_variance")
+            .arg("Variance", "");
+        s.add("group_placement_radius")
+            .arg("Radius", "");
+        s.add("set_loose_grouping");
+        s.add("set_tight_grouping");
+        s.add("terrain_to_place_on")
+            .arg("TerrainType", "");
+        s.add("set_gaia_object_only");
+        s.add("set_place_for_every_player");
+        s.add("place_on_specific_land_id")
+            .arg("LandId", "");
+        s.add("min_distance_to_players")
+            .arg("Distance", "");
+        s.add("max_distance_to_players")
+            .arg("Distance", "");
+
+        // <CONNECTION_GENERATION>
+        s.add("create_connect_all_players_land");
+        s.add("create_connect_teams_land");
+        s.add("create_connect_same_land_zones");
+        s.add("create_connect_all_lands");
+        s.add("replace_terrain")
+            .arg("OldTerrain", "")
+            .arg("NewTerrain", "");
+        s.add("terrain_cost")
+            .arg("TerrainType", "")
+            .arg("Cost", "");
+        s.add("terrain_size")
+            .arg("TerrainType", "")
+            .arg("A", "")
+            .arg("B", "");
+        s.add("default_terrain_placement")
+            .arg("TerrainType", "");
 
         // UserPatch commands
         s.add("ai_info_map_type")

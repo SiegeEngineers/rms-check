@@ -56,14 +56,14 @@ impl<'a> Iterator for Wordize<'a> {
         while let Some((index, c)) = self.chars.next() {
             let index = index as u32;
             if !saw_word {
-                if !char::is_whitespace(c) {
+                if !c.is_ascii_whitespace() {
                     saw_word = true;
                     start = index;
                 }
                 continue;
             }
 
-            if char::is_whitespace(c) {
+            if c.is_ascii_whitespace() {
                 end = index;
                 break;
             }

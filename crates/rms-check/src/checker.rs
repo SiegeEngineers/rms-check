@@ -426,7 +426,7 @@ impl<'a> ParseState<'a> {
             }
             Atom::Define(_, name) => {
                 self.define(name.value);
-            },
+            }
             Atom::Const(_, name, _) => {
                 self.define_const(name.value);
             }
@@ -438,36 +438,33 @@ impl<'a> ParseState<'a> {
         fn unbalanced_error(name: &str, end: &Atom<'_>, nest: Option<&Nesting<'_>>) -> Warning {
             let msg = format!("Unbalanced `{}`", name);
             match nest {
-                Some(Nesting::Brace(start)) => {
-                    end
-                        .error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this open brace `{`")
-                }
+                Some(Nesting::Brace(start)) => end.error(msg).note_at(
+                    start.file_id(),
+                    start.span(),
+                    "Matches this open brace `{`",
+                ),
                 Some(Nesting::If(start)) => {
-                    end
-                        .error(msg)
+                    end.error(msg)
                         .note_at(start.file_id(), start.span(), "Matches this `if`")
                 }
                 Some(Nesting::ElseIf(start)) => {
-                    end
-                        .error(msg)
+                    end.error(msg)
                         .note_at(start.file_id(), start.span(), "Matches this `elseif`")
                 }
                 Some(Nesting::Else(start)) => {
-                    end
-                        .error(msg)
+                    end.error(msg)
                         .note_at(start.file_id(), start.span(), "Matches this `else`")
                 }
-                Some(Nesting::StartRandom(start)) => {
-                    end
-                        .error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this `start_random`")
-                }
-                Some(Nesting::PercentChance(start)) => {
-                    end
-                        .error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this `percent_chance`")
-                }
+                Some(Nesting::StartRandom(start)) => end.error(msg).note_at(
+                    start.file_id(),
+                    start.span(),
+                    "Matches this `start_random`",
+                ),
+                Some(Nesting::PercentChance(start)) => end.error(msg).note_at(
+                    start.file_id(),
+                    start.span(),
+                    "Matches this `percent_chance`",
+                ),
                 None => end.error(format!("{}–nothing is open", msg)),
             }
         }
@@ -678,7 +675,6 @@ impl<'a> Checker<'a> {
         if let Some(nest_warning) = self.state.update_nesting(atom) {
             warnings.push(nest_warning);
         }
-
 
         warnings
     }
