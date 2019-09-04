@@ -198,6 +198,8 @@ impl<'a> Parser<'a> {
             "if" | "elseif" | "else" | "endif" => return None,
             "start_random" | "percent_chance" | "end_random" => return None,
             command_name if TOKENS.contains_key(command_name) => return None,
+            // incorrect comment syntax but ok
+            val if val.starts_with("/*") || val.ends_with("*/") => return None,
             _ => (),
         }
 
@@ -353,6 +355,25 @@ impl<'a> Iterator for Parser<'a> {
             },
             command_name if TOKENS.contains_key(command_name) => {
                 self.read_command(word, command_name)
+            }
+            // a common mistake is to do /****/ on a line, which is not strictly a comment because
+            // of missing spaces. Effectively it's still ignored by the game though, so we can
+            // pretend that it is a comment.
+            val if val.starts_with("/*") && val.ends_with("*/") => {
+                // Split the word up
+                t(Atom::Comment(
+                    Word {
+                        file: word.file,
+                        value: &word.value[0..2],
+                        span: Span::new(word.span.start(), word.span.start() + ByteOffset(2)),
+                    },
+                    word.value[2..word.value.len() - 2].to_string(),
+                    Some(Word {
+                        file: word.file,
+                        value: &word.value[word.value.len() - 2..],
+                        span: Span::new(word.span.end() - ByteOffset(2), word.span.end()),
+                    }),
+                ))
             }
             _ => t(Atom::Other(word)),
         }
