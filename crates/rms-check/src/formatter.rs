@@ -178,8 +178,8 @@ impl<'atom> Formatter<'atom> {
 
         // reset command width so an if block within a command block
         // does not over-indent.
-        let old_command_width = self.command_width;
-        self.command_width = 0;
+        let old_widths = (self.command_width, self.arg_width);
+        self.command_width = self.command_width.saturating_sub(2);
 
         let mut depth = 1;
         let content: Vec<Atom<'atom>> = input
@@ -220,7 +220,8 @@ impl<'atom> Formatter<'atom> {
             }
         }
 
-        self.command_width = old_command_width;
+        self.command_width = old_widths.0;
+        self.arg_width = old_widths.1;
 
         self.indent -= 1;
         self.text("endif");
@@ -245,8 +246,9 @@ impl<'atom> Formatter<'atom> {
 
         // reset command width so a start_random within a command block
         // does not over-indent.
-        let old_command_width = self.command_width;
+        let old_widths = (self.command_width, self.arg_width);
         self.command_width = 0;
+        self.arg_width = 0;
 
         let mut null_branch = vec![];
         let mut branches = vec![];
@@ -310,7 +312,8 @@ impl<'atom> Formatter<'atom> {
             }
         }
 
-        self.command_width = old_command_width;
+        self.command_width = old_widths.0;
+        self.arg_width = old_widths.1;
 
         self.indent -= 1;
         self.text("end_random");
@@ -374,8 +377,13 @@ impl<'atom> Formatter<'atom> {
     {
         use Atom::*;
 
-        if let Some(CloseBlock(_)) = self.prev {
-            self.newline();
+        match (&self.prev, &atom) {
+            // Add an additional newline after each }
+            (Some(CloseBlock(_)), _) => self.newline(),
+            (Some(Other(_)), Other(_)) => (),
+            // Add a newline after a run of `Other` tokens
+            (Some(Other(_)), _) => self.newline(),
+            _ => (),
         }
 
         match &atom {
@@ -400,6 +408,20 @@ impl<'atom> Formatter<'atom> {
                 input = self.random(input);
             }
             Comment(_, content, _) => self.comment(content),
+            // sometimes people use `//` comments even though that doesn't work
+            // should just pass those through
+            Other(word) if word.value.starts_with("//") => {
+                self.text(word.value);
+            }
+            Other(word) => {
+                let arg_like = word.value.to_ascii_uppercase().as_str() == word.value || word.value.chars().all(|c| c.is_ascii_digit());
+                if let (true, Some(Other(_))) = (arg_like, &self.prev) {
+                    self.result.push(' ');
+                    self.text(word.value);
+                } else {
+                    self.text(word.value);
+                }
+            },
             _ => unimplemented!("{:?}", atom),
         }
         self.prev = Some(atom);
