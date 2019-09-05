@@ -148,16 +148,15 @@ impl Lint for CompatibilityLint {
 #[cfg(test)]
 mod tests {
     use super::CompatibilityLint;
-    use crate::{RMSCheck, Severity};
+    use crate::{RMSCheck, RMSFile, Severity};
     use std::path::PathBuf;
 
     #[test]
     fn compatibility() {
+        let file = RMSFile::from_path("./tests/rms/compatibility.rms").unwrap();
         let result = RMSCheck::new()
             .with_lint(Box::new(CompatibilityLint::new()))
-            .add_file(PathBuf::from("./tests/rms/compatibility.rms"))
-            .unwrap()
-            .check();
+            .check(file);
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();

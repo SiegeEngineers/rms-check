@@ -72,16 +72,14 @@ impl Lint for CommentContentsLint {
 #[cfg(test)]
 mod tests {
     use super::CommentContentsLint;
-    use crate::{RMSCheck, Severity};
-    use std::path::PathBuf;
+    use crate::{RMSCheck, RMSFile, Severity};
 
     #[test]
     fn comment_contents() {
+        let file = RMSFile::from_path("./tests/rms/comment-contents.rms").unwrap();
         let result = RMSCheck::new()
             .with_lint(Box::new(CommentContentsLint::new()))
-            .add_file(PathBuf::from("./tests/rms/comment-contents.rms"))
-            .unwrap()
-            .check();
+            .check(file);
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();

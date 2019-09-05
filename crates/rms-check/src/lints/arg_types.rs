@@ -240,9 +240,8 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{RMSCheck, Severity};
+    use crate::{RMSCheck, RMSFile, Severity};
     use codespan::{ColumnIndex, LineIndex, Location};
-    use std::path::PathBuf;
 
     #[test]
     fn is_numeric_test() {
@@ -267,11 +266,10 @@ mod tests {
     #[test]
     fn arg_types() {
         let filename = "./tests/rms/arg-types.rms";
+        let file = RMSFile::from_path(filename).unwrap();
         let result = RMSCheck::new()
             .with_lint(Box::new(ArgTypesLint::new()))
-            .add_file(PathBuf::from(filename))
-            .unwrap()
-            .check();
+            .check(file);
         let file = result.file_id(filename).unwrap();
 
         let mut warnings = result.iter();
@@ -326,10 +324,10 @@ mod tests {
     #[test]
     fn base_elevation() {
         let filename = "base_elevation.rms";
+        let file = RMSFile::from_string(filename, "create_land { base_elevation 8 }");
         let result = RMSCheck::new()
             .with_lint(Box::new(ArgTypesLint::new()))
-            .add_source(filename, "create_land { base_elevation 8 }")
-            .check();
+            .check(file);
         let file = result.file_id(filename).unwrap();
 
         let mut warnings = result.iter();
