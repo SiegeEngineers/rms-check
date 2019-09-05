@@ -8,7 +8,7 @@
 #![warn(missing_docs)]
 #![warn(unused)]
 
-use codespan::{ByteIndex, ByteOffset, FileId, Files};
+use codespan::{ByteIndex, ByteOffset, Files};
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use lsp_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,

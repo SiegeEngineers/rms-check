@@ -4,7 +4,7 @@ use crate::{
     wordize::Word,
     RMSFile,
 };
-use codespan::{ByteIndex, FileId, Files, Span};
+use codespan::{ByteIndex, FileId, Span};
 pub use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 use lazy_static::lazy_static;
 use std::collections::HashSet;

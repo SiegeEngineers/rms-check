@@ -25,8 +25,7 @@ pub use crate::{
 };
 use codespan::{ByteIndex, FileId, Files, Location};
 use std::{
-    collections::HashMap,
-    io::{self, Result},
+    io,
     path::Path,
 };
 
@@ -57,7 +56,7 @@ impl RMSFile {
         }
     }
 
-    pub fn from_path(name: impl AsRef<Path>) -> Result<Self> {
+    pub fn from_path(name: impl AsRef<Path>) -> io::Result<Self> {
         let source = std::fs::read(name.as_ref())?;
         let source = std::str::from_utf8(&source).unwrap(); // TODO do not unwrap
         Ok(Self::from_string(name.as_ref().to_string_lossy(), source))
