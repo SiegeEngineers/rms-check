@@ -422,7 +422,19 @@ impl<'atom> Formatter<'atom> {
                     self.text(word.value);
                 }
             },
-            _ => unimplemented!("{:?}", atom),
+
+            // Garbage non-matching branch statements
+            ElseIf(_, cond) => {
+                self.text("elseif ");
+                self.text(cond.value);
+                self.newline();
+            },
+            EndIf(_) => {
+                self.text("endif");
+                self.newline();
+            },
+
+            _ => unimplemented!("{}", atom),
         }
         self.prev = Some(atom);
         input
