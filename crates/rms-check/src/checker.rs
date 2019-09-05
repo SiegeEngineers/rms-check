@@ -2,6 +2,7 @@ use crate::{
     parser::{Atom, Parser},
     tokens::{TokenType, TOKENS},
     wordize::Word,
+    RMSFile,
 };
 use codespan::{ByteIndex, FileId, Files, Span};
 pub use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
@@ -299,7 +300,7 @@ pub trait Lint {
 #[derive(Debug)]
 pub struct ParseState<'a> {
     /// The files.
-    pub files: &'a Files,
+    pub rms: &'a RMSFile,
     /// The target compatibility for this map script.
     pub compatibility: Compatibility,
     /// Whether this map should be treated as a builtin map. If true, #include and #include_drs should be made available.
@@ -314,12 +315,6 @@ pub struct ParseState<'a> {
     pub token_arg_index: u8,
     /// The current <SECTION>, as well as its opening token.
     pub current_section: Option<Atom<'a>>,
-    /// File ID of the AoC random_map.def file.
-    def_aoc: FileId,
-    /// File ID of the HD Edition random_map.def file.
-    def_hd: FileId,
-    /// File ID of the WololoKingdoms random_map.def file.
-    def_wk: FileId,
     /// List of builtin #const definitions.
     builtin_consts: HashSet<String>,
     /// List of builtin #define definitions.
@@ -333,17 +328,10 @@ pub struct ParseState<'a> {
 }
 
 impl<'a> ParseState<'a> {
-    pub fn new(
-        files: &'a Files,
-        (def_aoc, def_hd, def_wk): (FileId, FileId, FileId),
-        compatibility: Compatibility,
-    ) -> Self {
+    pub fn new(rms: &'a RMSFile, compatibility: Compatibility) -> Self {
         let mut state = Self {
-            files,
+            rms,
             compatibility,
-            def_aoc,
-            def_hd,
-            def_wk,
             is_builtin_map: false,
             is_comment: false,
             nesting: vec![],
@@ -400,11 +388,7 @@ impl<'a> ParseState<'a> {
         self.builtin_consts.clear();
         self.builtin_defines.clear();
 
-        let (file_id, content) = match self.compatibility {
-            Compatibility::WololoKingdoms => (self.def_wk, self.files.source(self.def_wk)),
-            Compatibility::HDEdition => (self.def_hd, self.files.source(self.def_hd)),
-            _ => (self.def_aoc, self.files.source(self.def_aoc)),
-        };
+        let (file_id, content) = self.rms.definitions(compatibility);
 
         for (atom, _) in Parser::new(file_id, content) {
             match atom {
@@ -609,8 +593,8 @@ pub struct CheckerBuilder {
 }
 
 impl CheckerBuilder {
-    pub fn build(self, files: &Files, def_files: (FileId, FileId, FileId)) -> Checker<'_> {
-        let state = ParseState::new(files, def_files, self.compatibility);
+    pub fn build(self, rms: &RMSFile) -> Checker<'_> {
+        let state = ParseState::new(rms, self.compatibility);
         Checker {
             lints: self.lints,
             state,

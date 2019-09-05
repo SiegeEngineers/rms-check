@@ -1,10 +1,9 @@
 use crate::cli_reporter::report as cli_report;
 use failure::{bail, Fallible};
 use multisplice::Multisplice;
-use rms_check::{AutoFixReplacement, Compatibility, RMSCheck};
+use rms_check::{AutoFixReplacement, Compatibility, RMSCheck, RMSFile};
 use std::{
-    fs::{remove_file, write, File},
-    io::Read,
+    fs::{remove_file, write},
     path::PathBuf,
 };
 
@@ -19,10 +18,9 @@ pub struct CheckArgs {
 }
 
 pub fn cli_check(args: CheckArgs) -> Fallible<()> {
-    let checker = RMSCheck::default()
-        .compatibility(args.compatibility)
-        .add_file(args.file)?;
-    let result = checker.check();
+    let file = RMSFile::from_path(args.file)?;
+    let checker = RMSCheck::default().compatibility(args.compatibility);
+    let result = checker.check(file);
     let has_warnings = result.has_warnings();
 
     cli_report(result);
@@ -34,17 +32,12 @@ pub fn cli_check(args: CheckArgs) -> Fallible<()> {
 }
 
 pub fn cli_fix(args: CheckArgs) -> Fallible<()> {
-    let mut input_file = File::open(&args.file)?;
-    let mut bytes = vec![];
-    input_file.read_to_end(&mut bytes)?;
-    let source = String::from_utf8_lossy(&bytes);
+    let file = RMSFile::from_path(&args.file)?;
 
-    let checker = RMSCheck::default()
-        .compatibility(args.compatibility)
-        .add_file(args.file.clone())?;
-    let result = checker.check();
+    let checker = RMSCheck::default().compatibility(args.compatibility);
+    let result = checker.check(file);
 
-    let mut splicer = Multisplice::new(&source);
+    let mut splicer = Multisplice::new(result.main_source());
 
     if !result.has_warnings() {
         // All good!
@@ -100,15 +93,15 @@ pub fn cli_fix(args: CheckArgs) -> Fallible<()> {
     if args.dry_run {
         let temp = format!("{}.tmp", args.file.to_string_lossy());
         write(&temp, &splicer.to_string())?;
-        let result = cli_check(CheckArgs {
+        let check_result = cli_check(CheckArgs {
             file: temp.clone().into(),
             ..args
         });
         remove_file(&temp)?;
-        result
+        check_result
     } else {
         let backup = format!("{}.bak", args.file.to_string_lossy());
-        write(&backup, source.as_ref())?;
+        write(&backup, result.main_source())?;
         write(&args.file, &splicer.to_string())?;
         remove_file(&backup)?;
         cli_check(args)

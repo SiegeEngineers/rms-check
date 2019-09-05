@@ -19,7 +19,7 @@ use lsp_types::{
     TextDocumentSyncKind, TextEdit, Url, WorkspaceEdit,
 };
 use multisplice::Multisplice;
-use rms_check::{AutoFixReplacement, Compatibility, RMSCheck, RMSCheckResult, Warning};
+use rms_check::{AutoFixReplacement, Compatibility, RMSCheck, RMSCheckResult, RMSFile, Warning};
 use serde_json::{self, json};
 use std::{
     collections::HashMap,
@@ -54,7 +54,7 @@ where
     }
 
     /// Convert an rms-check warning to an LSP diagnostic.
-    fn make_lsp_diagnostic(&self, (_, files): (&[FileId], &Files), warn: &Warning) -> Diagnostic {
+    fn make_lsp_diagnostic(&self, files: &Files, warn: &Warning) -> Diagnostic {
         let diag = codespan_lsp::make_lsp_diagnostic(
             files,
             "rms-check".to_string(),
@@ -151,11 +151,9 @@ where
         let doc = self.documents.get(&params.text_document.uri).unwrap();
         let result = self.check(&doc);
         let filename = doc.uri.to_string();
-        let (file_ids, files) = result.files();
-        let file_id = file_ids
-            .iter()
-            .cloned()
-            .find(|&id| files.name(id) == filename)
+        let files = result.files();
+        let file_id = result
+            .file_id(&filename)
             .ok_or_else(|| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
         let start = codespan_lsp::position_to_byte_index(files, file_id, &params.range.start)
             .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
@@ -238,10 +236,10 @@ where
 
     /// Run rms-check.
     fn check(&self, doc: &TextDocumentItem) -> RMSCheckResult {
+        let file = RMSFile::from_string(doc.uri.as_str(), &doc.text);
         RMSCheck::default()
             .compatibility(Compatibility::Conquerors)
-            .add_source(doc.uri.as_str(), &doc.text)
-            .check()
+            .check(file)
     }
 
     /// Run rms-check for a file and publish the resulting diagnostics.

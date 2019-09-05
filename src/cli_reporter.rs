@@ -21,7 +21,7 @@ pub fn report(result: RMSCheckResult) {
     let config = Config::default();
     let mut stream = StandardStream::stdout(ColorChoice::Auto);
     for warn in result.iter() {
-        emit(&mut stream, &config, result.files().1, warn.diagnostic()).unwrap();
+        emit(&mut stream, &config, result.files(), warn.diagnostic()).unwrap();
 
         match warn.severity() {
             Severity::Error => num_errors += 1,
