@@ -26,6 +26,8 @@ pub enum ParseErrorKind {
     MissingPercentChance,
     /// A comment was not closed before the end of the file.
     UnclosedComment,
+    /// Found an unknown word.
+    UnknownWord,
 }
 
 /// An error that can occur during parsing. The Parser will keep going after encountering parse
@@ -375,7 +377,10 @@ impl<'a> Iterator for Parser<'a> {
                     }),
                 ))
             }
-            _ => t(Atom::Other(word)),
+            _ => Some((
+                Atom::Other(word),
+                vec![ParseError::new(word.span, ParseErrorKind::UnknownWord)],
+            )),
         }
     }
 }

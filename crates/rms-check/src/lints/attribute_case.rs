@@ -15,7 +15,7 @@ impl Lint for AttributeCaseLint {
     fn lint_atom(&mut self, _state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
         match atom {
             Atom::Command(cmd, _) if self.is_wrong_case(cmd.value) => {
-                let suggestion = Suggestion::from(cmd, "Attributes must be all lowercase")
+                let suggestion = Suggestion::from(cmd, "Convert to lowercase")
                     .replace(cmd.value.to_ascii_lowercase());
                 let message = format!("Unknown attribute `{}`", cmd.value);
                 vec![atom.error(message).suggest(suggestion)]

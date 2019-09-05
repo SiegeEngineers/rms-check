@@ -104,8 +104,7 @@ impl Default for RMSCheck {
             .with_lint(Box::new(lints::DeadBranchCommentLint {}))
             .with_lint(Box::new(lints::IncludeLint::new()))
             .with_lint(Box::new(lints::IncorrectSectionLint::new()))
-        // .with_lint(Box::new(lints::UnknownAttributeLint {}))
-        // buggy
+            .with_lint(Box::new(lints::UnknownAttributeLint {}))
     }
 }
 
