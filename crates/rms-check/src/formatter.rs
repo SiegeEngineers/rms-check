@@ -5,7 +5,13 @@ use crate::{
 use codespan::Files;
 use std::iter::Peekable;
 
-#[derive(Clone)]
+#[derive(Debug, Default, Clone, Copy)]
+struct Width {
+    command_width: usize,
+    arg_width: usize,
+}
+
+#[derive(Debug, Clone)]
 pub struct Formatter<'atom> {
     /// The tab size.
     tab_size: u32,
@@ -16,10 +22,8 @@ pub struct Formatter<'atom> {
     /// Whether this line still needs indentation. A line needs indentation if no text has been
     /// written to it yet.
     needs_indent: bool,
-    /// Width of commands.
-    command_width: usize,
-    /// Width of the first argument to an attribute, primarily for inside a create_elevation block.
-    arg_width: usize,
+    /// Command name and argument widths in a given context.
+    widths: Vec<Width>,
     /// Whether we are inside a command block.
     inside_block: usize,
     /// The formatted text.
@@ -35,8 +39,7 @@ impl Default for Formatter<'_> {
             use_spaces: true,
             indent: Default::default(),
             needs_indent: Default::default(),
-            command_width: Default::default(),
-            arg_width: Default::default(),
+            widths: Default::default(),
             inside_block: Default::default(),
             result: Default::default(),
             prev: Default::default(),
@@ -76,13 +79,14 @@ impl<'atom> Formatter<'atom> {
     /// Write a command.
     fn command<'w>(&mut self, name: &Word<'w>, args: &[Word<'w>], is_block: bool) {
         self.text(name.value);
-        for _ in 0..self.command_width.saturating_sub(name.value.len()) {
+        let Width { command_width, arg_width } = self.widths.last().cloned().unwrap_or_default();
+        for _ in 0..command_width.saturating_sub(name.value.len()) {
             self.result.push(' ');
         }
         if let Some(arg) = args.get(0) {
             self.result.push(' ');
             self.text(arg.value);
-            for _ in 0..self.arg_width.saturating_sub(arg.value.len()) {
+            for _ in 0..arg_width.saturating_sub(arg.value.len()) {
                 self.result.push(' ');
             }
 
@@ -122,23 +126,23 @@ impl<'atom> Formatter<'atom> {
         self.inside_block += 1;
 
         let mut commands = vec![];
-        let mut longest = (0, 0);
+        let mut width = Width::default();
         let mut indent = 0;
         for atom in input.by_ref().take_while(|atom| !is_end(atom)) {
-            longest = match &atom {
-                Command(cmd, args) => (
-                    longest.0.max(cmd.value.len() + indent * self.tab_size as usize),
-                    longest.1.max(args.get(0).map(|word| word.value.len()).unwrap_or(0)),
-                ),
+            width = match &atom {
+                Command(cmd, args) => Width {
+                    command_width: width.command_width.max(cmd.value.len() + indent * self.tab_size as usize),
+                    arg_width: width.arg_width.max(args.get(0).map(|word| word.value.len()).unwrap_or(0)),
+                },
                 If(_, _) => {
                     indent += 1;
-                    longest
+                    width
                 }
                 EndIf(_) => {
                     indent -= 1;
-                    longest
+                    width
                 }
-                _ => longest,
+                _ => width,
             };
             commands.push(atom);
         }
@@ -146,15 +150,12 @@ impl<'atom> Formatter<'atom> {
         self.newline();
         self.indent += 1;
 
-        let old = (self.command_width, self.arg_width);
-        self.command_width = longest.0;
-        self.arg_width = longest.1;
+        self.widths.push(width);
         let mut sub_input = commands.into_iter().peekable();
         while let Some(atom) = sub_input.next() {
             sub_input = self.write_atom(atom, sub_input);
         }
-        self.command_width = old.0;
-        self.arg_width = old.1;
+        self.widths.pop();
 
         self.inside_block -= 1;
 
@@ -178,8 +179,11 @@ impl<'atom> Formatter<'atom> {
 
         // reset command width so an if block within a command block
         // does not over-indent.
-        let old_widths = (self.command_width, self.arg_width);
-        self.command_width = self.command_width.saturating_sub(2);
+        let Width { command_width, arg_width } = self.widths.last().cloned().unwrap_or_default();
+        self.widths.push(Width {
+            command_width: command_width.saturating_sub(2),
+            arg_width,
+        });
 
         let mut depth = 1;
         let content: Vec<Atom<'atom>> = input
@@ -220,8 +224,7 @@ impl<'atom> Formatter<'atom> {
             }
         }
 
-        self.command_width = old_widths.0;
-        self.arg_width = old_widths.1;
+        self.widths.pop();
 
         self.indent -= 1;
         self.text("endif");
@@ -246,9 +249,7 @@ impl<'atom> Formatter<'atom> {
 
         // reset command width so a start_random within a command block
         // does not over-indent.
-        let old_widths = (self.command_width, self.arg_width);
-        self.command_width = 0;
-        self.arg_width = 0;
+        self.widths.push(Width::default());
 
         let mut null_branch = vec![];
         let mut branches = vec![];
@@ -312,8 +313,7 @@ impl<'atom> Formatter<'atom> {
             }
         }
 
-        self.command_width = old_widths.0;
-        self.arg_width = old_widths.1;
+        self.widths.pop();
 
         self.indent -= 1;
         self.text("end_random");
