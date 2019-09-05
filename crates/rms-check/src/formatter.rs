@@ -18,6 +18,8 @@ pub struct Formatter<'atom> {
     needs_indent: bool,
     /// Width of commands.
     command_width: usize,
+    /// Width of the first argument to an attribute, primarily for inside a create_elevation block.
+    arg_width: usize,
     /// Whether we are inside a command block.
     inside_block: usize,
     /// The formatted text.
@@ -34,6 +36,7 @@ impl Default for Formatter<'_> {
             indent: Default::default(),
             needs_indent: Default::default(),
             command_width: Default::default(),
+            arg_width: Default::default(),
             inside_block: Default::default(),
             result: Default::default(),
             prev: Default::default(),
@@ -76,9 +79,17 @@ impl<'atom> Formatter<'atom> {
         for _ in 0..self.command_width.saturating_sub(name.value.len()) {
             self.result.push(' ');
         }
-        for arg in args {
+        if let Some(arg) = args.get(0) {
             self.result.push(' ');
             self.text(arg.value);
+            for _ in 0..self.arg_width.saturating_sub(arg.value.len()) {
+                self.result.push(' ');
+            }
+
+            for arg in &args[1..] {
+                self.result.push(' ');
+                self.text(arg.value);
+            }
         }
         if is_block {
             self.result.push(' ');
@@ -111,11 +122,14 @@ impl<'atom> Formatter<'atom> {
         self.inside_block += 1;
 
         let mut commands = vec![];
-        let mut longest = 0;
+        let mut longest = (0, 0);
         let mut indent = 0;
         for atom in input.by_ref().take_while(|atom| !is_end(atom)) {
             longest = match &atom {
-                Command(cmd, _) => longest.max(cmd.value.len() + indent * self.tab_size as usize),
+                Command(cmd, args) => (
+                    longest.0.max(cmd.value.len() + indent * self.tab_size as usize),
+                    longest.1.max(args.get(0).map(|word| word.value.len()).unwrap_or(0)),
+                ),
                 If(_, _) => {
                     indent += 1;
                     longest
@@ -132,13 +146,15 @@ impl<'atom> Formatter<'atom> {
         self.newline();
         self.indent += 1;
 
-        let old = self.command_width;
-        self.command_width = longest;
+        let old = (self.command_width, self.arg_width);
+        self.command_width = longest.0;
+        self.arg_width = longest.1;
         let mut sub_input = commands.into_iter().peekable();
         while let Some(atom) = sub_input.next() {
             sub_input = self.write_atom(atom, sub_input);
         }
-        self.command_width = old;
+        self.command_width = old.0;
+        self.arg_width = old.1;
 
         self.inside_block -= 1;
 
