@@ -173,6 +173,7 @@ lazy_static! {
         m.insert(token!("effect_percent", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Token, Token, Token, Number]));
         m.insert(token!("terrain_state", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Number, Number, Number, Number]));
         m.insert(token!("weather_type", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Number, Number, Number, Number]));
+        m.insert(token!("guard_state", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Token, Token, Number, Number]));
 
         let land_attribute_context = TokenContext::AnyOf(&[
            TokenContext::Attribute(Some("create_land")),
