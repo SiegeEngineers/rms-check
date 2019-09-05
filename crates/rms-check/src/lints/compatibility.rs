@@ -149,7 +149,6 @@ impl Lint for CompatibilityLint {
 mod tests {
     use super::CompatibilityLint;
     use crate::{RMSCheck, RMSFile, Severity};
-    use std::path::PathBuf;
 
     #[test]
     fn compatibility() {
