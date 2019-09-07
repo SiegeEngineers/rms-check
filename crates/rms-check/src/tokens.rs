@@ -202,6 +202,7 @@ lazy_static! {
         m.insert(token!("set_zone_randomly", land_attribute_context));
         m.insert(token!("other_zone_avoidance_distance", land_attribute_context, [Number]));
         m.insert(token!("assign_to_player", TokenContext::Attribute(Some("create_land")), [Number]));
+        m.insert(token!("assign_to", TokenContext::Attribute(Some("create_land")), [Token, Number, Number, Number]));
 
         m.insert(token!("base_terrain", TokenContext::AnyOf(&[
             TokenContext::TopLevelAttribute(Some("<LAND_GENERATION>")),
