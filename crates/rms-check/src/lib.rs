@@ -165,6 +165,11 @@ impl RMSFile {
     pub(crate) const fn files(&self) -> &Files {
         &self.files
     }
+
+    fn is_zip_rms(&self) -> bool {
+        let name = self.files.name(self.file_id());
+        name.starts_with("ZR@")
+    }
 }
 
 /// The result of a lint run.

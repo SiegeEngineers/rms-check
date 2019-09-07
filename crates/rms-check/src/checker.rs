@@ -594,7 +594,14 @@ pub struct CheckerBuilder {
 
 impl CheckerBuilder {
     pub fn build(self, rms: &RMSFile) -> Checker<'_> {
-        let state = ParseState::new(rms, self.compatibility);
+        // Default to UP 1.5 if it's a ZR@ map
+        let compatibility = if rms.is_zip_rms() && self.compatibility < Compatibility::UserPatch15 {
+            Compatibility::UserPatch15
+        } else {
+            self.compatibility
+        };
+
+        let state = ParseState::new(rms, compatibility);
         Checker {
             lints: self.lints,
             state,
