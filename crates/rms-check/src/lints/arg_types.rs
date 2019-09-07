@@ -186,6 +186,70 @@ impl Lint for ArgTypesLint {
                         warnings.push(args[0].warning("`zone 99` crashes the game"));
                     }
                 }
+                "assign_to" => {
+                    enum AssignTarget {
+                        Color,
+                        Player,
+                        Team,
+                    }
+                    let target = if let Some(arg) = args.get(0) {
+                        match arg.value {
+                            "AT_COLOR" => Some(AssignTarget::Color),
+                            "AT_PLAYER" => Some(AssignTarget::Player),
+                            "AT_TEAM" => Some(AssignTarget::Team),
+                            _ => {
+                                warnings.push(arg.warning(
+                                    "`assign_to` Target must be AT_COLOR, AT_PLAYER, AT_TEAM",
+                                ));
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
+
+                    if let Some(Ok(number)) = args.get(1).map(|f| f.value.parse::<i32>()) {
+                        match target {
+                            Some(AssignTarget::Color) | Some(AssignTarget::Player) => {
+                                if number < 0 || number > 8 {
+                                    warnings.push(args[1].warning("`assign_to` Number must be 1-8 when targeting AT_COLOR or AT_PLAYER"));
+                                }
+                            }
+                            Some(AssignTarget::Team) => {
+                                if (number < -4 || number > 4) && number != -10 {
+                                    warnings.push(args[1].warning(
+                                        "`assign_to` Number must be 1-4 when targeting AT_TEAM",
+                                    ));
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
+
+                    if let Some(Ok(mode)) = args.get(2).map(|f| f.value.parse::<i32>()) {
+                        match target {
+                            Some(AssignTarget::Team) => {
+                                if mode != -1 && mode != 0 {
+                                    warnings.push(args[2].warning("`assign_to` Mode must be 0 (random selection) or -1 (ordered selection) when targeting AT_TEAM"));
+                                }
+                            }
+                            Some(_) => {
+                                warnings.push(args[2].warning("`assign_to` Mode should be 0 when targeting AT_COLOR or AT_PLAYER"));
+                            }
+                            _ => (),
+                        }
+                    }
+
+                    if let Some(Ok(flags)) = args.get(3).map(|f| f.value.parse::<i32>()) {
+                        let mask = 1 | 2;
+                        if (flags & mask) != flags {
+                            warnings.push(
+                                args[3]
+                                    .warning("`assign_to` Flags must only combine flags 1 and 2"),
+                            );
+                        }
+                    }
+                }
                 _ => (),
             }
 
@@ -208,7 +272,11 @@ fn meant<'a>(actual: &str, possible: impl Iterator<Item = &'a str>) -> Option<&'
         }
     }
 
-    result
+    if lowest < actual.len() {
+        result
+    } else {
+        None
+    }
 }
 
 /// Check if a string is numeric.
@@ -240,7 +308,7 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{RMSCheck, RMSFile, Severity};
+    use crate::{Compatibility, RMSCheck, RMSFile, Severity};
     use codespan::{ColumnIndex, LineIndex, Location};
 
     #[test]
@@ -341,5 +409,66 @@ mod tests {
             result.resolve_position(file, first_span.start()).unwrap(),
             Location::new(LineIndex(0), ColumnIndex(29))
         );
+    }
+
+    #[test]
+    fn assign_to() {
+        let filename = "assign_to.rms";
+        let file = RMSFile::from_string(filename, "create_land { assign_to X 0 0 0 }");
+        let result = RMSCheck::new()
+            .with_lint(Box::new(ArgTypesLint::new()))
+            .check(file);
+        let file = result.file_id(filename).unwrap();
+        let mut warnings = result.iter();
+        assert_eq!(
+            warnings.next().unwrap().message(),
+            "Token `X` is never defined"
+        );
+        let first = warnings.next().unwrap();
+        assert!(warnings.next().is_none());
+        assert_eq!(first.diagnostic().severity, Severity::Warning);
+        assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(
+            first.message(),
+            "`assign_to` Target must be AT_COLOR, AT_PLAYER, AT_TEAM"
+        );
+        let first_span = first.diagnostic().primary_label.span;
+        assert_eq!(
+            result.resolve_position(file, first_span.start()).unwrap(),
+            Location::new(LineIndex(0), ColumnIndex(24))
+        );
+
+        let file = RMSFile::from_string(filename, "create_land { assign_to AT_TEAM 0 0 0 }");
+        let result = RMSCheck::new()
+            .compatibility(Compatibility::WololoKingdoms)
+            .with_lint(Box::new(ArgTypesLint::new()))
+            .check(file);
+        assert_eq!(result.iter().count(), 0);
+
+        let file = RMSFile::from_string(filename, "create_land { assign_to AT_TEAM 7 -2 4 }");
+        let result = RMSCheck::new()
+            .compatibility(Compatibility::WololoKingdoms)
+            .with_lint(Box::new(ArgTypesLint::new()))
+            .check(file);
+        let mut warnings = result.iter();
+        let first = warnings.next().unwrap();
+        assert_eq!(first.diagnostic().severity, Severity::Warning);
+        assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(
+            first.message(),
+            "`assign_to` Number must be 1-4 when targeting AT_TEAM"
+        );
+        let second = warnings.next().unwrap();
+        assert_eq!(second.diagnostic().severity, Severity::Warning);
+        assert_eq!(second.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(second.message(), "`assign_to` Mode must be 0 (random selection) or -1 (ordered selection) when targeting AT_TEAM");
+        let third = warnings.next().unwrap();
+        assert_eq!(third.diagnostic().severity, Severity::Warning);
+        assert_eq!(third.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(
+            third.message(),
+            "`assign_to` Flags must only combine flags 1 and 2"
+        );
+        assert!(warnings.next().is_none());
     }
 }
