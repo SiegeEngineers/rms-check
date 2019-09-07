@@ -24,15 +24,14 @@ pub use crate::{
     wordize::Word,
 };
 use codespan::{ByteIndex, FileId, Files, Location};
-use std::{
-    io,
-    path::Path,
-};
+use std::{fs::File, io, path::Path};
+use zip::ZipArchive;
 
+/// Container for a random map script, generalising various formats.
 #[derive(Debug)]
 pub struct RMSFile {
     files: Files,
-    main_file: FileId,
+    file_ids: Vec<FileId>,
     /// File ID of the AoC random_map.def file.
     def_aoc: FileId,
     /// File ID of the HD Edition random_map.def file.
@@ -42,35 +41,95 @@ pub struct RMSFile {
 }
 
 impl RMSFile {
-    fn new(mut files: Files, main_file: FileId) -> Self {
+    fn new(mut files: Files, file_ids: Vec<FileId>) -> Self {
         let def_aoc = files.add("random_map.def", include_str!("def_aoc.rms"));
         let def_hd = files.add("random_map.def", include_str!("def_hd.rms"));
         let def_wk = files.add("random_map.def", include_str!("def_wk.rms"));
 
         Self {
             files,
-            main_file,
+            file_ids,
             def_aoc,
             def_hd,
             def_wk,
         }
     }
 
+    /// Create an RMSFile from a file path.
     pub fn from_path(name: impl AsRef<Path>) -> io::Result<Self> {
         let source = std::fs::read(name.as_ref())?;
-        let source = std::str::from_utf8(&source).unwrap(); // TODO do not unwrap
-        Ok(Self::from_string(name.as_ref().to_string_lossy(), source))
+        let filename = name.as_ref().file_name().unwrap().to_string_lossy();
+        if filename.starts_with("ZR@") {
+            Self::from_zip_rms(name.as_ref().to_string_lossy(), &source)
+        } else {
+            let source = std::str::from_utf8(&source).unwrap(); // TODO do not unwrap
+            Ok(Self::from_string(name.as_ref().to_string_lossy(), source))
+        }
     }
 
+    /// Create an RMSFile from a source string.
     pub fn from_string(name: impl AsRef<str>, source: impl AsRef<str>) -> Self {
         let mut files = Files::new();
         let main_file = files.add(name.as_ref(), source.as_ref());
-        Self::new(files, main_file)
+        Self::new(files, vec![main_file])
     }
 
-    // pub fn from_unpacked_zr(path: impl AsRef<Path>) -> Result<Self> {}
-    // pub fn from_binary(name: impl AsRef<str>, source: &[u8]) -> Result<Self> {}
+    fn from_zip_rms_reader<R>(_name: impl AsRef<str>, reader: R) -> io::Result<Self>
+    where
+        R: io::Read + io::Seek,
+    {
+        let mut zip = ZipArchive::new(reader)?;
+        let mut files = Files::new();
+        let mut file_ids = vec![];
+        for index in 0..zip.len() {
+            let mut file = zip.by_index(index)?;
+            let mut bytes = vec![];
+            std::io::copy(&mut file, &mut bytes)?;
+            if file.name().ends_with(".rms") || file.name().ends_with(".inc") {
+                let source = std::str::from_utf8(&bytes).unwrap(); // TODO do not unwrap
+                file_ids.push(files.add(file.name(), source));
+                // If this is an .rms file, move it to the front so main_file() does the right thing
+                if file.name().ends_with(".rms") {
+                    file_ids.rotate_right(1);
+                }
+            }
+        }
 
+        Ok(Self::new(files, file_ids))
+    }
+
+    /// Create an RMSFile from a string of bytes containing a ZR@ map.
+    pub fn from_zip_rms(name: impl AsRef<str>, source: &[u8]) -> io::Result<Self> {
+        Self::from_zip_rms_reader(name, io::Cursor::new(source))
+    }
+
+    /// Create an RMSFile from a folder containing files intended for a ZR@ map.
+    pub fn from_zip_rms_path_unpacked(path: impl AsRef<Path>) -> io::Result<Self> {
+        let mut files = Files::new();
+        let mut file_ids = vec![];
+        for entry in std::fs::read_dir(path)? {
+            let path = entry?.path();
+            let name = path.to_string_lossy();
+            let bytes = std::fs::read(&path)?;
+            let source = std::str::from_utf8(&bytes).unwrap(); // TODO do not unwrap
+            file_ids.push(files.add(name.as_ref(), source));
+            // If this is an .rms file, move it to the front so main_file() does the right thing
+            if name.ends_with(".rms") {
+                file_ids.rotate_right(1);
+            }
+        }
+
+        Ok(Self::new(files, file_ids))
+    }
+
+    /// Create an RMSFile from a file path containing a ZR@ map.
+    pub fn from_zip_rms_path(path: impl AsRef<Path>) -> io::Result<Self> {
+        Self::from_zip_rms_reader(path.as_ref().to_string_lossy(), File::open(path.as_ref())?)
+    }
+
+    // pub fn from_bytes(name: impl AsRef<str>, source: &[u8]) -> io::Result<Self> {}
+
+    /// Get the definitions file for this map.
     pub(crate) fn definitions(&self, compatibility: Compatibility) -> (FileId, &str) {
         match compatibility {
             Compatibility::WololoKingdoms => (self.def_wk, self.files.source(self.def_wk)),
@@ -79,22 +138,30 @@ impl RMSFile {
         }
     }
 
-    const fn file_id(&self) -> FileId {
-        self.main_file
+    /// Get the codespan FileIds in this map.
+    pub fn file_ids(&self) -> &[FileId] {
+        &self.file_ids
     }
 
+    /// Get the codespan FileId of the main script in this map.
+    fn file_id(&self) -> FileId {
+        self.file_ids[0]
+    }
+
+    /// Get the source code of the main script in this map.
     fn main_source(&self) -> &str {
-        self.files.source(self.main_file)
+        self.files.source(self.file_ids[0])
     }
 
+    /// Get the codespan FileId for a file with the given name in this map (mostly for ZR@ maps).
     fn find_file(&self, name: &str) -> Option<FileId> {
-        if self.files.name(self.main_file) == name {
-            Some(self.main_file)
-        } else {
-            None
-        }
+        self.file_ids
+            .iter()
+            .cloned()
+            .find(|&id| self.files.name(id) == name)
     }
 
+    /// Get the codespan Files instance.
     pub(crate) const fn files(&self) -> &Files {
         &self.files
     }
@@ -228,13 +295,4 @@ impl RMSCheck {
 
         RMSCheckResult { rms, warnings }
     }
-}
-
-/// Check a random map script for errors or other issues.
-#[inline]
-pub fn check(source: &str, compatibility: Compatibility) -> RMSCheckResult {
-    let checker = RMSCheck::default().compatibility(compatibility);
-    let file = RMSFile::from_string("random.rms", source);
-
-    checker.check(file)
 }
