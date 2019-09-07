@@ -183,6 +183,7 @@ impl Warning {
 
     /// Create a new warning with severity "Warning".
     #[allow(unused)]
+    #[must_use]
     pub(crate) fn warning(file_id: FileId, span: Span, message: impl Into<String>) -> Self {
         let message: String = message.into();
         Warning {
@@ -195,6 +196,7 @@ impl Warning {
     }
 
     /// Create a new warning with severity "Error".
+    #[must_use]
     pub(crate) fn error(file_id: FileId, span: Span, message: impl Into<String>) -> Self {
         let message: String = message.into();
         Warning {
@@ -226,6 +228,7 @@ impl Warning {
 
 impl Word<'_> {
     /// Create a warning applying to this token.
+    #[must_use]
     pub(crate) fn warning(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
@@ -237,6 +240,7 @@ impl Word<'_> {
         }
     }
     /// Create an error applying to this token.
+    #[must_use]
     pub(crate) fn error(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
@@ -251,6 +255,7 @@ impl Word<'_> {
 
 impl Atom<'_> {
     /// Create a warning applying to this token.
+    #[must_use]
     pub(crate) fn warning(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
@@ -262,6 +267,7 @@ impl Atom<'_> {
         }
     }
     /// Create an error applying to this token.
+    #[must_use]
     pub(crate) fn error(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
