@@ -36,18 +36,16 @@ impl Lint for IncludeLint {
 #[cfg(test)]
 mod tests {
     use super::IncludeLint;
-    use crate::{RMSCheck, Severity};
+    use crate::{RMSCheck, RMSFile, Severity};
     use codespan::Location;
-    use std::path::PathBuf;
 
     #[test]
     fn include() {
         let filename = "./tests/rms/include.rms";
+        let file = RMSFile::from_path(filename).unwrap();
         let result = RMSCheck::new()
             .with_lint(Box::new(IncludeLint::new()))
-            .add_file(PathBuf::from(filename))
-            .unwrap()
-            .check();
+            .check(file);
         let file = result.file_id(filename).unwrap();
 
         let mut warnings = result.iter();
