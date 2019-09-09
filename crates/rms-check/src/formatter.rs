@@ -80,21 +80,33 @@ impl<'atom> Formatter<'atom> {
     fn command<'w>(&mut self, name: &Word<'w>, args: &[Word<'w>], is_block: bool) {
         self.text(name.value);
         let Width { command_width, arg_width } = self.widths.last().cloned().unwrap_or_default();
-        for _ in 0..command_width.saturating_sub(name.value.len()) {
-            self.result.push(' ');
-        }
-        if let Some(arg) = args.get(0) {
-            self.result.push(' ');
-            self.text(arg.value);
-            for _ in 0..arg_width.saturating_sub(arg.value.len()) {
+
+        let mut arg_iter = args.iter().peekable();
+
+        // If we have any args, add padding spaces between the command name and arg1, and between
+        // arg1 and arg2.
+        // The rest is not handled right now since they are less frequent and it's not certain
+        // that lining them up makes sense.
+        if let Some(arg1) = arg_iter.next() {
+            for _ in 0..command_width.saturating_sub(name.value.len()) {
                 self.result.push(' ');
             }
 
-            for arg in &args[1..] {
+            self.result.push(' ');
+            self.text(arg1.value);
+
+            if arg_iter.peek().is_some() {
+                for _ in 0..arg_width.saturating_sub(arg1.value.len()) {
+                    self.result.push(' ');
+                }
+            }
+
+            for arg in arg_iter {
                 self.result.push(' ');
                 self.text(arg.value);
             }
         }
+
         if is_block {
             self.result.push(' ');
         } else {
