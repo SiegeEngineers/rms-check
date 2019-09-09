@@ -1,9 +1,11 @@
 const path = require('path')
+const { TextDecoder } = require('util')
 const zip = require('./store-zip')
 const { commands, window, workspace } = require('vscode')
 const { LanguageClient, TransportKind } = require('vscode-languageclient')
 
 let client = null
+let decoder = null
 
 const configuration = workspace.getConfiguration('rmsCheck')
 
@@ -48,7 +50,6 @@ function getNativeServerOptions () {
 const openedZrMaps = new Map()
 
 async function editZrMap (uri) {
-  window.showInformationMessage(uri.fsPath)
   const file = uri.fsPath
 
   const panel = window.createWebviewPanel('rms-check.zr-map', path.basename(file), -1, {
@@ -59,7 +60,7 @@ async function editZrMap (uri) {
 
   const bytes = await workspace.fs.readFile(uri)
   const files = zip.read(bytes)
-  openedZrMaps.set(uri.toString(), files)
+  openedZrMaps.set(uri.toString(true), files)
 
   const mainFile = files.find((f) => /\.rms$/.test(f.header.name))
   if (mainFile) {
@@ -82,6 +83,8 @@ exports.activate = function activate (context) {
     documentSelector: ['aoe2-rms']
   }
 
+  decoder = new TextDecoder()
+
   client = new LanguageClient('rmsCheck', 'rms-check', serverOptions, clientOptions)
   client.start()
 
@@ -92,7 +95,7 @@ exports.activate = function activate (context) {
         fragment: null,
         scheme: 'file'
       })
-      const zr = openedZrMaps.get(zrUri.toString())
+      const zr = openedZrMaps.get(zrUri.toString(true))
       if (!zr) {
         throw new Error('ZR@ map was not opened.')
       }
@@ -102,7 +105,7 @@ exports.activate = function activate (context) {
         throw new Error('ZR@ map does not contain a .rms file.')
       }
 
-      return String.fromCharCode(...file.data)
+      return decoder.decode(file.data)
     }
   }))
 }

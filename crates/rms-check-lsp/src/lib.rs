@@ -65,7 +65,7 @@ where
             warn.diagnostic().clone(),
             |f| self.codespan_name_to_url(files.name(f)),
         )
-        .unwrap();
+        .expect("could not convert diagnostic to lsp");
 
         Diagnostic {
             code: warn
