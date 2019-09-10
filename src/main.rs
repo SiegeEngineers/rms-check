@@ -12,7 +12,7 @@ mod zip_rms;
 use check::{cli_check, cli_fix, CheckArgs};
 use failure::Fallible;
 use language_server::cli_server;
-use rms_check::Compatibility;
+use rms_check::{Compatibility, FormatOptions};
 use std::path::PathBuf;
 use structopt::StructOpt;
 use zip_rms::{cli_pack, cli_unpack};
@@ -102,6 +102,15 @@ enum CliCommand {
     Format {
         /// The file to format.
         file: PathBuf,
+        /// Set the size in spaces of a single tab indentation.
+        #[structopt(long = "tab-size", default_value = "2")]
+        tab_size: u32,
+        /// Whether to use spaces instead of tabs for indentation.
+        #[structopt(long = "no-use-spaces")]
+        no_use_spaces: bool,
+        /// Whether to align arguments in a list of commands.
+        #[structopt(long = "no-align-arguments")]
+        no_align_arguments: bool,
     },
     /// Syntax check and lint a random map script.
     #[structopt(name = "check")]
@@ -140,10 +149,15 @@ fn main() -> Fallible<()> {
             dry_run,
             fix_unsafe,
         }),
-        Some(CliCommand::Format { file }) => {
+        Some(CliCommand::Format { file, tab_size, no_use_spaces, no_align_arguments }) => {
+            let options = FormatOptions::default()
+                .tab_size(tab_size)
+                .use_spaces(!no_use_spaces)
+                .align_arguments(!no_align_arguments);
+
             let bytes = std::fs::read(file)?;
             let string = std::str::from_utf8(&bytes)?;
-            println!("{}", rms_check::format(string));
+            println!("{}", rms_check::format(string, options));
             Ok(())
         },
         Some(CliCommand::Server) => {
