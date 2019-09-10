@@ -20,7 +20,7 @@ pub use crate::{
         AutoFixReplacement, CheckerBuilder, Compatibility, Lint, Nesting, ParseState, Severity,
         Suggestion, Warning,
     },
-    formatter::format,
+    formatter::{format, FormatOptions},
     parser::{Atom, ParseErrorKind, Parser},
     tokens::{ArgType, TokenContext, TokenType, TOKENS},
     wordize::Word,

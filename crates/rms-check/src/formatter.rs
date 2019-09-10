@@ -5,18 +5,79 @@ use crate::{
 use codespan::Files;
 use std::iter::Peekable;
 
+/// Keeps track of alignment widths for commands/attributes.
 #[derive(Debug, Default, Clone, Copy)]
 struct Width {
+    /// The width of the widest command in a block.
     command_width: usize,
+    /// The width of the widest first argument of any command in a block.
     arg_width: usize,
 }
 
+/// Formatting options.
+///
+/// ## Example
+/// ```rust
+/// use rms_check::{format, FormatOptions};
+/// let opts = FormatOptions::default()
+///     .tab_size(8)
+///     .use_spaces(true)
+///     .align_arguments(false);
+/// let result = format("create_object SCOUT { number_of_objects 5 group_placement_radius 3 }", opts);
+/// assert_eq!(result, "create_object SCOUT {\r
+///         number_of_objects 5\r
+///         group_placement_radius 3\r
+/// }\r
+/// ");
+/// ```
 #[derive(Debug, Clone)]
-pub struct Formatter<'atom> {
-    /// The tab size.
+pub struct FormatOptions {
     tab_size: u32,
-    /// The tab size.
     use_spaces: bool,
+    align_arguments: bool,
+}
+
+impl Default for FormatOptions {
+    fn default () -> Self {
+        Self {
+            tab_size: 2,
+            use_spaces: true,
+            align_arguments: true,
+        }
+    }
+}
+
+impl FormatOptions {
+    /// Set the size in spaces of a single tab indentation (default 2). This is only used if
+    /// `use_spaces()` is enabled.
+    pub fn tab_size(self, tab_size: u32) -> Self { Self { tab_size, ..self } }
+    /// Whether to use spaces instead of tabs for indentation (default true).
+    pub fn use_spaces(self, use_spaces: bool) -> Self { Self { use_spaces, ..self } }
+    /// Whether to align arguments in a list of commands (default true).
+    ///
+    /// ## Example
+    /// When enabled:
+    /// ```rms
+    /// create_object SCOUT {
+    ///   number_of_objects   5
+    ///   group_variance      5
+    ///   terrain_to_place_on GRASS
+    /// }
+    /// ```
+    /// When disabled:
+    /// ```rms
+    /// create_object SCOUT {
+    ///   number_of_objects 5
+    ///   group_variance 5
+    ///   terrain_to_place_on GRASS
+    /// }
+    /// ```
+    pub fn align_arguments(self, align_arguments: bool) -> Self { Self { align_arguments, ..self } }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct Formatter<'atom> {
+    options: FormatOptions,
     /// The current indentation level.
     indent: u32,
     /// Whether this line still needs indentation. A line needs indentation if no text has been
@@ -32,22 +93,14 @@ pub struct Formatter<'atom> {
     prev: Option<Atom<'atom>>,
 }
 
-impl Default for Formatter<'_> {
-    fn default() -> Self {
+impl<'atom> Formatter<'atom> {
+    fn new(options: FormatOptions) -> Self {
         Self {
-            tab_size: 2,
-            use_spaces: true,
-            indent: Default::default(),
-            needs_indent: Default::default(),
-            widths: Default::default(),
-            inside_block: Default::default(),
-            result: Default::default(),
-            prev: Default::default(),
+            options,
+            ..Default::default()
         }
     }
-}
 
-impl<'atom> Formatter<'atom> {
     /// Write a newline (Windows-style).
     fn newline(&mut self) {
         self.result.push_str("\r\n");
@@ -57,8 +110,8 @@ impl<'atom> Formatter<'atom> {
     /// Indent the current line if it still needs it.
     fn maybe_indent(&mut self) {
         if self.needs_indent {
-            if self.use_spaces {
-                for _ in 0..self.indent * self.tab_size {
+            if self.options.use_spaces {
+                for _ in 0..self.indent * self.options.tab_size {
                     self.result.push(' ');
                 }
             } else {
@@ -83,28 +136,30 @@ impl<'atom> Formatter<'atom> {
 
         let mut arg_iter = args.iter().peekable();
 
-        // If we have any args, add padding spaces between the command name and arg1, and between
-        // arg1 and arg2.
-        // The rest is not handled right now since they are less frequent and it's not certain
-        // that lining them up makes sense.
-        if let Some(arg1) = arg_iter.next() {
-            for _ in 0..command_width.saturating_sub(name.value.len()) {
-                self.result.push(' ');
-            }
-
-            self.result.push(' ');
-            self.text(arg1.value);
-
-            if arg_iter.peek().is_some() {
-                for _ in 0..arg_width.saturating_sub(arg1.value.len()) {
+        if self.options.align_arguments {
+            // If we have any args, add padding spaces between the command name and arg1, and between
+            // arg1 and arg2.
+            // The rest is not handled right now since they are less frequent and it's not certain
+            // that lining them up makes sense.
+            if let Some(arg1) = arg_iter.next() {
+                for _ in 0..command_width.saturating_sub(name.value.len()) {
                     self.result.push(' ');
                 }
-            }
 
-            for arg in arg_iter {
                 self.result.push(' ');
-                self.text(arg.value);
+                self.text(arg1.value);
+
+                if arg_iter.peek().is_some() {
+                    for _ in 0..arg_width.saturating_sub(arg1.value.len()) {
+                        self.result.push(' ');
+                    }
+                }
             }
+        }
+
+        for arg in arg_iter {
+            self.result.push(' ');
+            self.text(arg.value);
         }
 
         if is_block {
@@ -143,7 +198,7 @@ impl<'atom> Formatter<'atom> {
         for atom in input.by_ref().take_while(|atom| !is_end(atom)) {
             width = match &atom {
                 Command(cmd, args) => Width {
-                    command_width: width.command_width.max(cmd.value.len() + indent * self.tab_size as usize),
+                    command_width: width.command_width.max(cmd.value.len() + indent * self.options.tab_size as usize),
                     arg_width: width.arg_width.max(args.get(0).map(|word| word.value.len()).unwrap_or(0)),
                 },
                 If(_, _) => {
@@ -463,11 +518,11 @@ impl<'atom> Formatter<'atom> {
 }
 
 /// Format an rms source string.
-pub fn format(source: &str) -> String {
+pub fn format(source: &str, options: FormatOptions) -> String {
     let mut files = Files::new();
     let f = files.add("format.rms", source);
     let parser = Parser::new(f, files.source(f));
-    Formatter::default().format(parser.map(|(atom, _)| atom))
+    Formatter::new(options).format(parser.map(|(atom, _)| atom))
 }
 
 #[cfg(test)]
@@ -477,7 +532,7 @@ mod tests {
     #[test]
     fn basic_section() {
         assert_eq!(
-            format("<PLAYER_SETUP> <OBJECTS_GENERATION>"),
+            format("<PLAYER_SETUP> <OBJECTS_GENERATION>", FormatOptions::default()),
             "<PLAYER_SETUP>\r\n\r\n<OBJECTS_GENERATION>\r\n"
         );
     }
@@ -485,7 +540,7 @@ mod tests {
     #[test]
     fn command_group() {
         assert_eq!(
-            format("create_terrain GRASS3 { base_terrain DESERT border_fuzziness 5 }"),
+            format("create_terrain GRASS3 { base_terrain DESERT border_fuzziness 5 }", FormatOptions::default()),
             "create_terrain GRASS3 {\r\n  base_terrain     DESERT\r\n  border_fuzziness 5\r\n}\r\n"
         );
     }
