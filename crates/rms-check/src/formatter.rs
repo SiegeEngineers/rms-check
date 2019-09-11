@@ -506,12 +506,27 @@ impl<'atom> Formatter<'atom> {
                 self.text(cond.value);
                 self.newline();
             },
+            Else(_) => {
+                self.text("else");
+                self.newline();
+            },
             EndIf(_) => {
                 self.text("endif");
                 self.newline();
             },
-
-            _ => unimplemented!("{}", atom),
+            CloseBlock(_) => {
+                self.text("}");
+                self.newline();
+            },
+            PercentChance(_, chance) => {
+                self.text("percent_chance ");
+                self.text(chance.value);
+                self.newline();
+            },
+            EndRandom(_) => {
+                self.text("end_random");
+                self.newline();
+            },
         }
         self.prev = Some(atom);
         input
