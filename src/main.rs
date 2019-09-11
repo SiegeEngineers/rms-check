@@ -149,7 +149,12 @@ fn main() -> Fallible<()> {
             dry_run,
             fix_unsafe,
         }),
-        Some(CliCommand::Format { file, tab_size, no_use_spaces, no_align_arguments }) => {
+        Some(CliCommand::Format {
+            file,
+            tab_size,
+            no_use_spaces,
+            no_align_arguments,
+        }) => {
             let options = FormatOptions::default()
                 .tab_size(tab_size)
                 .use_spaces(!no_use_spaces)
@@ -159,7 +164,7 @@ fn main() -> Fallible<()> {
             let string = std::str::from_utf8(&bytes)?;
             println!("{}", rms_check::format(string, options));
             Ok(())
-        },
+        }
         Some(CliCommand::Server) => {
             cli_server();
             unreachable!();

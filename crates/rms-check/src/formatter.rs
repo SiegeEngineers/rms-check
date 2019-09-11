@@ -38,7 +38,7 @@ pub struct FormatOptions {
 }
 
 impl Default for FormatOptions {
-    fn default () -> Self {
+    fn default() -> Self {
         Self {
             tab_size: 2,
             use_spaces: true,
@@ -50,9 +50,13 @@ impl Default for FormatOptions {
 impl FormatOptions {
     /// Set the size in spaces of a single tab indentation (default 2). This is only used if
     /// `use_spaces()` is enabled.
-    pub fn tab_size(self, tab_size: u32) -> Self { Self { tab_size, ..self } }
+    pub fn tab_size(self, tab_size: u32) -> Self {
+        Self { tab_size, ..self }
+    }
     /// Whether to use spaces instead of tabs for indentation (default true).
-    pub fn use_spaces(self, use_spaces: bool) -> Self { Self { use_spaces, ..self } }
+    pub fn use_spaces(self, use_spaces: bool) -> Self {
+        Self { use_spaces, ..self }
+    }
     /// Whether to align arguments in a list of commands (default true).
     ///
     /// ## Example
@@ -72,7 +76,12 @@ impl FormatOptions {
     ///   terrain_to_place_on GRASS
     /// }
     /// ```
-    pub fn align_arguments(self, align_arguments: bool) -> Self { Self { align_arguments, ..self } }
+    pub fn align_arguments(self, align_arguments: bool) -> Self {
+        Self {
+            align_arguments,
+            ..self
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -132,7 +141,10 @@ impl<'atom> Formatter<'atom> {
     /// Write a command.
     fn command<'w>(&mut self, name: &Word<'w>, args: &[Word<'w>], is_block: bool) {
         self.text(name.value);
-        let Width { command_width, arg_width } = self.widths.last().cloned().unwrap_or_default();
+        let Width {
+            command_width,
+            arg_width,
+        } = self.widths.last().cloned().unwrap_or_default();
 
         let mut arg_iter = args.iter().peekable();
 
@@ -198,8 +210,12 @@ impl<'atom> Formatter<'atom> {
         for atom in input.by_ref().take_while(|atom| !is_end(atom)) {
             width = match &atom {
                 Command(cmd, args) => Width {
-                    command_width: width.command_width.max(cmd.value.len() + indent * self.options.tab_size as usize),
-                    arg_width: width.arg_width.max(args.get(0).map(|word| word.value.len()).unwrap_or(0)),
+                    command_width: width
+                        .command_width
+                        .max(cmd.value.len() + indent * self.options.tab_size as usize),
+                    arg_width: width
+                        .arg_width
+                        .max(args.get(0).map(|word| word.value.len()).unwrap_or(0)),
                 },
                 If(_, _) => {
                     indent += 1;
@@ -246,7 +262,10 @@ impl<'atom> Formatter<'atom> {
 
         // reset command width so an if block within a command block
         // does not over-indent.
-        let Width { command_width, arg_width } = self.widths.last().cloned().unwrap_or_default();
+        let Width {
+            command_width,
+            arg_width,
+        } = self.widths.last().cloned().unwrap_or_default();
         self.widths.push(Width {
             command_width: command_width.saturating_sub(2),
             arg_width,
@@ -491,42 +510,43 @@ impl<'atom> Formatter<'atom> {
                 self.text(word.value);
             }
             Other(word) => {
-                let arg_like = word.value.to_ascii_uppercase().as_str() == word.value || word.value.chars().all(|c| c.is_ascii_digit());
+                let arg_like = word.value.to_ascii_uppercase().as_str() == word.value
+                    || word.value.chars().all(|c| c.is_ascii_digit());
                 if let (true, Some(Other(_))) = (arg_like, &self.prev) {
                     self.result.push(' ');
                     self.text(word.value);
                 } else {
                     self.text(word.value);
                 }
-            },
+            }
 
             // Garbage non-matching branch statements
             ElseIf(_, cond) => {
                 self.text("elseif ");
                 self.text(cond.value);
                 self.newline();
-            },
+            }
             Else(_) => {
                 self.text("else");
                 self.newline();
-            },
+            }
             EndIf(_) => {
                 self.text("endif");
                 self.newline();
-            },
+            }
             CloseBlock(_) => {
                 self.text("}");
                 self.newline();
-            },
+            }
             PercentChance(_, chance) => {
                 self.text("percent_chance ");
                 self.text(chance.value);
                 self.newline();
-            },
+            }
             EndRandom(_) => {
                 self.text("end_random");
                 self.newline();
-            },
+            }
         }
         self.prev = Some(atom);
         input
@@ -557,7 +577,10 @@ mod tests {
     #[test]
     fn basic_section() {
         assert_eq!(
-            format("<PLAYER_SETUP> <OBJECTS_GENERATION>", FormatOptions::default()),
+            format(
+                "<PLAYER_SETUP> <OBJECTS_GENERATION>",
+                FormatOptions::default()
+            ),
             "<PLAYER_SETUP>\r\n\r\n<OBJECTS_GENERATION>\r\n"
         );
     }
@@ -565,7 +588,10 @@ mod tests {
     #[test]
     fn command_group() {
         assert_eq!(
-            format("create_terrain GRASS3 { base_terrain DESERT border_fuzziness 5 }", FormatOptions::default()),
+            format(
+                "create_terrain GRASS3 { base_terrain DESERT border_fuzziness 5 }",
+                FormatOptions::default()
+            ),
             "create_terrain GRASS3 {\r\n  base_terrain     DESERT\r\n  border_fuzziness 5\r\n}\r\n"
         );
     }
