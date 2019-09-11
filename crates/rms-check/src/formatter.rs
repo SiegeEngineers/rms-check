@@ -378,6 +378,16 @@ impl<'atom> Formatter<'atom> {
                     input = self.write_atom(branch.remove(0), input);
                 }
             }
+        } else {
+            for (chance, branch) in branches {
+                self.text(&format!("percent_chance {}", chance.value));
+                self.newline();
+                self.indent += 1;
+                for atom in branch {
+                    input = self.write_atom(atom, input);
+                }
+                self.indent -= 1;
+            }
         }
 
         self.widths.pop();
