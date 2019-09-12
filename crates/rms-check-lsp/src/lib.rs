@@ -13,13 +13,16 @@ use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use lsp_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams,
-    InitializeResult, NumberOrString, Position, PublishDiagnosticsParams, ServerCapabilities,
-    SignatureHelpOptions, TextDocumentItem, TextDocumentPositionParams, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextEdit, Url, WorkspaceEdit,
+    DocumentFormattingParams, FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability,
+    InitializeParams, InitializeResult, NumberOrString, Position, PublishDiagnosticsParams,
+    ServerCapabilities, SignatureHelpOptions, TextDocumentItem, TextDocumentPositionParams,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url, WorkspaceEdit,
 };
 use multisplice::Multisplice;
-use rms_check::{AutoFixReplacement, Compatibility, RMSCheck, RMSCheckResult, RMSFile, Warning};
+use rms_check::{
+    format, AutoFixReplacement, Compatibility, FormatOptions, RMSCheck, RMSCheckResult, RMSFile,
+    Warning,
+};
 use serde_json::{self, json};
 use std::{
     collections::HashMap,
@@ -75,15 +78,18 @@ where
 
     /// Initialize the language server.
     fn initialize(&mut self, _params: InitializeParams) -> RpcResult {
-        let mut capabilities = ServerCapabilities::default();
-        capabilities.code_action_provider = Some(CodeActionProviderCapability::Simple(true));
-        capabilities.text_document_sync = Some(TextDocumentSyncCapability::Kind(
-            TextDocumentSyncKind::Incremental,
-        ));
-        capabilities.folding_range_provider = Some(FoldingRangeProviderCapability::Simple(true));
-        capabilities.signature_help_provider = Some(SignatureHelpOptions {
-            trigger_characters: Some(vec![" ".to_string(), "\t".to_string()]),
-        });
+        let capabilities = ServerCapabilities {
+            code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+            document_formatting_provider: Some(true),
+            folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
+            signature_help_provider: Some(SignatureHelpOptions {
+                trigger_characters: Some(vec![" ".to_string(), "\t".to_string()]),
+            }),
+            text_document_sync: Some(TextDocumentSyncCapability::Kind(
+                TextDocumentSyncKind::Incremental,
+            )),
+            ..ServerCapabilities::default()
+        };
         let result = InitializeResult { capabilities };
         serde_json::to_value(result).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
@@ -234,6 +240,25 @@ where
         serde_json::to_value(help).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
 
+    /// Format a document.
+    fn format(&self, params: DocumentFormattingParams) -> RpcResult {
+        let doc = self.documents.get(&params.text_document.uri).unwrap();
+        let mut files = Files::new();
+        let file_id = files.add(doc.uri.as_str(), &doc.text);
+
+        let options = FormatOptions::default()
+            .tab_size(params.options.tab_size as u32)
+            .use_spaces(params.options.insert_spaces);
+        let result = format(files.source(file_id), options);
+
+        serde_json::to_value(vec![TextEdit {
+            range: codespan_lsp::byte_span_to_range(&files, file_id, files.source_span(file_id))
+                .unwrap(),
+            new_text: result,
+        }])
+        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
+    }
+
     /// Run rms-check.
     fn check(&self, doc: &TextDocumentItem) -> RMSCheckResult {
         let file = RMSFile::from_string(doc.uri.as_str(), &doc.text);
@@ -365,6 +390,18 @@ impl RMSCheckLSP {
                         .lock()
                         .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
                         .signature_help(params)
+                });
+        }
+
+        {
+            let inner = Arc::clone(&self.inner);
+            self.handler
+                .add_method("textDocument/formatting", move |params: Params| {
+                    let params: DocumentFormattingParams = params.parse().unwrap();
+                    inner
+                        .lock()
+                        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
+                        .format(params)
                 });
         }
     }
