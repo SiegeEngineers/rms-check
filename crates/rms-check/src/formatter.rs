@@ -402,9 +402,12 @@ impl<'atom> Formatter<'atom> {
                 self.text(&format!("percent_chance {}", chance.value));
                 self.newline();
                 self.indent += 1;
-                for atom in branch {
-                    input = self.write_atom(atom, input);
+
+                let mut sub_input = branch.into_iter().peekable();
+                while let Some(atom) = sub_input.next() {
+                    sub_input = self.write_atom(atom, sub_input);
                 }
+
                 self.indent -= 1;
             }
         }
