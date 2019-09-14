@@ -1,2 +1,4 @@
 server/pkg
 client/bundle.js
+language-configuration.json
+aoe2-rms.tmLanguage
