@@ -1,7 +1,7 @@
 {
   "name": "rms-check-vscode",
   "displayName": "rms-check",
-  "description": "Language server for linting and manipulating Age of Empires 2 Random Map Scripts.",
+  "description": "Age of Empires 2 Random Map Script syntax highlighting and linting support.",
   "version": "0.0.0",
   "author": "Renée Kooi <renee@kooi.me>",
   "activationEvents": [
