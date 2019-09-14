@@ -50,11 +50,11 @@ impl Default for FormatOptions {
 impl FormatOptions {
     /// Set the size in spaces of a single tab indentation (default 2). This is only used if
     /// `use_spaces()` is enabled.
-    pub fn tab_size(self, tab_size: u32) -> Self {
+    pub const fn tab_size(self, tab_size: u32) -> Self {
         Self { tab_size, ..self }
     }
     /// Whether to use spaces instead of tabs for indentation (default true).
-    pub fn use_spaces(self, use_spaces: bool) -> Self {
+    pub const fn use_spaces(self, use_spaces: bool) -> Self {
         Self { use_spaces, ..self }
     }
     /// Whether to align arguments in a list of commands (default true).
@@ -76,7 +76,7 @@ impl FormatOptions {
     ///   terrain_to_place_on GRASS
     /// }
     /// ```
-    pub fn align_arguments(self, align_arguments: bool) -> Self {
+    pub const fn align_arguments(self, align_arguments: bool) -> Self {
         Self {
             align_arguments,
             ..self
@@ -240,8 +240,12 @@ impl<'atom> Formatter<'atom> {
         }
         self.widths.pop();
 
-        self.inside_block -= 1;
+        // Manually add newline if there was garbage
+        if let Some(Other(_)) = self.prev {
+            self.newline();
+        }
 
+        self.inside_block -= 1;
         self.indent -= 1;
         self.text("}");
         self.newline();
