@@ -13,7 +13,10 @@ use check::{cli_check, cli_fix, CheckArgs};
 use failure::Fallible;
 use language_server::cli_server;
 use rms_check::{Compatibility, FormatOptions};
-use std::path::PathBuf;
+use std::{
+    io::{self, Read},
+    path::{Path, PathBuf},
+};
 use structopt::StructOpt;
 use zip_rms::{cli_pack, cli_unpack};
 
@@ -100,7 +103,7 @@ enum CliCommand {
     /// Format the given file.
     #[structopt(name = "format")]
     Format {
-        /// The file to format.
+        /// The file to format. Use "-" to read from standard input.
         file: PathBuf,
         /// Set the size in spaces of a single tab indentation.
         #[structopt(long = "tab-size", default_value = "2")]
@@ -132,6 +135,17 @@ pub struct Cli {
     file: Option<String>,
 }
 
+fn read_input(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
+    let stdin = PathBuf::from("-");
+    if path.as_ref() == stdin {
+        let mut bytes = vec![];
+        io::stdin().read_to_end(&mut bytes)?;
+        Ok(bytes)
+    } else {
+        std::fs::read(path)
+    }
+}
+
 fn main() -> Fallible<()> {
     let args = Cli::from_args();
 
@@ -160,7 +174,7 @@ fn main() -> Fallible<()> {
                 .use_spaces(!no_use_spaces)
                 .align_arguments(!no_align_arguments);
 
-            let bytes = std::fs::read(file)?;
+            let bytes = read_input(file)?;
             let string = std::str::from_utf8(&bytes)?;
             println!("{}", rms_check::format(string, options));
             Ok(())
