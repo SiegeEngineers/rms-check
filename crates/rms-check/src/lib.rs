@@ -13,7 +13,7 @@ mod parser;
 mod tokens;
 mod wordize;
 
-use crate::{checker::Checker, wordize::Wordize};
+use crate::checker::Checker;
 pub use crate::{
     checker::{
         AutoFixReplacement, CheckerBuilder, Compatibility, Lint, Nesting, ParseState, Severity,
@@ -280,8 +280,7 @@ impl RMSCheck {
     pub fn check(self, rms: RMSFile) -> RMSCheckResult {
         let mut checker = self.checker.build(&rms);
 
-        let words = Wordize::new(rms.file_id(), rms.main_source());
-        let mut warnings: Vec<Warning> = words.filter_map(|w| checker.write_token(&w)).collect();
+        let mut warnings = vec![];
 
         let parser = Parser::new(rms.file_id(), rms.main_source());
         for (atom, parse_warning) in parser {

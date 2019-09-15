@@ -295,9 +295,6 @@ pub trait Lint {
     fn run_inside_comments(&self) -> bool {
         false
     }
-    fn lint_token(&mut self, _state: &mut ParseState<'_>, _token: &Word<'_>) -> Option<Warning> {
-        Default::default()
-    }
     fn lint_atom(&mut self, _state: &mut ParseState<'_>, _atom: &Atom<'_>) -> Vec<Warning> {
         Default::default()
     }
@@ -630,33 +627,6 @@ impl<'a> Checker<'a> {
         CheckerBuilder::default()
     }
 
-    /// Check an incoming token.
-    fn lint_token(&mut self, token: &Word<'a>) -> Option<Warning> {
-        let warning = {
-            let is_comment = self.state.is_comment;
-            let mut state = &mut self.state;
-            self.lints
-                .iter_mut()
-                .filter(|lint| !is_comment || lint.run_inside_comments())
-                .find_map(|lint| {
-                    lint.lint_token(&mut state, token)
-                        .map(|warning| warning.lint(lint.name()))
-                })
-        };
-        if warning.is_some() {
-            return warning;
-        }
-
-        if token.value.starts_with('<')
-            && token.value.ends_with('>')
-            && !TOKENS.contains_key(token.value)
-        {
-            return Some(token.error(format!("Invalid section {}", token.value)));
-        }
-
-        None
-    }
-
     pub fn write_atom(&mut self, atom: &Atom<'a>) -> Vec<Warning> {
         let mut state = &mut self.state;
         let mut warnings = vec![];
@@ -674,84 +644,5 @@ impl<'a> Checker<'a> {
         }
 
         warnings
-    }
-
-    /// Parse and lint the next token.
-    pub fn write_token(&mut self, token: &Word<'a>) -> Option<Warning> {
-        // Clear current token if we're past the end of its arguments list.
-        if let Some(current_token) = self.state.current_token {
-            if self.state.token_arg_index >= current_token.arg_len() {
-                self.state.current_token = None;
-                self.state.token_arg_index = 0;
-            }
-        }
-
-        let mut parse_error = None;
-
-        if token.value.starts_with("/*") {
-            // Technically incorrect but the user most likely attempted to open a comment here,
-            // so _not_ treating it as one would give lots of useless errors.
-            // Instead we only mark this token as an incorrect comment.
-            self.state.is_comment = true;
-            if token.value.len() > 2 {
-                let warning =
-                    token.error("Incorrect comment: there must be a space after the opening /*");
-                let (message, replacement) = if token.value.ends_with("*/") {
-                    (
-                        "Add spaces at the start and end of the comment",
-                        format!("/* {} */", &token.value[2..token.value.len() - 2]),
-                    )
-                } else {
-                    (
-                        "Add a space after the /*",
-                        format!("/* {}", &token.value[2..]),
-                    )
-                };
-                parse_error =
-                    Some(warning.suggest(Suggestion::from(token, message).replace(replacement)));
-            }
-        }
-
-        let lint_warning = self.lint_token(token);
-
-        if token.value.ends_with("*/") {
-            if !self.state.is_comment {
-                parse_error = Some(token.error("Unexpected closing `*/`"));
-            } else {
-                self.state.is_comment = false;
-                // "**/" was probably meant to be a closing comment, but only <whitespace>*/ actually closes
-                // comments.
-                if token.value.len() > 2 && parse_error.is_none() {
-                    parse_error = Some(
-                        token
-                            .error("Possibly unclosed comment, */ must be preceded by whitespace")
-                            .suggest(
-                                Suggestion::from(token, "Add a space before the */").replace(
-                                    format!("{} */", &token.value[2..token.value.len() - 2]),
-                                ),
-                            ),
-                    );
-                }
-            }
-        }
-
-        // TODO check whether this should happen
-        // Before UP1.5 a parser bug could cause things inside comments to be parsed
-        if self.state.is_comment {
-            return parse_error.or(lint_warning);
-        }
-
-        if self.state.current_token.is_some() {
-            self.state.token_arg_index += 1;
-        }
-
-        if let Some(ref token_type) = TOKENS.get(token.value) {
-            self.state.current_token = Some(token_type);
-            self.state.token_arg_index = 0;
-        }
-
-        // A parse error is more important than a lint warning, probably…
-        // chances are they're related anyway.
-        parse_error.or(lint_warning)
     }
 }
