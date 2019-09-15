@@ -241,7 +241,6 @@ impl Default for RMSCheck {
             .with_lint(Box::new(lints::AttributeCaseLint {}))
             .with_lint(Box::new(lints::CommentContentsLint::new()))
             .with_lint(Box::new(lints::CompatibilityLint::new()))
-            .with_lint(Box::new(lints::DeadBranchCommentLint {}))
             .with_lint(Box::new(lints::IncludeLint::new()))
             .with_lint(Box::new(lints::IncorrectSectionLint::new()))
             .with_lint(Box::new(lints::UnknownAttributeLint {}))
