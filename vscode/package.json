@@ -1,7 +1,7 @@
 {
   "name": "rms-check-vscode",
   "displayName": "rms-check",
-  "description": "Language server for linting and manipulating Age of Empires 2 Random Map Scripts.",
+  "description": "Age of Empires 2 Random Map Script syntax highlighting and linting support.",
   "version": "0.0.0",
   "author": "Renée Kooi <renee@kooi.me>",
   "activationEvents": [
@@ -9,6 +9,26 @@
   ],
   "categories": [],
   "contributes": {
+    "languages": [
+      {
+        "id": "aoe2-rms",
+        "aliases": [
+          "AoE2 Random Map Script",
+          "aoe2-rms"
+        ],
+        "extensions": [
+          ".rms"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "aoe2-rms",
+        "scopeName": "source.aoe2-rms",
+        "path": "./aoe2-rms.tmLanguage"
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "rms-check",
@@ -33,13 +53,12 @@
     "which": "^1.3.1"
   },
   "devDependencies": {
+    "aoe2-rms": "github:mangudai/vscode",
     "browserify": "^16.5.0",
+    "cpy-cli": "^2.0.0",
     "vsce": "^1.66.0",
     "vscode": "^1.1.34"
   },
-  "extensionDependencies": [
-    "deltaidea.aoe2-rms"
-  ],
   "engines": {
     "vscode": "^1.23.0"
   },
@@ -59,9 +78,10 @@
     "directory": "vscode"
   },
   "scripts": {
+    "build-ext": "cpy node_modules/aoe2-rms/{language-configuration.json,aoe2-rms.tmLanguage} .",
     "build-client": "browserify --node -x vscode client/extension.js -o client/bundle.js",
     "build-server": "cd .. && wasm-pack build vscode/server --release --target nodejs",
-    "prepare": "npm run build-server && npm run build-client",
+    "prepare": "npm run build-ext && npm run build-server && npm run build-client",
     "package": "npm run prepare && vsce package"
   }
 }

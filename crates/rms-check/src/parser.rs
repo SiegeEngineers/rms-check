@@ -580,12 +580,13 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn dry_arabia() {
         let f = std::fs::read("tests/rms/Dry Arabia.rms").unwrap();
         let source = std::str::from_utf8(&f).unwrap();
         for (atom, _) in Parser::new(file_id(), source) {
-            println!("{}", atom);
+            if let Atom::Other(_) = atom {
+                panic!("unrecognised atom");
+            }
         }
     }
 }

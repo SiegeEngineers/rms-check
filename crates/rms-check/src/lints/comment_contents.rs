@@ -1,10 +1,14 @@
-use crate::{Lint, ParseState, Suggestion, TokenType, Warning, Word, TOKENS};
-use codespan::Span;
+use crate::{
+    Atom, Compatibility, Lint, Nesting, ParseErrorKind, ParseState, Parser, Suggestion, Warning,
+};
+use codespan::{ByteOffset, Span};
+
+fn offset_span(span: Span, offset: ByteOffset) -> Span {
+    Span::new(span.start() + offset, span.end() + offset)
+}
 
 #[derive(Default)]
-pub struct CommentContentsLint {
-    current_command: Option<(Span, &'static TokenType, u8)>,
-}
+pub struct CommentContentsLint {}
 
 impl CommentContentsLint {
     pub fn new() -> Self {
@@ -21,51 +25,69 @@ impl Lint for CommentContentsLint {
         true
     }
 
-    fn lint_token(&mut self, state: &mut ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
-        if !state.is_comment {
-            return None;
-        }
+    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
+        if let Atom::Comment(start, content, end) = atom {
+            let offset = ByteOffset(start.span.end().to_usize() as i64);
 
-        self.current_command = self.current_command.and_then(|(s, t, args)| {
-            if args > 0 {
-                Some((s, t, args - 1))
-            } else {
-                None
+            let (has_start_random, has_if) =
+                state
+                    .nesting
+                    .iter()
+                    .fold((false, false), |acc, nest| match nest {
+                        Nesting::If(_) | Nesting::ElseIf(_) | Nesting::Else(_) => (acc.0, true),
+                        Nesting::StartRandom(_) | Nesting::PercentChance(_) => (true, acc.1),
+                        _ => acc,
+                    });
+
+            let may_trigger_parsing_bug = has_if
+                && state.compatibility <= Compatibility::UserPatch14
+                || has_start_random && state.compatibility <= Compatibility::UserPatch15;
+
+            let parser = Parser::new(state.rms.file_id(), &content);
+            let mut warnings = vec![];
+
+            let mut expecting_more_arguments = None;
+            'outer: for (atom, errors) in parser {
+                for error in errors {
+                    use ParseErrorKind::*;
+                    match error.kind {
+                        MissingConstName | MissingConstValue | MissingDefineName
+                        | MissingCommandArgs | MissingIfCondition | MissingPercentChance => {
+                            expecting_more_arguments = Some(atom);
+                            continue 'outer;
+                        }
+                        _ => (),
+                    }
+                }
+
+                if let Atom::Other(word) = atom {
+                    if may_trigger_parsing_bug
+                        && (state.has_define(word.value) || state.has_const(word.value))
+                    {
+                        let suggestion = Suggestion::from(
+                            &word,
+                            "Add `backticks` around the name to make the parser ignore it",
+                        )
+                        .replace(format!("`{}`", word.value));
+                        warnings.push(Warning::warning(word.file,
+                                                       offset_span(word.span, offset),
+                                                      "Using constant names in comments inside `start_random` or `if` statements can be dangerous, because the game may interpret them as other tokens instead.")
+                                    .suggest(suggestion));
+                    }
+                }
+
+                expecting_more_arguments = None;
             }
-        });
-        if let Some((span, tt, remaining)) = self.current_command {
-            if token.value == "*/" {
-                let suggestion = Suggestion::new(
-                    token.file,
-                    span,
-                    "Add `backticks` around the command to make the parser ignore it",
-                )
-                .replace(format!("`{}`", tt.name));
-                return Some(token.warning(format!("This close comment may be ignored because a previous command is expecting {} more argument(s)", remaining))
-                            .note_at(token.file, span, "Command started here")
-                            .suggest(suggestion));
+
+            if let (Some(atom), Some(close_comment)) = (&expecting_more_arguments, end) {
+                warnings.push(close_comment.warning("This close comment may be ignored because a previous command is expecting more arguments")
+                              .note_at(atom.file_id(), offset_span(atom.span(), offset), "Command started here"));
             }
+
+            return warnings;
         }
 
-        if self.current_command.is_none()
-            && (state.has_define(token.value) || state.has_const(token.value))
-        {
-            let suggestion = Suggestion::from(
-                token,
-                "Add `backticks` around the name to make the parser ignore it",
-            )
-            .replace(format!("`{}`", token.value));
-            return Some(token.warning("Using constant names in comments can be dangerous, because the game may interpret them as other tokens instead.")
-                        .suggest(suggestion));
-        }
-
-        if let Some(command) = TOKENS.get(token.value) {
-            if command.arg_len() > 0 {
-                self.current_command = Some((token.span, &command, command.arg_len()));
-            }
-        }
-
-        None
+        return vec![];
     }
 }
 
@@ -91,18 +113,18 @@ mod tests {
             first.diagnostic().code,
             Some("comment-contents".to_string())
         );
-        assert_eq!(first.message(), "This close comment may be ignored because a previous command is expecting 3 more argument(s)");
+        assert_eq!(first.message(), "This close comment may be ignored because a previous command is expecting more arguments");
         assert_eq!(second.diagnostic().severity, Severity::Warning);
         assert_eq!(
             second.diagnostic().code,
             Some("comment-contents".to_string())
         );
-        assert_eq!(second.message(), "This close comment may be ignored because a previous command is expecting 0 more argument(s)");
+        assert_eq!(second.message(), "This close comment may be ignored because a previous command is expecting more arguments");
         assert_eq!(third.diagnostic().severity, Severity::Warning);
         assert_eq!(
             third.diagnostic().code,
             Some("comment-contents".to_string())
         );
-        assert_eq!(third.message(), "Using constant names in comments can be dangerous, because the game may interpret them as other tokens instead.");
+        assert_eq!(third.message(), "Using constant names in comments inside `start_random` or `if` statements can be dangerous, because the game may interpret them as other tokens instead.");
     }
 }
