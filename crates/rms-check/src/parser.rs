@@ -51,6 +51,8 @@ pub enum Atom<'a> {
     Const(Word<'a>, Word<'a>, Option<Word<'a>>),
     /// A #define definition.
     Define(Word<'a>, Word<'a>),
+    /// An #undefine statement.
+    Undefine(Word<'a>, Word<'a>),
     /// A <SECTION> token.
     Section(Word<'a>),
     /// An if statement with a condition.
@@ -87,7 +89,7 @@ impl Atom<'_> {
             Section(def) | Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def)
             | OpenBlock(def) | CloseBlock(def) | Other(def) => def.file,
             Const(def, _, _) => def.file,
-            Define(def, _) | If(def, _) | ElseIf(def, _) | PercentChance(def, _) => def.file,
+            Define(def, _) | Undefine(def, _) | If(def, _) | ElseIf(def, _) | PercentChance(def, _) => def.file,
             Command(name, _) => name.file,
             Comment(left, _, _) => left.file,
         }
@@ -100,7 +102,7 @@ impl Atom<'_> {
             Section(def) | Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def)
             | OpenBlock(def) | CloseBlock(def) | Other(def) => def.span,
             Const(def, name, val) => def.span.merge(val.unwrap_or(*name).span),
-            Define(def, arg) | If(def, arg) | ElseIf(def, arg) | PercentChance(def, arg) => {
+            Define(def, arg) | Undefine(def, arg) | If(def, arg) | ElseIf(def, arg) | PercentChance(def, arg) => {
                 def.span.merge(arg.span)
             }
             Command(name, args) => match args.last() {
@@ -129,6 +131,7 @@ impl Display for Atom<'_> {
                 val.map(|v| v.value).unwrap_or("()")
             ),
             Define(_, name) => write!(f, "Define<{}>", name.value),
+            Undefine(_, name) => write!(f, "Undefine<{}>", name.value),
             Section(name) => write!(f, "Section{}", name.value),
             If(_, condition) => write!(f, "If<{}>", condition.value),
             ElseIf(_, condition) => write!(f, "ElseIf<{}>", condition.value),
@@ -333,6 +336,16 @@ impl<'a> Iterator for Parser<'a> {
             "end_random" => t(Atom::EndRandom(word)),
             "#define" => match self.read_arg() {
                 Some(name) => t(Atom::Define(word, name)),
+                None => Some((
+                    Atom::Other(word),
+                    vec![ParseError::new(
+                        word.span,
+                        ParseErrorKind::MissingDefineName,
+                    )],
+                )),
+            },
+            "#undefine" => match self.read_arg() {
+                Some(name) => t(Atom::Undefine(word, name)),
                 None => Some((
                     Atom::Other(word),
                     vec![ParseError::new(
