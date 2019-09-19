@@ -8,6 +8,7 @@
 #![warn(clippy::missing_const_for_fn)]
 
 mod checker;
+mod formatter;
 mod lints;
 mod parser;
 mod tokens;
@@ -19,6 +20,7 @@ pub use crate::{
         AutoFixReplacement, CheckerBuilder, Compatibility, Lint, Nesting, ParseState, Severity,
         Suggestion, Warning,
     },
+    formatter::{format, FormatOptions},
     parser::{Atom, ParseErrorKind, Parser},
     tokens::{ArgType, TokenContext, TokenType, TOKENS},
     wordize::Word,

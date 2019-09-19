@@ -12,8 +12,11 @@ mod zip_rms;
 use check::{cli_check, cli_fix, CheckArgs};
 use failure::Fallible;
 use language_server::cli_server;
-use rms_check::Compatibility;
-use std::path::PathBuf;
+use rms_check::{Compatibility, FormatOptions};
+use std::{
+    io::{self, Read},
+    path::{Path, PathBuf},
+};
 use structopt::StructOpt;
 use zip_rms::{cli_pack, cli_unpack};
 
@@ -97,6 +100,21 @@ enum CliCommand {
         #[structopt(flatten)]
         compat_flags: CliCompat,
     },
+    /// Format the given file.
+    #[structopt(name = "format")]
+    Format {
+        /// The file to format. Use "-" to read from standard input.
+        file: PathBuf,
+        /// Set the size in spaces of a single tab indentation.
+        #[structopt(long = "tab-size", default_value = "2")]
+        tab_size: u32,
+        /// Whether to use spaces instead of tabs for indentation.
+        #[structopt(long = "no-use-spaces")]
+        no_use_spaces: bool,
+        /// Whether to align arguments in a list of commands.
+        #[structopt(long = "no-align-arguments")]
+        no_align_arguments: bool,
+    },
     /// Syntax check and lint a random map script.
     #[structopt(name = "check")]
     Check(CliCheck),
@@ -117,6 +135,17 @@ pub struct Cli {
     file: Option<String>,
 }
 
+fn read_input(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
+    let stdin = PathBuf::from("-");
+    if path.as_ref() == stdin {
+        let mut bytes = vec![];
+        io::stdin().read_to_end(&mut bytes)?;
+        Ok(bytes)
+    } else {
+        std::fs::read(path)
+    }
+}
+
 fn main() -> Fallible<()> {
     let args = Cli::from_args();
 
@@ -134,6 +163,22 @@ fn main() -> Fallible<()> {
             dry_run,
             fix_unsafe,
         }),
+        Some(CliCommand::Format {
+            file,
+            tab_size,
+            no_use_spaces,
+            no_align_arguments,
+        }) => {
+            let options = FormatOptions::default()
+                .tab_size(tab_size)
+                .use_spaces(!no_use_spaces)
+                .align_arguments(!no_align_arguments);
+
+            let bytes = read_input(file)?;
+            let string = std::str::from_utf8(&bytes)?;
+            println!("{}", rms_check::format(string, options));
+            Ok(())
+        }
         Some(CliCommand::Server) => {
             cli_server();
             unreachable!();
