@@ -8,8 +8,8 @@ repository = "https://github.com/goto-bus-stop/rms-check.git"
 edition = "2018"
 
 [dependencies]
-codespan = "^0.4.1"
-codespan-reporting = "^0.4.1"
+codespan = "^0.5.0"
+codespan-reporting = "^0.5.0"
 itertools = "^0.8.0"
 lazy_static = "^1.4.0"
 strsim = "^0.9.2"
