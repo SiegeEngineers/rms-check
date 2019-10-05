@@ -4,6 +4,8 @@ A linter and language server for Age of Empires 2 random map scripts.
 
 [Usage](#usage) - [Status](#status) - [Install](#install) - [License: GPL-3.0](#license)
 
+![VSCode integration](./screenshot.png)
+
 ## Usage
 
 ```
