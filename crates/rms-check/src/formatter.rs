@@ -379,6 +379,7 @@ impl<'atom> Formatter<'atom> {
             match stmts[0] {
                 Define(_, _) => true,
                 Const(_, _, _) => true,
+                Undefine(_, _) => true,
                 // Include(_, _) => true,
                 // IncludeDrs(_, _) => true,
                 Command(_, _) => true,
@@ -474,6 +475,13 @@ impl<'atom> Formatter<'atom> {
         self.newline();
     }
 
+    /// Write an #undefine statement.
+    fn undefine(&mut self, name: &Word<'_>) {
+        self.text("#undefine ");
+        self.text(name.value);
+        self.newline();
+    }
+
     fn write_atom<I>(&mut self, atom: Atom<'atom>, mut input: Peekable<I>) -> Peekable<I>
     where
         I: Iterator<Item = Atom<'atom>>,
@@ -493,6 +501,7 @@ impl<'atom> Formatter<'atom> {
             Section(name) => self.section(name),
             Define(_, name) => self.define(name),
             Const(_, name, value) => self.const_(name, value),
+            Undefine(_, name) => self.undefine(name),
             Command(name, args) => {
                 let is_block = if let Some(OpenBlock(_)) = input.peek() {
                     true
