@@ -89,7 +89,11 @@ impl Atom<'_> {
             Section(def) | Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def)
             | OpenBlock(def) | CloseBlock(def) | Other(def) => def.file,
             Const(def, _, _) => def.file,
-            Define(def, _) | Undefine(def, _) | If(def, _) | ElseIf(def, _) | PercentChance(def, _) => def.file,
+            Define(def, _)
+            | Undefine(def, _)
+            | If(def, _)
+            | ElseIf(def, _)
+            | PercentChance(def, _) => def.file,
             Command(name, _) => name.file,
             Comment(left, _, _) => left.file,
         }
@@ -102,9 +106,11 @@ impl Atom<'_> {
             Section(def) | Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def)
             | OpenBlock(def) | CloseBlock(def) | Other(def) => def.span,
             Const(def, name, val) => def.span.merge(val.unwrap_or(*name).span),
-            Define(def, arg) | Undefine(def, arg) | If(def, arg) | ElseIf(def, arg) | PercentChance(def, arg) => {
-                def.span.merge(arg.span)
-            }
+            Define(def, arg)
+            | Undefine(def, arg)
+            | If(def, arg)
+            | ElseIf(def, arg)
+            | PercentChance(def, arg) => def.span.merge(arg.span),
             Command(name, args) => match args.last() {
                 Some(arg) => name.span.merge(arg.span),
                 None => name.span,
