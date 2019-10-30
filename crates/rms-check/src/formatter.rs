@@ -82,6 +82,10 @@ impl FormatOptions {
             ..self
         }
     }
+
+    pub fn format<'atom>(self, script: impl Iterator<Item = Atom<'atom>>) -> String {
+        Formatter::new(self).format(script)
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -583,7 +587,7 @@ pub fn format(source: &str, options: FormatOptions) -> String {
     let mut files = Files::new();
     let f = files.add("format.rms", source);
     let parser = Parser::new(f, files.source(f));
-    Formatter::new(options).format(parser.map(|(atom, _)| atom))
+    options.format(parser.map(|(atom, _)| atom))
 }
 
 #[cfg(test)]

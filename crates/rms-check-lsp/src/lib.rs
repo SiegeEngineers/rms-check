@@ -20,7 +20,7 @@ use lsp_types::{
 };
 use multisplice::Multisplice;
 use rms_check::{
-    format, AutoFixReplacement, Compatibility, FormatOptions, RMSCheck, RMSCheckResult, RMSFile,
+    AutoFixReplacement, Compatibility, FormatOptions, Parser, RMSCheck, RMSCheckResult, RMSFile,
     Warning,
 };
 use serde_json::{self, json};
@@ -246,10 +246,11 @@ where
         let mut files = Files::new();
         let file_id = files.add(doc.uri.as_str(), &doc.text);
 
+        let parser = Parser::new(file_id, files.source(file_id)).map(|(atom, _warnings)| atom);
         let options = FormatOptions::default()
             .tab_size(params.options.tab_size as u32)
             .use_spaces(params.options.insert_spaces);
-        let result = format(files.source(file_id), options);
+        let result = options.format(parser);
 
         serde_json::to_value(vec![TextEdit {
             range: codespan_lsp::byte_span_to_range(&files, file_id, files.source_span(file_id))
