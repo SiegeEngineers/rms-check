@@ -26,8 +26,18 @@ pub use crate::{
     wordize::Word,
 };
 use codespan::{ByteIndex, FileId, Files, Location};
-use std::{fs::File, io, path::Path};
+use std::{borrow::Cow, fs::File, io, path::Path};
 use zip::ZipArchive;
+use encoding_rs::Encoding;
+
+fn to_chardet_string(bytes: &[u8]) -> Cow<'_, str> {
+    let (encoding_name, _, _) = chardet::detect(bytes);
+    if let Some(encoding) = Encoding::for_label(encoding_name.as_bytes()) {
+        encoding.decode(bytes).0
+    } else {
+        String::from_utf8_lossy(bytes)
+    }
+}
 
 fn to_io_error<T: 'static + std::error::Error + Send + Sync>(err: T) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
@@ -72,7 +82,7 @@ impl RMSFile {
         if filename.starts_with("ZR@") {
             Self::from_zip_rms(name.as_ref().to_string_lossy(), &source)
         } else {
-            let source = std::str::from_utf8(&source).map_err(to_io_error)?;
+            let source = to_chardet_string(&source);
             Ok(Self::from_string(name.as_ref().to_string_lossy(), source))
         }
     }
@@ -96,7 +106,7 @@ impl RMSFile {
             let mut bytes = vec![];
             std::io::copy(&mut file, &mut bytes)?;
             if file.name().ends_with(".rms") || file.name().ends_with(".inc") {
-                let source = std::str::from_utf8(&bytes).map_err(to_io_error)?;
+                let source = to_chardet_string(&bytes);
                 file_ids.push(files.add(file.name(), source));
                 // If this is an .rms file, move it to the front so main_file() does the right thing
                 if file.name().ends_with(".rms") {
@@ -121,7 +131,7 @@ impl RMSFile {
             let path = entry?.path();
             let name = path.to_string_lossy();
             let bytes = std::fs::read(&path)?;
-            let source = std::str::from_utf8(&bytes).map_err(to_io_error)?;
+            let source = to_chardet_string(&bytes);
             file_ids.push(files.add(name.as_ref(), source));
             // If this is an .rms file, move it to the front so main_file() does the right thing
             if name.ends_with(".rms") {
