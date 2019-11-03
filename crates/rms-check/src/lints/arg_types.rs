@@ -234,7 +234,9 @@ impl Lint for ArgTypesLint {
                                 }
                             }
                             Some(_) => {
-                                warnings.push(args[2].warning("`assign_to` Mode should be 0 when targeting AT_COLOR or AT_PLAYER"));
+                                if mode != 0 {
+                                    warnings.push(args[2].warning("`assign_to` Mode should be 0 when targeting AT_COLOR or AT_PLAYER"));
+                                }
                             }
                             _ => (),
                         }
