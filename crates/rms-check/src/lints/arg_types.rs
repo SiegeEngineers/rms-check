@@ -1,8 +1,11 @@
 use crate::{ArgType, Atom, Lint, ParseState, Suggestion, Warning, Word, TOKENS};
+use codespan::Span;
 use strsim::levenshtein;
 
 #[derive(Default)]
-pub struct ArgTypesLint {}
+pub struct ArgTypesLint {
+    actor_areas: Vec<(i32, Span)>,
+}
 
 impl ArgTypesLint {
     pub fn new() -> Self {
@@ -139,6 +142,76 @@ impl ArgTypesLint {
             _ => None,
         }
     }
+
+    /// Check the arguments to an `assign_to` attribute.
+    fn check_assign_to(&self, args: &[Word<'_>], warnings: &mut Vec<Warning>) {
+        enum AssignTarget {
+            Color,
+            Player,
+            Team,
+        }
+        let target = if let Some(arg) = args.get(0) {
+            match arg.value {
+                "AT_COLOR" => Some(AssignTarget::Color),
+                "AT_PLAYER" => Some(AssignTarget::Player),
+                "AT_TEAM" => Some(AssignTarget::Team),
+                _ => {
+                    warnings.push(
+                        arg.warning("`assign_to` Target must be AT_COLOR, AT_PLAYER, AT_TEAM"),
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        if let Some(Ok(number)) = args.get(1).map(|f| f.value.parse::<i32>()) {
+            match target {
+                Some(AssignTarget::Color) | Some(AssignTarget::Player) => {
+                    if number < 0 || number > 8 {
+                        warnings.push(args[1].warning(
+                            "`assign_to` Number must be 1-8 when targeting AT_COLOR or AT_PLAYER",
+                        ));
+                    }
+                }
+                Some(AssignTarget::Team) => {
+                    if (number < -4 || number > 4) && number != -10 {
+                        warnings.push(
+                            args[1]
+                                .warning("`assign_to` Number must be 1-4 when targeting AT_TEAM"),
+                        );
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        if let Some(Ok(mode)) = args.get(2).map(|f| f.value.parse::<i32>()) {
+            match target {
+                Some(AssignTarget::Team) => {
+                    if mode != -1 && mode != 0 {
+                        warnings.push(args[2].warning("`assign_to` Mode must be 0 (random selection) or -1 (ordered selection) when targeting AT_TEAM"));
+                    }
+                }
+                Some(_) => {
+                    if mode != 0 {
+                        warnings.push(args[2].warning(
+                            "`assign_to` Mode should be 0 when targeting AT_COLOR or AT_PLAYER",
+                        ));
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        if let Some(Ok(flags)) = args.get(3).map(|f| f.value.parse::<i32>()) {
+            let mask = 1 | 2;
+            if (flags & mask) != flags {
+                warnings.push(args[3].warning("`assign_to` Flags must only combine flags 1 and 2"));
+            }
+        }
+    }
 }
 
 impl Lint for ArgTypesLint {
@@ -186,68 +259,25 @@ impl Lint for ArgTypesLint {
                         warnings.push(args[0].warning("`zone 99` crashes the game"));
                     }
                 }
-                "assign_to" => {
-                    enum AssignTarget {
-                        Color,
-                        Player,
-                        Team,
+                "assign_to" => self.check_assign_to(args, &mut warnings),
+                "actor_area" if !args.is_empty() => {
+                    if let Ok(n) = args[0].value.parse::<i32>() {
+                        self.actor_areas.push((n, args[0].span));
                     }
-                    let target = if let Some(arg) = args.get(0) {
-                        match arg.value {
-                            "AT_COLOR" => Some(AssignTarget::Color),
-                            "AT_PLAYER" => Some(AssignTarget::Player),
-                            "AT_TEAM" => Some(AssignTarget::Team),
-                            _ => {
-                                warnings.push(arg.warning(
-                                    "`assign_to` Target must be AT_COLOR, AT_PLAYER, AT_TEAM",
-                                ));
-                                None
-                            }
-                        }
-                    } else {
-                        None
-                    };
-
-                    if let Some(Ok(number)) = args.get(1).map(|f| f.value.parse::<i32>()) {
-                        match target {
-                            Some(AssignTarget::Color) | Some(AssignTarget::Player) => {
-                                if number < 0 || number > 8 {
-                                    warnings.push(args[1].warning("`assign_to` Number must be 1-8 when targeting AT_COLOR or AT_PLAYER"));
-                                }
-                            }
-                            Some(AssignTarget::Team) => {
-                                if (number < -4 || number > 4) && number != -10 {
-                                    warnings.push(args[1].warning(
-                                        "`assign_to` Number must be 1-4 when targeting AT_TEAM",
-                                    ));
-                                }
-                            }
-                            _ => (),
-                        }
-                    }
-
-                    if let Some(Ok(mode)) = args.get(2).map(|f| f.value.parse::<i32>()) {
-                        match target {
-                            Some(AssignTarget::Team) => {
-                                if mode != -1 && mode != 0 {
-                                    warnings.push(args[2].warning("`assign_to` Mode must be 0 (random selection) or -1 (ordered selection) when targeting AT_TEAM"));
-                                }
-                            }
-                            Some(_) => {
-                                if mode != 0 {
-                                    warnings.push(args[2].warning("`assign_to` Mode should be 0 when targeting AT_COLOR or AT_PLAYER"));
-                                }
-                            }
-                            _ => (),
-                        }
-                    }
-
-                    if let Some(Ok(flags)) = args.get(3).map(|f| f.value.parse::<i32>()) {
-                        let mask = 1 | 2;
-                        if (flags & mask) != flags {
+                }
+                "actor_area_to_place_in" | "avoid_actor_area" if !args.is_empty() => {
+                    if let Ok(to_place_in) = args[0].value.parse::<i32>() {
+                        if self
+                            .actor_areas
+                            .iter()
+                            .find(|(n, _)| *n == to_place_in)
+                            .is_none()
+                        {
                             warnings.push(
-                                args[3]
-                                    .warning("`assign_to` Flags must only combine flags 1 and 2"),
+                                args[0].warning(format!(
+                                    "Actor area {} is never defined",
+                                    to_place_in
+                                )),
                             );
                         }
                     }
@@ -471,6 +501,46 @@ mod tests {
             third.message(),
             "`assign_to` Flags must only combine flags 1 and 2"
         );
+        assert!(warnings.next().is_none());
+    }
+
+    #[test]
+    fn actor_area() {
+        let filename = "actor_area.rms";
+        let file = RMSFile::from_string(
+            filename,
+            "
+            create_object VILLAGER {
+                actor_area 1
+            }
+            create_object VILLAGER {
+                actor_area_to_place_in 1
+            }
+            create_object VILLAGER {
+                avoid_actor_area 1
+            }
+            create_object VILLAGER {
+                actor_area_to_place_in 17
+            }
+            create_object VILLAGER {
+                avoid_actor_area 18
+            }
+        ",
+        );
+        let result = RMSCheck::new()
+            .with_lint(Box::new(ArgTypesLint::new()))
+            .check(file);
+        let file = result.file_id(filename).unwrap();
+        let mut warnings = result.iter();
+
+        let first = warnings.next().unwrap();
+        assert_eq!(first.diagnostic().severity, Severity::Warning);
+        assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(first.message(), "Actor area 17 is never defined");
+        let second = warnings.next().unwrap();
+        assert_eq!(second.diagnostic().severity, Severity::Warning);
+        assert_eq!(second.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(second.message(), "Actor area 18 is never defined");
         assert!(warnings.next().is_none());
     }
 }
