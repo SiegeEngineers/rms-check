@@ -23,7 +23,9 @@ pub enum Compatibility {
     WololoKingdoms = 5,
     /// Target HD Edition (assumes all DLCs).
     HDEdition = 2,
-    /// Try to be maximally compatible.
+    /// Target Definitive Edition.
+    DefinitiveEdition = 6,
+    /// Try to be maximally compatible. This is basically the same as targeting Conquerors.
     All = 0,
 }
 

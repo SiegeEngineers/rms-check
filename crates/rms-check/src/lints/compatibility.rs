@@ -41,6 +41,7 @@ impl CompatibilityLint {
                         Some(Compatibility::UserPatch15)
                     }
                     "wololokingdoms" | "wk" => Some(Compatibility::WololoKingdoms),
+                    "definitive edition" | "de" => Some(Compatibility::DefinitiveEdition),
                     _ => None,
                 };
                 if let Some(compat) = compat {
@@ -116,6 +117,18 @@ impl Lint for CompatibilityLint {
                                     atom.file_id(),
                                     atom.span(),
                                     "Wrap this command in an `if UP_AVAILABLE` statement or add a /* Compatibility: UserPatch 1.4 */ comment at the top of the file",
+                                )
+                        )
+                    }
+                }
+                "actor_area" | "actor_area_to_place_in" | "avoid_actor_area" | "actor_area_radius" => {
+                    if state.compatibility() != Compatibility::DefinitiveEdition {
+                        warnings.push(
+                            atom.warning("Actor areas are only supported in the Definitive Edition")
+                                .note_at(
+                                    atom.file_id(),
+                                    atom.span(),
+                                    "Add a /* Compatibility: Definitive Edition */ comment at the top of the file",
                                 )
                         )
                     }

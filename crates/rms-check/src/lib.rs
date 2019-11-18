@@ -26,9 +26,9 @@ pub use crate::{
     wordize::Word,
 };
 use codespan::{ByteIndex, FileId, Files, Location};
+use encoding_rs::Encoding;
 use std::{borrow::Cow, fs::File, io, path::Path};
 use zip::ZipArchive;
-use encoding_rs::Encoding;
 
 fn to_chardet_string(bytes: &[u8]) -> Cow<'_, str> {
     let (encoding_name, _, _) = chardet::detect(bytes);
