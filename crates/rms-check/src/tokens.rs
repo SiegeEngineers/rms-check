@@ -164,9 +164,12 @@ lazy_static! {
         m.insert(token!("<OBJECTS_GENERATION>", TokenContext::Section));
         m.insert(token!("<CONNECTION_GENERATION>", TokenContext::Section));
 
+        m.insert(token!("color_correction", TokenContext::TopLevelAttribute(None), [Token]));
         m.insert(token!("ai_info_map_type", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Token, Number, Number, Number]));
         m.insert(token!("random_placement", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>"))));
         m.insert(token!("direct_placement", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>"))));
+        m.insert(token!("circle_placement", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>"))));
+        m.insert(token!("circle_radius", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Number]));
         m.insert(token!("nomad_resources", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>"))));
         m.insert(token!("grouped_by_team", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>"))));
         m.insert(token!("effect_amount", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Token, Token, Token, Number]));
@@ -174,6 +177,8 @@ lazy_static! {
         m.insert(token!("terrain_state", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Number, Number, Number, Number]));
         m.insert(token!("weather_type", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Number, Number, Number, Number]));
         m.insert(token!("guard_state", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Token, Token, Number, Number]));
+        m.insert(token!("enable_waves", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Number]));
+        m.insert(token!("terrain_mask", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Number]));
 
         let land_attribute_context = TokenContext::AnyOf(&[
            TokenContext::Attribute(Some("create_land")),
@@ -246,24 +251,33 @@ lazy_static! {
         m.insert(token!("clumping_factor", TokenContext::Attribute(Some("create_terrain")), [Number]));
 
         m.insert(token!("create_object", TokenContext::Command(Some("<OBJECTS_GENERATION>")), [Token]));
-        m.insert(token!("set_scaling_to_map_size", TokenContext::Attribute(Some("create_object"))));
-        m.insert(token!("set_scaling_to_player_number", TokenContext::Attribute(Some("create_object"))));
-        m.insert(token!("number_of_groups", TokenContext::Attribute(Some("create_object")), [Number]));
-        m.insert(token!("number_of_objects", TokenContext::Attribute(Some("create_object")), [Number]));
-        m.insert(token!("group_variance", TokenContext::Attribute(Some("create_object")), [Number]));
-        m.insert(token!("group_placement_radius", TokenContext::Attribute(Some("create_object")), [Number]));
-        m.insert(token!("set_loose_grouping", TokenContext::Attribute(Some("create_object"))));
-        m.insert(token!("set_tight_grouping", TokenContext::Attribute(Some("create_object"))));
-        m.insert(token!("terrain_to_place_on", TokenContext::Attribute(Some("create_object")), [Token]));
-        m.insert(token!("set_gaia_object_only", TokenContext::Attribute(Some("create_object"))));
-        m.insert(token!("set_place_for_every_player", TokenContext::Attribute(Some("create_object"))));
-        m.insert(token!("place_on_specific_land_id", TokenContext::Attribute(Some("create_object")), [Number]));
-        m.insert(token!("min_distance_to_players", TokenContext::Attribute(Some("create_object")), [Number]));
-        m.insert(token!("max_distance_to_players", TokenContext::Attribute(Some("create_object")), [Number]));
-        m.insert(token!("max_distance_to_other_zones", TokenContext::Attribute(Some("create_object")), [Number]));
-        m.insert(token!("min_distance_group_placement", TokenContext::Attribute(Some("create_object")), [Number]));
-        m.insert(token!("temp_min_distance_group_placement", TokenContext::Attribute(Some("create_object")), [Number]));
-        m.insert(token!("resource_delta", TokenContext::Attribute(Some("create_object")), [Number]));
+        let create_object = TokenContext::Attribute(Some("create_object"));
+        m.insert(token!("set_scaling_to_map_size", create_object));
+        m.insert(token!("set_scaling_to_player_number", create_object));
+        m.insert(token!("number_of_groups", create_object, [Number]));
+        m.insert(token!("number_of_objects", create_object, [Number]));
+        m.insert(token!("group_variance", create_object, [Number]));
+        m.insert(token!("group_placement_radius", create_object, [Number]));
+        m.insert(token!("set_loose_grouping", create_object));
+        m.insert(token!("set_tight_grouping", create_object));
+        m.insert(token!("terrain_to_place_on", create_object, [Token]));
+        m.insert(token!("set_gaia_object_only", create_object));
+        m.insert(token!("set_place_for_every_player", create_object));
+        m.insert(token!("place_on_specific_land_id", create_object, [Number]));
+        m.insert(token!("min_distance_to_players", create_object, [Number]));
+        m.insert(token!("max_distance_to_players", create_object, [Number]));
+        m.insert(token!("max_distance_to_other_zones", create_object, [Number]));
+        m.insert(token!("min_distance_group_placement", create_object, [Number]));
+        m.insert(token!("temp_min_distance_group_placement", create_object, [Number]));
+        m.insert(token!("resource_delta", create_object, [Number]));
+        m.insert(token!("avoid_forest_zone", create_object, [Number]));
+        m.insert(token!("place_on_forest_zone", create_object, [Number]));
+        m.insert(token!("actor_area", create_object, [Number]));
+        m.insert(token!("actor_area_radius", create_object, [Number]));
+        m.insert(token!("actor_area_to_place_in", create_object, [Number]));
+        m.insert(token!("avoid_actor_area", create_object, [Number]));
+        m.insert(token!("force_placement", create_object));
+        m.insert(token!("find_closest", create_object));
 
         let connect_attribute_context = TokenContext::AnyOf(&[
             TokenContext::Attribute(Some("create_connect_all_players_land")),
