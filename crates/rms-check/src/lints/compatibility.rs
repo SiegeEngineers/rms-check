@@ -121,7 +121,10 @@ impl Lint for CompatibilityLint {
                         )
                     }
                 }
-                "actor_area" | "actor_area_to_place_in" | "avoid_actor_area" | "actor_area_radius" => {
+                "actor_area"
+                | "actor_area_to_place_in"
+                | "avoid_actor_area"
+                | "actor_area_radius" => {
                     if state.compatibility() != Compatibility::DefinitiveEdition {
                         warnings.push(
                             atom.warning("Actor areas are only supported in the Definitive Edition")

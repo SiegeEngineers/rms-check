@@ -267,12 +267,7 @@ impl Lint for ArgTypesLint {
                 }
                 "actor_area_to_place_in" | "avoid_actor_area" if !args.is_empty() => {
                     if let Ok(to_place_in) = args[0].value.parse::<i32>() {
-                        if self
-                            .actor_areas
-                            .iter()
-                            .find(|(n, _)| *n == to_place_in)
-                            .is_none()
-                        {
+                        if self.actor_areas.iter().all(|(n, _)| *n != to_place_in) {
                             warnings.push(
                                 args[0].warning(format!(
                                     "Actor area {} is never defined",
@@ -530,7 +525,6 @@ mod tests {
         let result = RMSCheck::new()
             .with_lint(Box::new(ArgTypesLint::new()))
             .check(file);
-        let file = result.file_id(filename).unwrap();
         let mut warnings = result.iter();
 
         let first = warnings.next().unwrap();

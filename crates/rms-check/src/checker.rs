@@ -1,6 +1,6 @@
 use crate::{
     parser::{Atom, Parser},
-    tokens::{TokenType, TOKENS},
+    tokens::TokenType,
     wordize::Word,
     RMSFile,
 };

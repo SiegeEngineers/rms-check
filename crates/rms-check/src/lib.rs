@@ -39,10 +39,6 @@ fn to_chardet_string(bytes: &[u8]) -> Cow<'_, str> {
     }
 }
 
-fn to_io_error<T: 'static + std::error::Error + Send + Sync>(err: T) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, err)
-}
-
 /// Container for a random map script, generalising various formats.
 #[derive(Debug)]
 pub struct RMSFile {
