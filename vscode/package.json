@@ -43,6 +43,16 @@
           ],
           "default": "off",
           "description": "Traces the communication between VS Code and the language server."
+        },
+        "rmsCheck.server": {
+          "scope": "machine",
+          "type": "string",
+          "enum": [
+            "wasm",
+            "native"
+          ],
+          "default": "wasm",
+          "description": "Optionally use the native Rust language server"
         }
       }
     }

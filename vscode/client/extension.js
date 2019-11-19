@@ -4,14 +4,19 @@ const { LanguageClient, TransportKind } = require('vscode-languageclient')
 
 let client = null
 
+const configuration = workspace.getConfiguration('rmsCheck')
+
 const major = process.version.match(/^v(\d+)/)[1]
-const useWasm = parseInt(major, 10) >= 10
+const defaultUseWasm = parseInt(major, 10) >= 10
+
+const useWasm = configuration.server === 'native' ? false
+  : configuration.server === 'wasm' ? true
+  : defaultUseWasm
 
 function getWasmServerOptions () {
   return {
     run: {
       module: require.resolve('../server'),
-      args: ['--server'],
       transport: TransportKind.stdio
     }
   }
@@ -28,12 +33,12 @@ function getNativeServerOptions () {
   return {
     run: {
       command: 'rms-check',
-      args: ['--server'],
+      args: ['server'],
       transport: TransportKind.stdio
     },
     debug: localServer && {
       command: localServer,
-      args: ['--server'],
+      args: ['server'],
       transport: TransportKind.stdio
     }
   }
