@@ -108,7 +108,10 @@ impl Iterator for FoldingRanges<'_> {
         };
         match atom {
             Comment(start, _, Some(end)) => {
-                self.fold_lines(start.span.start()..=end.span.start(), Some(FoldingRangeKind::Comment));
+                self.fold_lines(
+                    start.span.start()..=end.span.start(),
+                    Some(FoldingRangeKind::Comment),
+                );
             }
             OpenBlock(_) => self.waiting_folds.push(atom),
             CloseBlock(end) => {

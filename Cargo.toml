@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 ansi_term = "^0.12.1"
-codespan-reporting = "^0.5.0"
+codespan-reporting = "0.6"
 failure = "^0.1.5"
 multisplice = "^0.3.0"
 rms-check = { path = "crates/rms-check" }

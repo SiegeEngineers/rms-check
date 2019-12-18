@@ -15,8 +15,9 @@ use lsp_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
     DocumentFormattingParams, FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability,
     InitializeParams, InitializeResult, NumberOrString, Position, PublishDiagnosticsParams,
-    ServerCapabilities, SignatureHelpOptions, TextDocumentItem, TextDocumentPositionParams,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url, WorkspaceEdit,
+    ServerCapabilities, ServerInfo, SignatureHelpOptions, TextDocumentItem,
+    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
+    WorkDoneProgressOptions, WorkspaceEdit,
 };
 use multisplice::Multisplice;
 use rms_check::{
@@ -84,13 +85,23 @@ where
             folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
             signature_help_provider: Some(SignatureHelpOptions {
                 trigger_characters: Some(vec![" ".to_string(), "\t".to_string()]),
+                retrigger_characters: None,
+                work_done_progress_options: WorkDoneProgressOptions {
+                    work_done_progress: None,
+                },
             }),
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
                 TextDocumentSyncKind::Incremental,
             )),
             ..ServerCapabilities::default()
         };
-        let result = InitializeResult { capabilities };
+        let result = InitializeResult {
+            capabilities,
+            server_info: Some(ServerInfo {
+                name: "rms-check".to_string(),
+                version: None,
+            }),
+        };
         serde_json::to_value(result).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
 
@@ -205,6 +216,7 @@ where
                         document_changes: None,
                     }),
                     command: None,
+                    is_preferred: None,
                 });
             }
         }
@@ -281,7 +293,7 @@ where
             diagnostics.push(diag);
         }
 
-        let params = PublishDiagnosticsParams::new(doc.uri.clone(), diagnostics);
+        let params = PublishDiagnosticsParams::new(doc.uri.clone(), diagnostics, Some(doc.version));
         (self.emit)(json!({
             "jsonrpc": "2.0",
             "method": "textDocument/publishDiagnostics",
