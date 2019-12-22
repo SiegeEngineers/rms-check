@@ -6,6 +6,7 @@
   "author": "Renée Kooi <renee@kooi.me>",
   "activationEvents": [
     "onLanguage:aoe2-rms",
+    "onFileSystem:aoe2-rms",
     "onCommand:rms-check.edit-zr-map",
     "onWebviewPanel:rms-check.zr-map"
   ],

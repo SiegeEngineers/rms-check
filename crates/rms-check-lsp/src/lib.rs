@@ -50,11 +50,7 @@ where
 {
     /// Convert a codespan file name to an LSP file URL.
     fn codespan_name_to_url(&self, filename: &str) -> Result<Url, ()> {
-        if filename.starts_with("file://") {
-            return filename.parse().map_err(|_| ());
-        }
-
-        Err(())
+        filename.parse().map_err(|_| ())
     }
 
     /// Convert an rms-check warning to an LSP diagnostic.
