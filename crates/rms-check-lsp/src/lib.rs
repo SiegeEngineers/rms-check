@@ -87,7 +87,7 @@ where
                 },
             }),
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                TextDocumentSyncKind::Incremental,
+                TextDocumentSyncKind::Full,
             )),
             ..ServerCapabilities::default()
         };
@@ -119,14 +119,9 @@ where
         impl Lines {
             fn new(source: &str) -> Self {
                 Lines {
-                    indices: std::iter::once(ByteIndex::from(0))
-                        .chain(source.chars().enumerate().filter_map(|(index, c)| {
-                            if c == '\n' {
-                                Some(ByteIndex::from(index as u32 + 1))
-                            } else {
-                                None
-                            }
-                        }))
+                    indices: std::iter::once(0)
+                        .chain(source.match_indices('\n').map(|(index, _)| index as u32 + 1))
+                        .map(ByteIndex::from)
                         .collect(),
                 }
             }
@@ -143,7 +138,7 @@ where
                 let (start, end) = change
                     .range
                     .map(|r| (lines.map(&r.start), lines.map(&r.end)))
-                    .unwrap_or((
+                    .unwrap_or_else(|| (
                         ByteIndex::from(0),
                         ByteIndex::from(doc.text.as_bytes().len() as u32),
                     ));
