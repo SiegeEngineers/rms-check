@@ -84,9 +84,11 @@
     }
   },
   "dependencies": {
+    "simple-concat": "^1.0.0",
     "vscode-jsonrpc": "^4.0.0",
     "vscode-languageclient": "^5.2.1",
-    "which": "^2.0.1"
+    "which": "^2.0.1",
+    "yazl": "^2.5.1"
   },
   "devDependencies": {
     "aoe2-rms": "github:mangudai/vscode",

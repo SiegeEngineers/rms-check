@@ -1,6 +1,8 @@
 const path = require('path')
 const { TextDecoder, promisify } = require('util')
+const { ZipFile } = require('yazl')
 const zip = require('./store-zip')
+const concat = promisify(require('simple-concat'))
 const { commands, window, workspace, FileSystemError, FileType, Uri } = require('vscode')
 const { LanguageClient, TransportKind } = require('vscode-languageclient')
 
@@ -51,10 +53,14 @@ function getNativeServerOptions () {
 }
 
 async function editZrMap (uri) {
+  c.appendLine(`Edit ZR@ map: ${uri}`)
   const basename = path.basename(uri.fsPath)
   const bytes = await workspace.fs.readFile(uri)
+  c.appendLine(`  readFile: ${bytes.length} bytes`)
   const files = zip.read(bytes)
+  c.appendLine(`  ${files.length} files`)
 
+  c.appendLine(`Add workspace folder: ${toZrUri(uri)}`)
   workspace.updateWorkspaceFolders(workspace.workspaceFolders.length, 0, { uri: toZrUri(uri), name: basename })
 
   const mainFile = files.find((f) => /\.rms$/.test(f.header.name))
@@ -113,8 +119,21 @@ class ZipRmsFileSystemProvider {
     throw FileSystemError.NoPermissions('ZR@-maps cannot contain directories')
   }
 
-  delete (uri, options) {
-    throw FileSystemError.Unavailable('not yet implemented')
+  async delete (uri, options) {
+    c.appendLine(`Deleting file: ${uri}`)
+    const [zipFile, filename] = toFileUri(uri)
+
+    await this._editFile(zipFile, (files, newZip) => {
+      for (const { data, header } of files) {
+        if (header.name === filename) {
+          continue
+        }
+        newZip.addBuffer(data, header.name, {
+          mtime: fromDosDateTime(header.mdate, header.mtime),
+          compress: false
+        })
+      }
+    })
   }
 
   async readDirectory (uri) {
@@ -146,8 +165,27 @@ class ZipRmsFileSystemProvider {
     return file.data
   }
 
-  rename (oldUri, newUri, options) {
-    throw FileSystemError.Unavailable('not yet implemented')
+  async rename (oldUri, newUri, options) {
+    c.appendLine(`Renaming file: ${uri}`)
+    const [oldZipFile, oldFilename] = toFileUri(oldUri)
+    const [newZipFile, newFilename] = toFileUri(newUri)
+
+    if (oldZipFile !== newZipFile) {
+      throw new FileSystemError('Cannot move files between ZR@-maps')
+    }
+
+    await this._editFile(oldZipFile, (files, newZip) => {
+      for (const { data, header } of files) {
+        let name = header.name
+        if (name === oldFilename) {
+          mtime = new Date()
+        }
+        newZip.addBuffer(data, name, {
+          mtime: fromDosDateTime(header.mdate, header.mtime),
+          compress: false
+        })
+      }
+    })
   }
 
   async stat (uri) {
@@ -188,20 +226,38 @@ class ZipRmsFileSystemProvider {
   }
 
   async writeFile (uri, content, options) {
+    c.appendLine(`Writing file: ${uri}, ${content.length} bytes`)
     const [zipFile, filename] = toFileUri(uri)
 
+    await this._editFile(zipFile, (files, newZip) => {
+      for (const { data, header } of files) {
+        if (header.name === filename) {
+          continue
+        }
+        const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+        newZip.addBuffer(Buffer.from(data), header.name, {
+          mtime: fromDosDateTime(header.mdate, header.mtime),
+          compress: false
+        })
+      }
+
+      const buffer = Buffer.from(content.buffer, content.byteOffset, content.byteLength)
+      newZip.addBuffer(buffer, filename, { compress: false })
+    })
+  }
+
+  async _editFile (zipFile, edit) {
     const bytes = await workspace.fs.readFile(zipFile)
     const files = zip.read(bytes)
+    const newZip = new ZipFile()
+    const concatBytes = concat(newZip.outputStream)
 
-    const file = files.find((f) => f.header.name === filename)
-    if (!file) {
-      throw FileSystemError.FileNotFound(uri)
-    }
+    await edit(files, newZip)
+    newZip.end()
 
-    ;[file.header.mdate, file.header.mtime] = toDosDateTime(new Date())
-    file.data = content
+    const buffer = await concatBytes
+    const newBytes = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
 
-    const newBytes = zip.write(files)
     await workspace.fs.writeFile(zipFile, newBytes)
   }
 }
