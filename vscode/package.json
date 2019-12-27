@@ -1,6 +1,6 @@
 {
   "name": "rms-check-vscode",
-  "displayName": "rms-check",
+  "displayName": "AoE2 RMS Check",
   "description": "Age of Empires 2 Random Map Script syntax highlighting and linting support.",
   "version": "0.0.0",
   "author": "Renée Kooi <renee@kooi.me>",
@@ -34,7 +34,7 @@
     ],
     "configuration": {
       "type": "object",
-      "title": "rms-check",
+      "title": "AoE2 RMS Check",
       "properties": {
         "rmsCheck.trace.server": {
           "scope": "window",
@@ -45,7 +45,7 @@
             "verbose"
           ],
           "default": "off",
-          "description": "Traces the communication between VS Code and the language server."
+          "description": "Debugging option: Traces the communication between VS Code and the language server."
         },
         "rmsCheck.server": {
           "scope": "machine",
@@ -54,8 +54,36 @@
             "wasm",
             "native"
           ],
+          "enumDescriptions": [
+            "Builtin WebAssembly server",
+            "Native Rust server (requires separate installation)"
+          ],
           "default": "wasm",
-          "description": "Optionally use the native Rust language server"
+          "description": "Optionally use the native Rust language server."
+        },
+        "rmsCheck.defaultCompatibility": {
+          "scope": "resource",
+          "type": "string",
+          "enum": [
+            "conquerors",
+            "up14",
+            "up15",
+            "wk",
+            "hd",
+            "de",
+            "all"
+          ],
+          "enumDescriptions": [
+            "Conquerors",
+            "UserPatch 1.4",
+            "UserPatch 1.5",
+            "WololoKingdoms",
+            "HD Edition + DLC",
+            "Definitive Edition",
+            "All"
+          ],
+          "default": "all",
+          "description": "The default compatibility level to use. This determines which predefined constants and which commands are available in map scripts. Use a `/* Compatibility: $Value */` comment in individual map scripts to override this setting."
         }
       }
     },
@@ -63,7 +91,7 @@
       {
         "command": "rms-check.edit-zr-map",
         "category": "rms-check",
-        "title": "Edit ZR@ map"
+        "title": "Edit ZR@ (Zip-RMS) map"
       }
     ],
     "menus": {

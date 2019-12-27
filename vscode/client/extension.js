@@ -11,14 +11,14 @@ let decoder = null
 
 const c = window.createOutputChannel('rms-check')
 
-const configuration = workspace.getConfiguration('rmsCheck')
+const globalConfig = workspace.getConfiguration('rmsCheck')
 let storagePath = null
 
 const major = process.version.match(/^v(\d+)/)[1]
 const defaultUseWasm = parseInt(major, 10) >= 10
 
-const useWasm = configuration.server === 'native' ? false
-  : configuration.server === 'wasm' ? true
+const useWasm = globalConfig.server === 'native' ? false
+  : globalConfig.server === 'wasm' ? true
   : defaultUseWasm
 
 function getWasmServerOptions () {
