@@ -6,7 +6,7 @@
   "author": "Renée Kooi <renee@kooi.me>",
   "activationEvents": [
     "onLanguage:aoe2-rms",
-    "onFileSystem:aoe2-rms",
+    "onFileSystem:aoe2-rms-zr",
     "onCommand:rms-check.edit-zr-map",
     "onWebviewPanel:rms-check.zr-map"
   ],
@@ -92,7 +92,7 @@
     "aoe2-rms": "github:mangudai/vscode",
     "browserify": "^16.5.0",
     "cpy-cli": "^2.0.0",
-    "vsce": "^1.69.0",
+    "vsce": "^1.71.0",
     "vscode": "^1.1.34"
   },
   "engines": {

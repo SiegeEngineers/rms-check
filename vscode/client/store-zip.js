@@ -32,7 +32,10 @@ function readLocalFileHeader (view) {
   var nameLength = view.getUint16(26, LE)
   var extraLength = view.getUint16(28, LE)
   var name = decoder.decode(view.buffer.slice(view.byteOffset + 30, view.byteOffset + 30 + nameLength))
-  var extra = extraLength > 0 ? decoder.decode(view.buffer.slice(view.byteOffset + 30 + nameLength, view.byteOffset + 30 + nameLength + extraLength)) : null
+  var extra = null
+  if (extraLength > 0) {
+    decoder.decode(view.buffer.slice(view.byteOffset + 30 + nameLength, view.byteOffset + 30 + nameLength + extraLength))
+  }
 
   return {
     signature,

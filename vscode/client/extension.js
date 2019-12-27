@@ -7,6 +7,8 @@ const { LanguageClient, TransportKind } = require('vscode-languageclient')
 let client = null
 let decoder = null
 
+const c = window.createOutputChannel('rms-check')
+
 const configuration = workspace.getConfiguration('rmsCheck')
 let storagePath = null
 
@@ -52,6 +54,8 @@ async function editZrMap (uri) {
   const basename = path.basename(uri.fsPath)
   const bytes = await workspace.fs.readFile(uri)
   const files = zip.read(bytes)
+
+  workspace.updateWorkspaceFolders(workspace.workspaceFolders.length, 0, { uri: toZrUri(uri), name: basename })
 
   const mainFile = files.find((f) => /\.rms$/.test(f.header.name))
   if (mainFile) {
@@ -101,6 +105,7 @@ function toFileUri (uri) {
 
 class ZipRmsFileSystemProvider {
   onDidChangeFile (listener) {
+    c.appendLine('onDidChangeFile')
     // Ignore for now, should watch the zip file and check entry mtimes in the future
   }
 
@@ -113,10 +118,13 @@ class ZipRmsFileSystemProvider {
   }
 
   async readDirectory (uri) {
+    c.appendLine(`Reading directory: ${uri}`)
     const [zipFile, filename] = toFileUri(uri)
+    c.appendLine(`zipFile = ${zipFile}`)
 
     const bytes = await workspace.fs.readFile(zipFile)
     const files = zip.read(bytes)
+    c.appendLine(`${files.length} files`)
 
     return files.map((f) => {
       return [f.header.name, FileType.File]
@@ -124,6 +132,7 @@ class ZipRmsFileSystemProvider {
   }
 
   async readFile (uri) {
+    c.appendLine(`Reading file: ${uri}`)
     const [zipFile, filename] = toFileUri(uri)
 
     const bytes = await workspace.fs.readFile(zipFile)
@@ -142,7 +151,18 @@ class ZipRmsFileSystemProvider {
   }
 
   async stat (uri) {
+    c.appendLine(`Stat ${uri}`)
     const [zipFile, filename] = toFileUri(uri)
+
+    if (filename === '') {
+      const stat = await workspace.fs.stat(zipFile)
+      return {
+        ctime: stat.ctime,
+        mtime: stat.mtime,
+        size: stat.size,
+        type: FileType.Directory,
+      }
+    }
 
     const bytes = await workspace.fs.readFile(zipFile)
     const files = zip.read(bytes)
