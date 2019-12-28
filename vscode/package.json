@@ -114,19 +114,17 @@
       ]
     }
   },
-  "dependencies": {
+  "devDependencies": {
+    "@zeit/ncc": "^0.20.5",
+    "aoe2-rms": "github:mangudai/vscode",
+    "cpy-cli": "^2.0.0",
     "simple-concat": "^1.0.0",
+    "vsce": "^1.71.0",
+    "vscode": "^1.1.34",
     "vscode-jsonrpc": "^4.0.0",
     "vscode-languageclient": "^5.2.1",
     "which": "^2.0.1",
     "yazl": "^2.5.1"
-  },
-  "devDependencies": {
-    "aoe2-rms": "github:mangudai/vscode",
-    "browserify": "^16.5.0",
-    "cpy-cli": "^2.0.0",
-    "vsce": "^1.71.0",
-    "vscode": "^1.1.34"
   },
   "engines": {
     "vscode": "^1.23.0"
@@ -139,7 +137,7 @@
     "rms"
   ],
   "license": "MIT",
-  "main": "./client/extension",
+  "main": "./dist/client/index.js",
   "publisher": "Anda",
   "repository": {
     "type": "git",
@@ -148,8 +146,10 @@
   },
   "scripts": {
     "build-ext": "cpy node_modules/aoe2-rms/{language-configuration.json,aoe2-rms.tmLanguage} .",
-    "build-client": "browserify --node -x vscode client/extension.js -o client/bundle.js",
-    "build-server": "cd .. && wasm-pack build vscode/server --release --target nodejs",
+    "build-client": "ncc build client/extension.js -e vscode -o dist/client",
+    "build-server-wasm": "cd .. && wasm-pack build vscode/server --release --target nodejs",
+    "build-server-js": "ncc build server/index.js -o dist/server",
+    "build-server": "npm run build-server-wasm && npm run build-server-js",
     "prepare": "npm run build-ext && npm run build-server && npm run build-client",
     "package": "npm run prepare && vsce package"
   }

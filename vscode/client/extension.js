@@ -6,6 +6,8 @@ const zip = require('./store-zip')
 const concat = promisify(require('simple-concat'))
 const { commands, window, workspace, FileSystemError, FileType } = require('vscode')
 const { LanguageClient, TransportKind } = require('vscode-languageclient')
+// `path` alias that @zeit/ncc can't detect, so we can refer to truly external paths
+const externalPath = (() => path)()
 
 let client = null
 
@@ -23,7 +25,9 @@ const useWasm = globalConfig.server === 'native' ? false
 function getWasmServerOptions () {
   return {
     run: {
-      module: require.resolve('../server'),
+      // unbundled: ../server/index.js is the server entry point
+      // bundled: ../server/index.js refers to dist/server/index.js, which is the bundled server
+      module: externalPath.join(__dirname, '..', 'server', 'index.js'),
       transport: TransportKind.stdio
     }
   }
