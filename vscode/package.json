@@ -5,12 +5,15 @@
   "version": "0.0.0",
   "author": "Renée Kooi <renee@kooi.me>",
   "activationEvents": [
+    "workspaceContains:**/*.rms",
     "onLanguage:aoe2-rms",
     "onFileSystem:aoe2-rms-zr",
     "onCommand:rms-check.edit-zr-map",
     "onWebviewPanel:rms-check.zr-map"
   ],
-  "categories": [],
+  "categories": [
+    "Programming Languages"
+  ],
   "contributes": {
     "languages": [
       {
@@ -74,13 +77,13 @@
             "all"
           ],
           "enumDescriptions": [
-            "Conquerors",
-            "UserPatch 1.4",
-            "UserPatch 1.5",
-            "WololoKingdoms",
-            "HD Edition + DLC",
-            "Definitive Edition",
-            "All"
+            "Assume Conquerors 1.0c by default",
+            "Assume UserPatch 1.4 by default",
+            "Assume UserPatch 1.5 by default",
+            "Assume WololoKingdoms by default",
+            "Assume HD Edition + DLC by default",
+            "Assume Definitive Edition by default",
+            "Try to be maximally compatible: enable warnings for incompatibility with *any* version"
           ],
           "default": "all",
           "description": "The default compatibility level to use. This determines which predefined constants and which commands are available in map scripts. Use a `/* Compatibility: $Value */` comment in individual map scripts to override this setting."
@@ -97,16 +100,16 @@
     "menus": {
       "explorer/context": [
         {
-          "when": "resourceLangId == aoe2-rms",
+          "when": "resourceLangId == aoe2-rms && resourceFilename =~ /^ZR@/",
           "command": "rms-check.edit-zr-map",
-          "group": "7_modification"
+          "group": "navigation"
         }
       ],
       "editor/title": [
         {
-          "when": "resourceLangId == aoe2-rms",
+          "when": "resourceLangId == aoe2-rms && resourceFilename =~ /^ZR@/",
           "command": "rms-check.edit-zr-map",
-          "group": "7_modification"
+          "group": "navigation"
         }
       ]
     }
@@ -137,7 +140,7 @@
   ],
   "license": "MIT",
   "main": "./client/extension",
-  "publisher": "goto-bus-stop",
+  "publisher": "Anda",
   "repository": {
     "type": "git",
     "url": "https://github.com/goto-bus-stop/rms-check",
