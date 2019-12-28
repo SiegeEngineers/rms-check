@@ -1,13 +1,19 @@
 {
   "name": "rms-check-vscode",
-  "displayName": "rms-check",
+  "displayName": "AoE2 RMS Check",
   "description": "Age of Empires 2 Random Map Script syntax highlighting and linting support.",
   "version": "0.0.0",
   "author": "Renée Kooi <renee@kooi.me>",
   "activationEvents": [
-    "onLanguage:aoe2-rms"
+    "workspaceContains:**/*.rms",
+    "onLanguage:aoe2-rms",
+    "onFileSystem:aoe2-rms-zr",
+    "onCommand:rms-check.edit-zr-map",
+    "onWebviewPanel:rms-check.zr-map"
   ],
-  "categories": [],
+  "categories": [
+    "Programming Languages"
+  ],
   "contributes": {
     "languages": [
       {
@@ -31,7 +37,7 @@
     ],
     "configuration": {
       "type": "object",
-      "title": "rms-check",
+      "title": "AoE2 RMS Check",
       "properties": {
         "rmsCheck.trace.server": {
           "scope": "window",
@@ -42,7 +48,7 @@
             "verbose"
           ],
           "default": "off",
-          "description": "Traces the communication between VS Code and the language server."
+          "description": "Debugging option: Traces the communication between VS Code and the language server."
         },
         "rmsCheck.server": {
           "scope": "machine",
@@ -51,23 +57,74 @@
             "wasm",
             "native"
           ],
+          "enumDescriptions": [
+            "Builtin WebAssembly server",
+            "Native Rust server (requires separate installation)"
+          ],
           "default": "wasm",
-          "description": "Optionally use the native Rust language server"
+          "description": "Optionally use the native Rust language server."
+        },
+        "rmsCheck.defaultCompatibility": {
+          "scope": "resource",
+          "type": "string",
+          "enum": [
+            "conquerors",
+            "up14",
+            "up15",
+            "wk",
+            "hd",
+            "de",
+            "all"
+          ],
+          "enumDescriptions": [
+            "Assume Conquerors 1.0c by default",
+            "Assume UserPatch 1.4 by default",
+            "Assume UserPatch 1.5 by default",
+            "Assume WololoKingdoms by default",
+            "Assume HD Edition + DLC by default",
+            "Assume Definitive Edition by default",
+            "Try to be maximally compatible: enable warnings for incompatibility with *any* version"
+          ],
+          "default": "all",
+          "description": "The default compatibility level to use. This determines which predefined constants and which commands are available in map scripts. Use a `/* Compatibility: $Value */` comment in individual map scripts to override this setting."
         }
       }
+    },
+    "commands": [
+      {
+        "command": "rms-check.edit-zr-map",
+        "category": "rms-check",
+        "title": "Edit ZR@ (Zip-RMS) map"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "when": "resourceLangId == aoe2-rms && resourceFilename =~ /^ZR@/",
+          "command": "rms-check.edit-zr-map",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "when": "resourceLangId == aoe2-rms && resourceFilename =~ /^ZR@/",
+          "command": "rms-check.edit-zr-map",
+          "group": "navigation"
+        }
+      ]
     }
   },
-  "dependencies": {
+  "devDependencies": {
+    "@zeit/ncc": "^0.20.5",
+    "aoe2-rms": "github:mangudai/vscode",
+    "cpy-cli": "^2.0.0",
+    "simple-concat": "^1.0.0",
+    "vsce": "^1.71.0",
+    "vscode": "^1.1.34",
     "vscode-jsonrpc": "^4.0.0",
     "vscode-languageclient": "^5.2.1",
-    "which": "^2.0.1"
-  },
-  "devDependencies": {
-    "aoe2-rms": "github:mangudai/vscode",
-    "browserify": "^16.5.0",
-    "cpy-cli": "^2.0.0",
-    "vsce": "^1.69.0",
-    "vscode": "^1.1.34"
+    "which": "^2.0.1",
+    "yazl": "^2.5.1"
   },
   "engines": {
     "vscode": "^1.23.0"
@@ -80,8 +137,8 @@
     "rms"
   ],
   "license": "MIT",
-  "main": "./client/extension",
-  "publisher": "goto-bus-stop",
+  "main": "./dist/client/index.js",
+  "publisher": "Anda",
   "repository": {
     "type": "git",
     "url": "https://github.com/goto-bus-stop/rms-check",
@@ -89,8 +146,10 @@
   },
   "scripts": {
     "build-ext": "cpy node_modules/aoe2-rms/{language-configuration.json,aoe2-rms.tmLanguage} .",
-    "build-client": "browserify --node -x vscode client/extension.js -o client/bundle.js",
-    "build-server": "cd .. && wasm-pack build vscode/server --release --target nodejs",
+    "build-client": "ncc build client/extension.js -e vscode -o dist/client",
+    "build-server-wasm": "cd .. && wasm-pack build vscode/server --release --target nodejs",
+    "build-server-js": "ncc build server/index.js -o dist/server",
+    "build-server": "npm run build-server-wasm && npm run build-server-js",
     "prepare": "npm run build-ext && npm run build-server && npm run build-client",
     "package": "npm run prepare && vsce package"
   }
