@@ -1,25 +1,24 @@
 const path = require('path')
-const { TextDecoder, promisify } = require('util')
+const fs = require('fs')
+const { promisify } = require('util')
 const { ZipFile } = require('yazl')
 const zip = require('./store-zip')
 const concat = promisify(require('simple-concat'))
-const { commands, window, workspace, FileSystemError, FileType, Uri } = require('vscode')
+const { commands, window, workspace, FileSystemError, FileType } = require('vscode')
 const { LanguageClient, TransportKind } = require('vscode-languageclient')
 
 let client = null
-let decoder = null
 
 const c = window.createOutputChannel('rms-check')
 
 const globalConfig = workspace.getConfiguration('rmsCheck')
-let storagePath = null
 
 const major = process.version.match(/^v(\d+)/)[1]
 const defaultUseWasm = parseInt(major, 10) >= 10
 
 const useWasm = globalConfig.server === 'native' ? false
   : globalConfig.server === 'wasm' ? true
-  : defaultUseWasm
+    : defaultUseWasm
 
 function getWasmServerOptions () {
   return {
@@ -75,9 +74,6 @@ exports.activate = function activate (context) {
   const clientOptions = {
     documentSelector: ['aoe2-rms']
   }
-
-  decoder = new TextDecoder()
-  storagePath = context.storagePath
 
   client = new LanguageClient('rmsCheck', 'rms-check', serverOptions, clientOptions)
   client.start()
@@ -139,6 +135,9 @@ class ZipRmsFileSystemProvider {
   async readDirectory (uri) {
     c.appendLine(`Reading directory: ${uri}`)
     const [zipFile, filename] = toFileUri(uri)
+    if (filename !== '') {
+      return []
+    }
     c.appendLine(`zipFile = ${zipFile}`)
 
     const bytes = await workspace.fs.readFile(zipFile)
@@ -166,7 +165,7 @@ class ZipRmsFileSystemProvider {
   }
 
   async rename (oldUri, newUri, options) {
-    c.appendLine(`Renaming file: ${uri}`)
+    c.appendLine(`Renaming file: ${oldUri} -> ${newUri}`)
     const [oldZipFile, oldFilename] = toFileUri(oldUri)
     const [newZipFile, newFilename] = toFileUri(newUri)
 
@@ -178,7 +177,7 @@ class ZipRmsFileSystemProvider {
       for (const { data, header } of files) {
         let name = header.name
         if (name === oldFilename) {
-          mtime = new Date()
+          name = newFilename
         }
         newZip.addBuffer(data, name, {
           mtime: fromDosDateTime(header.mdate, header.mtime),
@@ -198,7 +197,7 @@ class ZipRmsFileSystemProvider {
         ctime: stat.ctime,
         mtime: stat.mtime,
         size: stat.size,
-        type: FileType.Directory,
+        type: FileType.Directory
       }
     }
 
@@ -235,7 +234,7 @@ class ZipRmsFileSystemProvider {
           continue
         }
         const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
-        newZip.addBuffer(Buffer.from(data), header.name, {
+        newZip.addBuffer(buffer, header.name, {
           mtime: fromDosDateTime(header.mdate, header.mtime),
           compress: false
         })
@@ -260,13 +259,6 @@ class ZipRmsFileSystemProvider {
 
     await workspace.fs.writeFile(zipFile, newBytes)
   }
-}
-
-function toDosDateTime (date) {
-  return [
-    (date.getHours() << 11) + (date.getMinutes() << 5) + (date.getSeconds() / 2),
-    ((date.getFullYear() - 1980) << 9) + ((date.getMonth() + 1) << 5) + date.getDate()
-  ]
 }
 
 function fromDosDateTime (date, time) {
