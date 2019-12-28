@@ -8,7 +8,8 @@
 #![warn(missing_docs)]
 #![warn(unused)]
 
-use codespan::{ByteIndex, ByteOffset, Files};
+use codespan::{ByteIndex, ByteOffset, Files, Span};
+use codespan_lsp::range_to_byte_span;
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use lsp_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
@@ -87,7 +88,7 @@ where
                 },
             }),
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                TextDocumentSyncKind::Full,
+                TextDocumentSyncKind::Incremental,
             )),
             ..ServerCapabilities::default()
         };
@@ -111,41 +112,37 @@ where
 
     /// A document changed, re-lint.
     fn changed(&mut self, params: DidChangeTextDocumentParams) {
-        let uri = params.text_document.uri.clone();
-
-        struct Lines {
-            indices: Vec<ByteIndex>,
-        }
-        impl Lines {
-            fn new(source: &str) -> Self {
-                Lines {
-                    indices: std::iter::once(0)
-                        .chain(source.match_indices('\n').map(|(index, _)| index as u32 + 1))
-                        .map(ByteIndex::from)
-                        .collect(),
+        if let Some(doc) = self.documents.get_mut(&params.text_document.uri) {
+            if let Some(version) = params.text_document.version {
+                if doc.version > version {
+                    (self.emit)(json!({
+                        "jsonrpc": "2.0",
+                        "method": "window/showMessage",
+                        "params": lsp_types::ShowMessageParams {
+                            typ: lsp_types::MessageType::Warning,
+                            message: format!("version mismatch: {} > {}", doc.version, version),
+                        },
+                    }));
+                    return;
                 }
             }
 
-            fn map(&self, loc: &Position) -> ByteIndex {
-                self.indices[loc.line as usize] + ByteOffset(loc.character as i64)
-            }
-        }
-
-        if let Some(doc) = self.documents.get_mut(&params.text_document.uri) {
-            let lines = Lines::new(&doc.text);
+            let mut files = Files::new();
+            let file_id = files.add(doc.uri.as_str(), &doc.text);
             let mut splicer = Multisplice::new(&doc.text);
             for change in &params.content_changes {
-                let (start, end) = change
+                let span = change
                     .range
-                    .map(|r| (lines.map(&r.start), lines.map(&r.end)))
-                    .unwrap_or_else(|| (
+                    .map(|r| range_to_byte_span(&files, file_id, &r).unwrap())
+                    .unwrap_or_else(|| Span::new(
                         ByteIndex::from(0),
                         ByteIndex::from(doc.text.as_bytes().len() as u32),
                     ));
-                splicer.splice(start.to_usize(), end.to_usize(), &change.text);
+                splicer.splice(span.start().to_usize(), span.end().to_usize(), &change.text);
             }
+            doc.version += 1;
             doc.text = splicer.to_string();
-            self.check_and_publish(uri);
+            self.check_and_publish(params.text_document.uri);
         }
     }
 
