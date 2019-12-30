@@ -237,8 +237,8 @@ impl Lint for ArgTypesLint {
                 "base_elevation" if !args.is_empty() => {
                     let arg = args[0];
                     if let Ok(n) = arg.value.parse::<i32>() {
-                        if n < 1 || n > 7 {
-                            warnings.push(arg.warning("Elevation value out of range (1-7)"));
+                        if n < 0 || n > 7 {
+                            warnings.push(arg.warning("Elevation value out of range (0 or 1-7)"));
                         }
                     }
                 }
