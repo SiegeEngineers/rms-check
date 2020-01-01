@@ -11,6 +11,9 @@ edition = "2018"
 name = "rms-check"
 path = "src/main.rs"
 
+[profile.release]
+lto = true
+
 [dependencies]
 ansi_term = "^0.12.1"
 codespan-reporting = "0.6"
