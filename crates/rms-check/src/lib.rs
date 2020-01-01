@@ -279,7 +279,6 @@ impl RMSCheck {
     pub fn compatibility(self, compatibility: Compatibility) -> Self {
         Self {
             checker: self.checker.compatibility(compatibility),
-            ..self
         }
     }
 
@@ -288,7 +287,6 @@ impl RMSCheck {
     pub fn with_lint(self, lint: Box<dyn Lint>) -> Self {
         Self {
             checker: self.checker.with_lint(lint),
-            ..self
         }
     }
 
