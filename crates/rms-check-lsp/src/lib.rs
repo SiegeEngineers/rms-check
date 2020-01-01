@@ -8,14 +8,14 @@
 #![warn(missing_docs)]
 #![warn(unused)]
 
-use codespan::{ByteIndex, ByteOffset, Files, Span};
+use codespan::{ByteIndex, Files, Span};
 use codespan_lsp::range_to_byte_span;
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use lsp_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
     DocumentFormattingParams, FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability,
-    InitializeParams, InitializeResult, NumberOrString, Position, PublishDiagnosticsParams,
+    InitializeParams, InitializeResult, NumberOrString, PublishDiagnosticsParams,
     ServerCapabilities, ServerInfo, SignatureHelpOptions, TextDocumentItem,
     TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
     WorkDoneProgressOptions, WorkspaceEdit,
