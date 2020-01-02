@@ -430,7 +430,7 @@ mod tests {
         assert!(warnings.next().is_none());
         assert_eq!(first.diagnostic().severity, Severity::Warning);
         assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
-        assert_eq!(first.message(), "Elevation value out of range (1-7)");
+        assert_eq!(first.message(), "Elevation value out of range (0 or 1-7)");
         let first_span = first.diagnostic().primary_label.span;
         assert_eq!(
             result.resolve_position(file, first_span.start()).unwrap(),
