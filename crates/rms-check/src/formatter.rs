@@ -187,7 +187,7 @@ impl<'atom> Formatter<'atom> {
 
     /// Write a section header.
     fn section<'w>(&mut self, name: &Word<'w>) {
-        if let Some(_) = self.prev {
+        if self.prev.is_some() {
             self.newline();
         }
         self.text(name.value);
@@ -351,7 +351,7 @@ impl<'atom> Formatter<'atom> {
         for atom in input.by_ref() {
             match &atom {
                 PercentChance(_, arg) if depth == 1 => {
-                    branches.push((arg.clone(), vec![]));
+                    branches.push((*arg, vec![]));
                     continue;
                 }
                 StartRandom(_) => {
@@ -366,10 +366,10 @@ impl<'atom> Formatter<'atom> {
                 _ => (),
             };
 
-            if branches.len() > 0 {
-                branches.last_mut().unwrap().1.push(atom);
-            } else {
+            if branches.is_empty() {
                 null_branch.push(atom);
+            } else {
+                branches.last_mut().unwrap().1.push(atom);
             }
         }
 
@@ -377,7 +377,7 @@ impl<'atom> Formatter<'atom> {
             if stmts.len() > 1 {
                 return false;
             }
-            if stmts.len() == 0 {
+            if stmts.is_empty() {
                 return true;
             }
             match stmts[0] {
@@ -401,7 +401,7 @@ impl<'atom> Formatter<'atom> {
                     chance.push(' ');
                 }
                 self.text(&chance);
-                if branch.len() > 0 {
+                if !branch.is_empty() {
                     self.text(" ");
                     input = self.write_atom(branch.remove(0), input);
                 }

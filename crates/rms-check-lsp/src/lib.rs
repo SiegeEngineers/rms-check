@@ -134,10 +134,12 @@ where
                 let span = change
                     .range
                     .map(|r| range_to_byte_span(&files, file_id, &r).unwrap())
-                    .unwrap_or_else(|| Span::new(
-                        ByteIndex::from(0),
-                        ByteIndex::from(doc.text.as_bytes().len() as u32),
-                    ));
+                    .unwrap_or_else(|| {
+                        Span::new(
+                            ByteIndex::from(0),
+                            ByteIndex::from(doc.text.as_bytes().len() as u32),
+                        )
+                    });
                 splicer.splice(span.start().to_usize(), span.end().to_usize(), &change.text);
             }
             doc.version += 1;
