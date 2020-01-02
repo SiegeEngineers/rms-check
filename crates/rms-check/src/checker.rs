@@ -538,11 +538,6 @@ impl<'a> ParseState<'a> {
     }
 }
 
-pub struct Checker<'a> {
-    lints: Vec<Box<dyn Lint>>,
-    state: ParseState<'a>,
-}
-
 /// Builtin #define or #const names.
 const AOC_OPTION_DEFINES: [&str; 8] = [
     "TINY_MAP",
@@ -624,6 +619,11 @@ impl CheckerBuilder {
     }
 }
 
+pub struct Checker<'a> {
+    lints: Vec<Box<dyn Lint>>,
+    state: ParseState<'a>,
+}
+
 impl<'a> Checker<'a> {
     pub fn builder() -> CheckerBuilder {
         CheckerBuilder::default()
@@ -633,11 +633,10 @@ impl<'a> Checker<'a> {
         let mut state = &mut self.state;
         let mut warnings = vec![];
         for lint in self.lints.iter_mut() {
-            warnings.extend(
-                lint.lint_atom(&mut state, atom)
-                    .into_iter()
-                    .map(move |warning| warning.lint(lint.name())),
-            );
+            let new_warnings = lint.lint_atom(&mut state, atom)
+                .into_iter()
+                .map(move |warning| warning.lint(lint.name()));
+            warnings.extend(new_warnings);
         }
 
         self.state.update(atom);
