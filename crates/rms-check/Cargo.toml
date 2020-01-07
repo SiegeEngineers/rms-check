@@ -15,4 +15,4 @@ encoding_rs = "^0.8.22"
 itertools = "^0.8.2"
 lazy_static = "^1.4.0"
 strsim = "^0.9.3"
-zip = { version = "0.5.3", default-features = false } # only need `store`
+zip = { version = "0.5", default-features = false } # only need `store`
