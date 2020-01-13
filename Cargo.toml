@@ -23,7 +23,7 @@ rms-check = { path = "crates/rms-check" }
 rms-check-lsp = { path = "crates/rms-check-lsp" }
 serde_json = "^1.0.44"
 structopt = "^0.3.7"
-termcolor = "^1.0.4"
+termcolor = "^1.1.0"
 zip = { version = "0.5", default-features = false } # only need `store`
 
 [workspace]
