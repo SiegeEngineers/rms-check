@@ -8,11 +8,11 @@ repository = "https://github.com/goto-bus-stop/rms-check.git"
 edition = "2018"
 
 [dependencies]
-chardet = "^0.2.4"
+chardet = "0.2"
 codespan = "0.6"
 codespan-reporting = "0.6"
-encoding_rs = "^0.8.22"
-itertools = "^0.8.2"
-lazy_static = "^1.4.0"
-strsim = "^0.9.3"
+encoding_rs = "0.8"
+itertools = "0.8"
+lazy_static = "1.4"
+strsim = "0.9"
 zip = { version = "0.5", default-features = false } # only need `store`
