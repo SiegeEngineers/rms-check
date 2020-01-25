@@ -308,14 +308,10 @@ pub struct ParseState<'a> {
     pub compatibility: Compatibility,
     /// Whether this map should be treated as a builtin map. If true, #include and #include_drs should be made available.
     pub is_builtin_map: bool,
-    /// Whether we're currently inside a comment.
-    pub is_comment: bool,
     /// The amount of nested statements we entered, like `if`, `start_random`.
     pub nesting: Vec<Nesting<'a>>,
     /// The token type that we are currently reading arguments for.
     pub current_token: Option<&'static TokenType>,
-    /// The amount of arguments we've read.
-    pub token_arg_index: u8,
     /// The current <SECTION>, as well as its opening token.
     pub current_section: Option<Atom<'a>>,
     /// List of builtin #const definitions.
@@ -336,10 +332,8 @@ impl<'a> ParseState<'a> {
             rms,
             compatibility,
             is_builtin_map: false,
-            is_comment: false,
             nesting: vec![],
             current_token: None,
-            token_arg_index: 0,
             current_section: None,
             builtin_consts: HashSet::new(),
             builtin_defines: HashSet::new(),
@@ -351,40 +345,55 @@ impl<'a> ParseState<'a> {
         state
     }
 
+    /// Track that a `#define` name may or may not exist from this point.
+    ///
+    /// These defines are valid in `if` statements, but not in commands, for example.
     pub fn optional_define(&mut self, name: impl ToString) {
         self.option_defines.insert(name.to_string());
     }
+    /// Track that a `#define` name exists.
     pub fn define(&mut self, name: impl ToString) {
         self.seen_defines.insert(name.to_string());
     }
+    /// Track that a `#const` name exists.
     pub fn define_const(&mut self, name: impl ToString) {
         self.seen_consts.insert(name.to_string());
     }
+    /// Does a given `#define` name exist?
     pub fn has_define(&self, name: &str) -> bool {
         self.seen_defines.contains(name) || self.builtin_defines.contains(name)
     }
+    /// May a given `#define` name exist at this point?
     pub fn may_have_define(&self, name: &str) -> bool {
         self.has_define(name) || self.option_defines.contains(name)
     }
+    /// Does a given `#const` name exist?
     pub fn has_const(&self, name: &str) -> bool {
         self.seen_consts.contains(name) || self.builtin_consts.contains(name)
     }
+    /// List all the `#const` names that are currently available.
     pub fn consts(&self) -> impl Iterator<Item = &str> {
         self.seen_consts
             .iter()
             .map(|string| string.as_ref())
             .chain(self.builtin_consts.iter().map(|string| string.as_ref()))
     }
+    /// List all the `#define` names that are currently available.
     pub fn defines(&self) -> impl Iterator<Item = &str> {
         self.seen_defines
             .iter()
             .map(|string| string.as_ref())
             .chain(self.builtin_defines.iter().map(|string| string.as_ref()))
     }
+
+    /// Get the compatibility mode the parser runs in.
     pub const fn compatibility(&self) -> Compatibility {
         self.compatibility
     }
 
+    /// Set the compatibility mode the parser should run in.
+    ///
+    /// This affects the available builtin `#define` and `#const` names.
     pub fn set_compatibility(&mut self, compatibility: Compatibility) {
         self.compatibility = compatibility;
 
@@ -406,6 +415,7 @@ impl<'a> ParseState<'a> {
         }
     }
 
+    /// Update the parse state upon reading a new Atom.
     fn update(&mut self, atom: &Atom<'a>) {
         match atom.kind {
             AtomKind::Section { .. } => {
@@ -421,6 +431,7 @@ impl<'a> ParseState<'a> {
         }
     }
 
+    /// Update the nesting state upon reading a new Atom.
     fn update_nesting(&mut self, atom: &Atom<'a>) -> Option<Warning> {
         fn unbalanced_error(name: &str, end: &Atom<'_>, nest: Option<&Nesting<'_>>) -> Warning {
             let msg = format!("Unbalanced `{}`", name);
@@ -532,7 +543,7 @@ impl<'a> ParseState<'a> {
     }
 }
 
-/// Builtin #define or #const names.
+/// Builtin #define or #const names for AoE2: The Age of Conquerors.
 const AOC_OPTION_DEFINES: [&str; 8] = [
     "TINY_MAP",
     "SMALL_MAP",
@@ -545,6 +556,7 @@ const AOC_OPTION_DEFINES: [&str; 8] = [
 ];
 
 lazy_static! {
+    /// Builtin #define or #const names for UserPatch.
     static ref UP_OPTION_DEFINES: Vec<String> = {
         let mut list = vec![
             "FIXED_POSITIONS".to_string(),
