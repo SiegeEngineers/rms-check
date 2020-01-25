@@ -170,7 +170,6 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     /// Create a new parser for the given source code. The FileId is stored on parsed `Atom`s so
     /// their position in the source file can be resolved later on to generate warning messages.
-    #[inline]
     pub fn new(file_id: FileId, source: &'a str) -> Self {
         Parser {
             source,

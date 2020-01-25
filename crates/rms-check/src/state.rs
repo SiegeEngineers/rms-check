@@ -25,7 +25,6 @@ pub enum Compatibility {
 }
 
 impl Default for Compatibility {
-    #[inline]
     fn default() -> Compatibility {
         Compatibility::Conquerors
     }

@@ -193,7 +193,6 @@ pub struct RMSCheckResult {
 
 impl RMSCheckResult {
     /// The files that were linted, and a list of the file IDs so they can be iterated over.
-    #[inline]
     pub const fn files(&self) -> &Files {
         self.rms.files()
     }
@@ -204,7 +203,6 @@ impl RMSCheckResult {
     }
 
     /// Get a file's source code by the file name.
-    #[inline]
     pub fn file(&self, name: &str) -> Option<&str> {
         self.rms.find_file(name).map(|id| self.files().source(id))
     }
@@ -214,19 +212,16 @@ impl RMSCheckResult {
     }
 
     /// Were there any warnings?
-    #[inline]
     pub fn has_warnings(&self) -> bool {
         !self.warnings.is_empty()
     }
 
     /// Resolve a file ID and byte index to a Line/Column location pair.
-    #[inline]
     pub fn resolve_position(&self, file_id: FileId, index: ByteIndex) -> Option<Location> {
         self.rms.files().location(file_id, index).ok()
     }
 
     /// Iterate over the warnings.
-    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &Warning> {
         self.warnings.iter()
     }
@@ -236,7 +231,6 @@ impl IntoIterator for RMSCheckResult {
     type Item = Warning;
     type IntoIter = std::vec::IntoIter<Self::Item>;
     /// Iterate over the warnings.
-    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.warnings.into_iter()
     }
@@ -262,7 +256,6 @@ impl Default for RMSCheck {
 
 impl RMSCheck {
     /// Initialize an RMS checker.
-    #[inline]
     pub fn new() -> Self {
         RMSCheck {
             checker: Checker::builder(),
@@ -272,7 +265,6 @@ impl RMSCheck {
     /// Configure the default compatibility for the script.
     ///
     /// The compatibility setting can be overridden by scripts using `Compatibility: ` comments.
-    #[inline]
     pub fn compatibility(self, compatibility: Compatibility) -> Self {
         Self {
             checker: self.checker.compatibility(compatibility),
@@ -280,7 +272,6 @@ impl RMSCheck {
     }
 
     /// Add a lint rule.
-    #[inline]
     pub fn with_lint(self, lint: Box<dyn Lint>) -> Self {
         Self {
             checker: self.checker.with_lint(lint),

@@ -47,19 +47,16 @@ pub struct TokenType {
 }
 impl TokenType {
     /// Get the type of the `n`th argument.
-    #[inline]
     pub const fn arg_type(&self, n: u8) -> &Option<ArgType> {
         &self.arg_types[n as usize]
     }
 
     /// Get the number of arguments required by this token type.
-    #[inline]
     pub fn arg_len(&self) -> u8 {
         self.arg_types.iter().position(Option::is_none).unwrap_or(4) as u8
     }
 
     /// Get the context for this type, describing where it can appear.
-    #[inline]
     pub const fn context(&self) -> &TokenContext {
         &self.context
     }

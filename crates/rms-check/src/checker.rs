@@ -14,14 +14,12 @@ pub enum AutoFixReplacement {
 }
 
 impl AutoFixReplacement {
-    #[inline]
     pub fn is_fixable(&self) -> bool {
         match self {
             AutoFixReplacement::Safe(_) => true,
             _ => false,
         }
     }
-    #[inline]
     pub fn is_fixable_unsafe(&self) -> bool {
         match self {
             AutoFixReplacement::None => false,
@@ -45,38 +43,31 @@ pub struct Suggestion {
 
 impl Suggestion {
     /// Get the codespan file ID that would be updated by this suggestion.
-    #[inline]
     pub const fn file_id(&self) -> FileId {
         self.file_id
     }
     /// Get the span this suggestion applies to.
-    #[inline]
     pub const fn span(&self) -> Span {
         self.span
     }
     /// Get the starting position this suggestion applies to.
-    #[inline]
     pub fn start(&self) -> ByteIndex {
         self.span.start()
     }
     /// Get the end position this suggestion applies to.
-    #[inline]
     pub fn end(&self) -> ByteIndex {
         self.span.end()
     }
     /// Get the suggestion message.
-    #[inline]
     pub fn message(&self) -> &str {
         &self.message
     }
     /// Get the replacement string that could fix the problem.
-    #[inline]
     pub const fn replacement(&self) -> &AutoFixReplacement {
         &self.replacement
     }
 
     /// Create a suggestion.
-    #[inline]
     pub fn new(file_id: FileId, span: Span, message: impl ToString) -> Self {
         let message = message.to_string();
         Suggestion {
@@ -87,7 +78,6 @@ impl Suggestion {
         }
     }
     /// Create a suggestion applying to a specific token.
-    #[inline]
     pub fn from(token: &Word<'_>, message: impl ToString) -> Self {
         let message = message.to_string();
         Suggestion {
@@ -98,14 +88,12 @@ impl Suggestion {
         }
     }
     /// Specify a possible fix for the problem.
-    #[inline]
     pub fn replace(mut self, replacement: impl ToString) -> Self {
         self.replacement = AutoFixReplacement::Safe(replacement.to_string());
         self
     }
     /// Specify a possible fix for the problem, but one that may not be correct and requires some
     /// manual intervention.
-    #[inline]
     pub fn replace_unsafe(mut self, replacement: impl ToString) -> Self {
         self.replacement = AutoFixReplacement::Unsafe(replacement.to_string());
         self
@@ -123,32 +111,26 @@ pub struct Warning {
 
 impl Warning {
     /// Get the diagnostic for this warning.
-    #[inline]
     pub const fn diagnostic(&self) -> &Diagnostic {
         &self.diagnostic
     }
     /// Get the severity of this warning.
-    #[inline]
     pub const fn severity(&self) -> Severity {
         self.diagnostic.severity
     }
     /// Get additional labels for this warning.
-    #[inline]
     pub const fn labels(&self) -> &Vec<Label> {
         &self.diagnostic.secondary_labels
     }
     /// Get the human-readable error message.
-    #[inline]
     pub fn message(&self) -> &str {
         &self.diagnostic.message
     }
     /// Check whether any suggestions could be made.
-    #[inline]
     pub fn has_suggestions(&self) -> bool {
         !self.suggestions.is_empty()
     }
     /// Get any suggestions that may help to fix the problem.
-    #[inline]
     pub const fn suggestions(&self) -> &Vec<Suggestion> {
         &self.suggestions
     }
