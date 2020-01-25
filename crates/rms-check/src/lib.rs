@@ -1,4 +1,5 @@
-//!
+//! Entry point for linting AoE2 random map scripts.
+
 #![deny(future_incompatible)]
 #![deny(nonstandard_style)]
 #![deny(rust_2018_idioms)]

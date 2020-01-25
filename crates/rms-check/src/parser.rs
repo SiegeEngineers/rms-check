@@ -1,13 +1,11 @@
-use crate::{
-    tokens::TOKENS,
-    wordize::{Word, Wordize},
-};
+//! AoE2 random map script parser, turning a source string into a sequence of parsed units called "atoms".
+
+use crate::tokens::TOKENS;
+use crate::wordize::{Word, Wordize};
 use codespan::{ByteIndex, ByteOffset, FileId, Span};
 use itertools::MultiPeek;
-use std::{
-    fmt::{self, Display},
-    ops::RangeBounds,
-};
+use std::fmt::{self, Display};
+use std::ops::RangeBounds;
 
 /// The kind of error that generated a Parser warning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +101,7 @@ pub struct Atom<'a> {
 }
 
 impl<'a> Atom<'a> {
+    /// Construct an atom with the given kind from a word, inheriting its location information.
     const fn from_word(kind: AtomKind<'a>, word: Word<'_>) -> Self {
         Self {
             kind,
@@ -111,14 +110,17 @@ impl<'a> Atom<'a> {
         }
     }
 
+    /// Construct an unknown atom from a word, inheriting its location information.
     const fn other(word: Word<'a>) -> Self {
         Self::from_word(AtomKind::Other { value: word }, word)
     }
 
+    /// Get the ID of the file this atom was parsed from.
     pub const fn file(&self) -> FileId {
         self.file
     }
 
+    /// Get the full span for this atom.
     pub const fn span(&self) -> Span {
         self.span
     }

@@ -1,8 +1,11 @@
+//! State tracker while parsing AoE2 random map scripts.
+
 use crate::checker::Warning;
 use crate::parser::{Atom, AtomKind, Parser};
 use crate::tokens::TokenType;
 use crate::RMSFile;
 use std::collections::HashSet;
+use std::str::FromStr;
 
 /// The target compatibility for a map script.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
@@ -30,13 +33,20 @@ impl Default for Compatibility {
     }
 }
 
+/// Enum for the different atoms that introduce nested contexts.
 #[derive(Debug, Clone)]
 pub enum Nesting<'a> {
+    /// An opening `if` statement.
     If(Atom<'a>),
+    /// An `elseif` statement.
     ElseIf(Atom<'a>),
+    /// An `else` statement.
     Else(Atom<'a>),
+    /// An opening `start_random` statement.
     StartRandom(Atom<'a>),
+    /// An opening `percent_chance` statement.
     PercentChance(Atom<'a>),
+    /// An opening brace (`{`), introducing a block with attributes.
     Brace(Atom<'a>),
 }
 
@@ -45,10 +55,14 @@ enum HeaderName {
     Compatibility,
 }
 
-fn parse_header_name(name: &str) -> Option<HeaderName> {
-    match name.to_ascii_lowercase().trim() {
-        "compatibility" => Some(HeaderName::Compatibility),
-        _ => None,
+impl FromStr for HeaderName {
+    type Err = ();
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        match name.to_ascii_lowercase().trim() {
+            "compatibility" => Ok(HeaderName::Compatibility),
+            _ => Err(()),
+        }
     }
 }
 
@@ -214,7 +228,7 @@ impl<'a> ParseState<'a> {
 
             let mut parts = line.splitn(2, ": ");
             if let (Some(name), Some(val)) = (parts.next(), parts.next()) {
-                if let Some(header) = parse_header_name(name) {
+                if let Ok(header) = name.parse() {
                     self.set_header(header, val);
                 }
             }

@@ -1,3 +1,5 @@
+//! The checker that runs lints and keeps track of warnings.
+
 use crate::parser::Atom;
 use crate::state::{Compatibility, ParseState};
 use crate::wordize::Word;

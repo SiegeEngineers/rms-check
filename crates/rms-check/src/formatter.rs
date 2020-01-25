@@ -1,3 +1,5 @@
+//! A code formatter for AoE2 random map scripts.
+
 use crate::parser::{Atom, AtomKind, Parser};
 use crate::wordize::Word;
 use codespan::Files;

@@ -1,3 +1,5 @@
+//! A word splitter for `codespan` files, with location tracking.
+
 use codespan::{ByteIndex, FileId, Span};
 use std::iter::Iterator;
 use std::str::CharIndices;
