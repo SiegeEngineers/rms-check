@@ -103,7 +103,7 @@ pub struct Atom<'a> {
 }
 
 impl<'a> Atom<'a> {
-    fn from_word(kind: AtomKind<'a>, word: Word<'_>) -> Self {
+    const fn from_word(kind: AtomKind<'a>, word: Word<'_>) -> Self {
         Self {
             kind,
             file: word.file,
@@ -111,15 +111,15 @@ impl<'a> Atom<'a> {
         }
     }
 
-    fn other(word: Word<'a>) -> Self {
+    const fn other(word: Word<'a>) -> Self {
         Self::from_word(AtomKind::Other { value: word }, word)
     }
 
-    pub fn file(&self) -> FileId {
+    pub const fn file(&self) -> FileId {
         self.file
     }
 
-    pub fn span(&self) -> Span {
+    pub const fn span(&self) -> Span {
         self.span
     }
 }
