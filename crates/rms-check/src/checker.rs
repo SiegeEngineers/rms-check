@@ -300,6 +300,18 @@ pub trait Lint {
     }
 }
 
+#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq)]
+enum HeaderName {
+    Compatibility,
+}
+
+fn parse_header_name(name: &str) -> Option<HeaderName> {
+    match name.to_ascii_lowercase().trim() {
+        "compatibility" => Some(HeaderName::Compatibility),
+        _ => None,
+    }
+}
+
 #[derive(Debug)]
 pub struct ParseState<'a> {
     /// The files.
@@ -324,10 +336,12 @@ pub struct ParseState<'a> {
     pub seen_defines: HashSet<String>,
     /// List of builtin optional definitions.
     pub option_defines: HashSet<String>,
+    /// Are we still parsing header comments?
+    end_of_headers: bool,
 }
 
 impl<'a> ParseState<'a> {
-    pub fn new(rms: &'a RMSFile, compatibility: Compatibility) -> Self {
+    fn new(rms: &'a RMSFile, compatibility: Compatibility) -> Self {
         let mut state = Self {
             rms,
             compatibility,
@@ -340,6 +354,7 @@ impl<'a> ParseState<'a> {
             seen_consts: HashSet::new(),
             seen_defines: HashSet::new(),
             option_defines: HashSet::new(),
+            end_of_headers: false,
         };
         state.set_compatibility(compatibility);
         state
@@ -417,6 +432,8 @@ impl<'a> ParseState<'a> {
 
     /// Update the parse state upon reading a new Atom.
     fn update(&mut self, atom: &Atom<'a>) {
+        self.update_headers(atom);
+
         match atom.kind {
             AtomKind::Section { .. } => {
                 self.current_section = Some(atom.clone());
@@ -428,6 +445,50 @@ impl<'a> ParseState<'a> {
                 self.define_const(name.value);
             }
             _ => (),
+        }
+    }
+
+    fn set_header(&mut self, name: HeaderName, value: &str) {
+        match name {
+            HeaderName::Compatibility => {
+                let compat = match value.to_ascii_lowercase().trim() {
+                    "hd edition" | "hd" => Compatibility::HDEdition,
+                    "conquerors" | "aoc" => Compatibility::Conquerors,
+                    "userpatch 1.5" | "up 1.5" => Compatibility::UserPatch15,
+                    "userpatch 1.4" | "up 1.4" | "userpatch" | "up" => Compatibility::UserPatch14,
+                    "wololokingdoms" | "wk" => Compatibility::WololoKingdoms,
+                    "definitive edition" | "de" => Compatibility::DefinitiveEdition,
+                    _ => return,
+                };
+                self.set_compatibility(compat);
+            }
+        }
+    }
+
+    fn parse_header_comment(&mut self, content: &str) {
+        for mut line in content.lines() {
+            line = line.trim();
+            if line.starts_with("* ") {
+                line = &line[2..];
+            }
+
+            let mut parts = line.splitn(2, ": ");
+            if let (Some(name), Some(val)) = (parts.next(), parts.next()) {
+                if let Some(header) = parse_header_name(name) {
+                    self.set_header(header, val);
+                }
+            }
+        }
+    }
+
+    fn update_headers(&mut self, atom: &Atom<'a>) {
+        if self.end_of_headers {
+            return;
+        }
+        if let AtomKind::Comment { content, .. } = &atom.kind {
+            self.parse_header_comment(content);
+        } else {
+            self.end_of_headers = true;
         }
     }
 

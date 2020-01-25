@@ -1,16 +1,13 @@
 use crate::{Atom, AtomKind, Compatibility, Lint, ParseState, Warning};
 
+#[derive(Default)]
 pub struct CompatibilityLint {
-    is_header_comment: bool,
     conditions: Vec<String>,
 }
 
 impl CompatibilityLint {
     pub fn new() -> Self {
-        Self {
-            is_header_comment: true,
-            conditions: vec![],
-        }
+        Self::default()
     }
 
     fn has_up_extension(&self, state: &ParseState<'_>) -> bool {
@@ -29,42 +26,6 @@ impl CompatibilityLint {
     fn add_define_check(&mut self, name: &str) {
         self.conditions.push(name.to_string());
     }
-
-    fn set_header(&mut self, state: &mut ParseState<'_>, name: &str, val: &str) {
-        match name {
-            "Compatibility" => {
-                let compat = match val.to_lowercase().trim() {
-                    "hd edition" | "hd" => Some(Compatibility::HDEdition),
-                    "conquerors" | "aoc" => Some(Compatibility::Conquerors),
-                    "userpatch 1.5" | "up 1.5" => Some(Compatibility::UserPatch15),
-                    "userpatch 1.4" | "up 1.4" | "userpatch" | "up" => {
-                        Some(Compatibility::UserPatch15)
-                    }
-                    "wololokingdoms" | "wk" => Some(Compatibility::WololoKingdoms),
-                    "definitive edition" | "de" => Some(Compatibility::DefinitiveEdition),
-                    _ => None,
-                };
-                if let Some(compat) = compat {
-                    state.set_compatibility(compat);
-                }
-            }
-            _ => (),
-        }
-    }
-
-    fn parse_comment(&mut self, state: &mut ParseState<'_>, content: &str) {
-        for mut line in content.lines() {
-            line = line.trim();
-            if line.starts_with("* ") {
-                line = &line[2..];
-            }
-
-            let mut parts = line.splitn(2, ": ");
-            if let (Some(name), Some(val)) = (parts.next(), parts.next()) {
-                self.set_header(state, name, val);
-            }
-        }
-    }
 }
 
 impl Lint for CompatibilityLint {
@@ -73,15 +34,6 @@ impl Lint for CompatibilityLint {
     }
 
     fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
-        match &atom.kind {
-            AtomKind::Comment { content, .. } if self.is_header_comment => {
-                self.parse_comment(state, content);
-            }
-            _ => {
-                self.is_header_comment = false;
-            }
-        }
-
         let mut warnings = vec![];
 
         if let AtomKind::Command { name, .. } = &atom.kind {
