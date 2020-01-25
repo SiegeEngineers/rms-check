@@ -11,16 +11,15 @@ mod checker;
 mod formatter;
 mod lints;
 mod parser;
+mod state;
 mod tokens;
 mod wordize;
 
 use crate::checker::Checker;
-pub use crate::checker::{
-    AutoFixReplacement, CheckerBuilder, Compatibility, Lint, Nesting, ParseState, Severity,
-    Suggestion, Warning,
-};
+pub use crate::checker::{AutoFixReplacement, CheckerBuilder, Lint, Severity, Suggestion, Warning};
 pub use crate::formatter::{format, FormatOptions};
 pub use crate::parser::{Atom, AtomKind, ParseErrorKind, Parser};
+pub use crate::state::{Compatibility, Nesting, ParseState};
 pub use crate::tokens::{ArgType, TokenContext, TokenType, TOKENS};
 pub use crate::wordize::Word;
 use codespan::{ByteIndex, FileId, Files, Location};
