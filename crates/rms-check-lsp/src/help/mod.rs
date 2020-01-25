@@ -4,8 +4,7 @@ use codespan::{ByteIndex, FileId, Files};
 use lsp_types::{
     Documentation, ParameterInformation, ParameterLabel, SignatureHelp, SignatureInformation,
 };
-use rms_check::{ArgType, TOKENS};
-use rms_check::{Atom, Parser};
+use rms_check::{ArgType, AtomKind, Parser, TOKENS};
 
 /// Helper struct to create SignatureInformation structures.
 #[derive(Debug, Clone)]
@@ -87,11 +86,20 @@ pub fn find_signature_help(
 ) -> Option<SignatureHelp> {
     let parser = Parser::new(file_id, files.source(file_id));
     for (atom, _) in parser {
-        let (name, args) = match &atom {
+        let (name, args) = match &atom.kind {
             // Turn args from a Vec<Word> into a Vec<&Word>
-            Atom::Command(name, args) => (name, args.iter().collect()),
-            Atom::Define(def, name) | Atom::Const(def, name, None) => (def, vec![name]),
-            Atom::Const(def, name, Some(value)) => (def, vec![name, value]),
+            AtomKind::Command { name, arguments } => (name, arguments.iter().collect()),
+            AtomKind::Define { head, name }
+            | AtomKind::Const {
+                head,
+                name,
+                value: None,
+            } => (head, vec![name]),
+            AtomKind::Const {
+                head,
+                name,
+                value: Some(value),
+            } => (head, vec![name, value]),
             _ => continue,
         };
         let span = atom.span();

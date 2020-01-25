@@ -1,4 +1,4 @@
-use crate::{Atom, Compatibility, Lint, ParseState, Warning};
+use crate::{Atom, AtomKind, Compatibility, Lint, ParseState, Warning};
 
 pub struct CompatibilityLint {
     is_header_comment: bool,
@@ -73,10 +73,8 @@ impl Lint for CompatibilityLint {
     }
 
     fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
-        use Atom::*;
-
-        match atom {
-            Comment(_, content, _) if self.is_header_comment => {
+        match &atom.kind {
+            AtomKind::Comment { content, .. } if self.is_header_comment => {
                 self.parse_comment(state, content);
             }
             _ => {
@@ -86,13 +84,13 @@ impl Lint for CompatibilityLint {
 
         let mut warnings = vec![];
 
-        if let Command(name, _) = atom {
+        if let AtomKind::Command { name, .. } = &atom.kind {
             match name.value {
                 "effect_amount" | "effect_percent" => {
                     if !self.has_up_extension(state) {
                         warnings.push(atom.warning("RMS Effects require UserPatch 1.5").note_at(
-                            atom.file_id(),
-                            atom.span(),
+                            atom.file,
+                            atom.span,
                             "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file",
                         ))
                     }
@@ -102,8 +100,8 @@ impl Lint for CompatibilityLint {
                         warnings.push(
                             atom.warning("Direct placement requires UserPatch 1.5")
                                 .note_at(
-                                    atom.file_id(),
-                                    atom.span(),
+                                    atom.file,
+                                    atom.span,
                                     "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file",
                                 )
                         )
@@ -114,8 +112,8 @@ impl Lint for CompatibilityLint {
                         warnings.push(
                             atom.warning("Nomad resources requires UserPatch 1.4")
                                 .note_at(
-                                    atom.file_id(),
-                                    atom.span(),
+                                    atom.file,
+                                    atom.span,
                                     "Wrap this command in an `if UP_AVAILABLE` statement or add a /* Compatibility: UserPatch 1.4 */ comment at the top of the file",
                                 )
                         )
@@ -129,8 +127,8 @@ impl Lint for CompatibilityLint {
                         warnings.push(
                             atom.warning("Actor areas are only supported in the Definitive Edition")
                                 .note_at(
-                                    atom.file_id(),
-                                    atom.span(),
+                                    atom.file,
+                                    atom.span,
                                     "Add a /* Compatibility: Definitive Edition */ comment at the top of the file",
                                 )
                         )
@@ -140,18 +138,18 @@ impl Lint for CompatibilityLint {
             }
         };
 
-        match atom {
-            If(_, arg) => self.add_define_check(arg.value),
-            ElseIf(_, arg) => {
+        match atom.kind {
+            AtomKind::If { condition, .. } => self.add_define_check(condition.value),
+            AtomKind::ElseIf { condition, .. } => {
                 self.conditions.pop();
-                self.add_define_check(arg.value);
+                self.add_define_check(condition.value);
             }
-            Else(_) => {
+            AtomKind::Else { .. } => {
                 self.conditions.pop();
                 // Dummy argument to make nesting work right
                 self.add_define_check(" ");
             }
-            EndIf(_) => {
+            AtomKind::EndIf { .. } => {
                 self.conditions.pop();
             }
             _ => (),

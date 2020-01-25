@@ -15,16 +15,14 @@ mod tokens;
 mod wordize;
 
 use crate::checker::Checker;
-pub use crate::{
-    checker::{
-        AutoFixReplacement, CheckerBuilder, Compatibility, Lint, Nesting, ParseState, Severity,
-        Suggestion, Warning,
-    },
-    formatter::{format, FormatOptions},
-    parser::{Atom, ParseErrorKind, Parser},
-    tokens::{ArgType, TokenContext, TokenType, TOKENS},
-    wordize::Word,
+pub use crate::checker::{
+    AutoFixReplacement, CheckerBuilder, Compatibility, Lint, Nesting, ParseState, Severity,
+    Suggestion, Warning,
 };
+pub use crate::formatter::{format, FormatOptions};
+pub use crate::parser::{Atom, AtomKind, ParseErrorKind, Parser};
+pub use crate::tokens::{ArgType, TokenContext, TokenType, TOKENS};
+pub use crate::wordize::Word;
 use codespan::{ByteIndex, FileId, Files, Location};
 use encoding_rs::Encoding;
 use std::{borrow::Cow, fs::File, io, path::Path};
@@ -304,9 +302,8 @@ impl RMSCheck {
                     // Handled by arg-types lint
                     continue;
                 }
-                warnings.push(
-                    Warning::error(atom.file_id(), w.span, format!("{:?}", w.kind)).lint("parse"),
-                );
+                warnings
+                    .push(Warning::error(atom.file, w.span, format!("{:?}", w.kind)).lint("parse"));
             }
         }
 

@@ -1,4 +1,4 @@
-use crate::{Atom, Lint, ParseState, Suggestion, Warning, TOKENS};
+use crate::{Atom, AtomKind, Lint, ParseState, Suggestion, Warning, TOKENS};
 use strsim::levenshtein;
 
 #[allow(unused)]
@@ -8,16 +8,16 @@ impl Lint for UnknownAttributeLint {
         "unknown-attribute"
     }
     fn lint_atom(&mut self, _state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
-        match atom {
+        match atom.kind {
             // Treat unrecognised tokens as attributes, if they are not numbers
-            Atom::Other(word) => {
-                if !word.value.chars().all(|c| c.is_ascii_digit()) {
-                    let warning = word.error(format!("Unknown attribute `{}`", word.value));
+            AtomKind::Other { value } => {
+                if !value.value.chars().all(|c| c.is_ascii_digit()) {
+                    let warning = value.error(format!("Unknown attribute `{}`", value.value));
                     let warning = if let Some(similar) =
-                        meant(word.value, TOKENS.keys().map(|s| s.as_ref()))
+                        meant(value.value, TOKENS.keys().map(|s| s.as_ref()))
                     {
                         warning.suggest(
-                            Suggestion::from(word, format!("Did you mean `{}`?", similar))
+                            Suggestion::from(&value, format!("Did you mean `{}`?", similar))
                                 .replace_unsafe(similar.to_string()),
                         )
                     } else {

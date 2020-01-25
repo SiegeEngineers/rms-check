@@ -1,5 +1,6 @@
 use crate::{
-    Atom, Compatibility, Lint, Nesting, ParseErrorKind, ParseState, Parser, Suggestion, Warning,
+    Atom, AtomKind, Compatibility, Lint, Nesting, ParseErrorKind, ParseState, Parser, Suggestion,
+    Warning,
 };
 use codespan::{ByteOffset, Span};
 
@@ -26,8 +27,13 @@ impl Lint for CommentContentsLint {
     }
 
     fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
-        if let Atom::Comment(start, content, end) = atom {
-            let offset = ByteOffset(start.span.end().to_usize() as i64);
+        if let AtomKind::Comment {
+            open,
+            content,
+            close,
+        } = &atom.kind
+        {
+            let offset = ByteOffset(open.span.end().to_usize() as i64);
 
             let (has_start_random, has_if) =
                 state
@@ -60,17 +66,17 @@ impl Lint for CommentContentsLint {
                     }
                 }
 
-                if let Atom::Other(word) = atom {
+                if let AtomKind::Other { value } = atom.kind {
                     if may_trigger_parsing_bug
-                        && (state.has_define(word.value) || state.has_const(word.value))
+                        && (state.has_define(value.value) || state.has_const(value.value))
                     {
                         let suggestion = Suggestion::from(
-                            &word,
+                            &value,
                             "Add `backticks` around the name to make the parser ignore it",
                         )
-                        .replace(format!("`{}`", word.value));
-                        warnings.push(Warning::warning(word.file,
-                                                       offset_span(word.span, offset),
+                        .replace(format!("`{}`", value.value));
+                        warnings.push(Warning::warning(value.file,
+                                                       offset_span(value.span, offset),
                                                       "Using constant names in comments inside `start_random` or `if` statements can be dangerous, because the game may interpret them as other tokens instead.")
                                     .suggest(suggestion));
                     }
@@ -79,9 +85,9 @@ impl Lint for CommentContentsLint {
                 expecting_more_arguments = None;
             }
 
-            if let (Some(atom), Some(close_comment)) = (&expecting_more_arguments, end) {
+            if let (Some(atom), Some(close_comment)) = (&expecting_more_arguments, close) {
                 warnings.push(close_comment.warning("This close comment may be ignored because a previous command is expecting more arguments")
-                              .note_at(atom.file_id(), offset_span(atom.span(), offset), "Command started here"));
+                              .note_at(atom.file, offset_span(atom.span, offset), "Command started here"));
             }
 
             return warnings;

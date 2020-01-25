@@ -1,4 +1,4 @@
-use crate::{Atom, Lint, ParseState, Suggestion, Warning};
+use crate::{Atom, AtomKind, Lint, ParseState, Suggestion, Warning};
 
 #[derive(Default)]
 pub struct IncludeLint {}
@@ -14,14 +14,14 @@ impl Lint for IncludeLint {
         "include"
     }
     fn lint_atom(&mut self, _state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
-        match atom {
-            Atom::Command(cmd, _) if cmd.value == "#include_drs" => {
+        match atom.kind {
+            AtomKind::Command { name, .. } if name.value == "#include_drs" => {
                 vec![atom.error("#include_drs can only be used by builtin maps")]
             }
-            Atom::Command(cmd, _) if cmd.value == "#include" => {
+            AtomKind::Command { name, .. } if name.value == "#include" => {
                 let suggestion = Suggestion::new(
-                    atom.file_id(),
-                    atom.span(),
+                    atom.file,
+                    atom.span,
                     "If you're trying to make a map pack, use a map pack generator instead.",
                 );
                 vec![atom

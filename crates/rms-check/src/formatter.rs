@@ -1,7 +1,5 @@
-use crate::{
-    parser::{Atom, Parser},
-    wordize::Word,
-};
+use crate::parser::{Atom, AtomKind, Parser};
+use crate::wordize::Word;
 use codespan::Files;
 use std::iter::Peekable;
 
@@ -114,6 +112,11 @@ impl<'atom> Formatter<'atom> {
         }
     }
 
+    /// Get the Kind of the most recently printed Atom, if any exist.
+    fn prev_kind(&self) -> Option<&AtomKind<'_>> {
+        self.prev.as_ref().map(|atom| &atom.kind)
+    }
+
     /// Write a newline (Windows-style).
     fn newline(&mut self) {
         self.result.push_str("\r\n");
@@ -143,17 +146,17 @@ impl<'atom> Formatter<'atom> {
     }
 
     /// Write a command.
-    fn command<'w>(&mut self, name: &Word<'w>, args: &[Word<'w>], is_block: bool) {
+    fn command<'w>(&mut self, name: &Word<'w>, arguments: &[Word<'w>], is_block: bool) {
         self.text(name.value);
         let Width {
             command_width,
             arg_width,
         } = self.widths.last().cloned().unwrap_or_default();
 
-        let mut arg_iter = args.iter().peekable();
+        let mut arg_iter = arguments.iter().peekable();
 
         if self.options.align_arguments {
-            // If we have any args, add padding spaces between the command name and arg1, and between
+            // If we have any arguments, add padding spaces between the command name and arg1, and between
             // arg1 and arg2.
             // The rest is not handled right now since they are less frequent and it's not certain
             // that lining them up makes sense.
@@ -200,9 +203,8 @@ impl<'atom> Formatter<'atom> {
     where
         I: Iterator<Item = Atom<'atom>>,
     {
-        use Atom::*;
-        let is_end = |atom: &Atom<'_>| match atom {
-            CloseBlock(_) => true,
+        let is_end = |atom: &Atom<'_>| match atom.kind {
+            AtomKind::CloseBlock { .. } => true,
             _ => false,
         };
 
@@ -212,20 +214,20 @@ impl<'atom> Formatter<'atom> {
         let mut width = Width::default();
         let mut indent = 0;
         for atom in input.by_ref().take_while(|atom| !is_end(atom)) {
-            width = match &atom {
-                Command(cmd, args) => Width {
+            width = match &atom.kind {
+                AtomKind::Command { name, arguments } => Width {
                     command_width: width
                         .command_width
-                        .max(cmd.value.len() + indent * self.options.tab_size as usize),
+                        .max(name.value.len() + indent * self.options.tab_size as usize),
                     arg_width: width
                         .arg_width
-                        .max(args.get(0).map(|word| word.value.len()).unwrap_or(0)),
+                        .max(arguments.get(0).map(|word| word.value.len()).unwrap_or(0)),
                 },
-                If(_, _) => {
+                AtomKind::If { .. } => {
                     indent += 1;
                     width
                 }
-                EndIf(_) => {
+                AtomKind::EndIf { .. } => {
                     indent -= 1;
                     width
                 }
@@ -245,7 +247,7 @@ impl<'atom> Formatter<'atom> {
         self.widths.pop();
 
         // Manually add newline if there was garbage
-        if let Some(Other(_)) = self.prev {
+        if let Some(AtomKind::Other { .. }) = self.prev_kind() {
             self.newline();
         }
 
@@ -261,8 +263,6 @@ impl<'atom> Formatter<'atom> {
     where
         I: Iterator<Item = Atom<'atom>>,
     {
-        use Atom::*;
-
         self.text("if ");
         self.text(cond.value);
         self.newline();
@@ -283,14 +283,14 @@ impl<'atom> Formatter<'atom> {
         let content: Vec<Atom<'atom>> = input
             .by_ref()
             .take_while(|atom| {
-                match atom {
-                    If(_, _) => depth += 1,
-                    EndIf(_) => depth -= 1,
+                match atom.kind {
+                    AtomKind::If { .. } => depth += 1,
+                    AtomKind::EndIf { .. } => depth -= 1,
                     _ => (),
                 }
 
-                match atom {
-                    EndIf(_) if depth == 0 => false,
+                match atom.kind {
+                    AtomKind::EndIf { .. } if depth == 0 => false,
                     _ => true,
                 }
             })
@@ -298,15 +298,15 @@ impl<'atom> Formatter<'atom> {
 
         let mut sub_input = content.into_iter().peekable();
         while let Some(atom) = sub_input.next() {
-            match atom {
-                Atom::ElseIf(_, cond) => {
+            match atom.kind {
+                AtomKind::ElseIf { condition, .. } => {
                     self.indent -= 1;
                     self.text("elseif ");
-                    self.text(cond.value);
+                    self.text(condition.value);
                     self.newline();
                     self.indent += 1;
                 }
-                Atom::Else(_) => {
+                AtomKind::Else { .. } => {
                     self.indent -= 1;
                     self.text("else");
                     self.newline();
@@ -335,8 +335,6 @@ impl<'atom> Formatter<'atom> {
     where
         I: Iterator<Item = Atom<'atom>>,
     {
-        use Atom::*;
-
         self.text("start_random");
         self.newline();
         self.indent += 1;
@@ -349,15 +347,15 @@ impl<'atom> Formatter<'atom> {
         let mut branches = vec![];
         let mut depth = 1;
         for atom in input.by_ref() {
-            match &atom {
-                PercentChance(_, arg) if depth == 1 => {
-                    branches.push((*arg, vec![]));
+            match atom.kind {
+                AtomKind::PercentChance { chance, .. } if depth == 1 => {
+                    branches.push((chance, vec![]));
                     continue;
                 }
-                StartRandom(_) => {
+                AtomKind::StartRandom { .. } => {
                     depth += 1;
                 }
-                EndRandom(_) => {
+                AtomKind::EndRandom { .. } => {
                     depth -= 1;
                     if depth == 0 {
                         break;
@@ -380,13 +378,13 @@ impl<'atom> Formatter<'atom> {
             if stmts.is_empty() {
                 return true;
             }
-            match stmts[0] {
-                Define(_, _) => true,
-                Const(_, _, _) => true,
-                Undefine(_, _) => true,
+            match stmts[0].kind {
+                AtomKind::Define { .. } => true,
+                AtomKind::Const { .. } => true,
+                AtomKind::Undefine { .. } => true,
                 // Include(_, _) => true,
                 // IncludeDrs(_, _) => true,
-                Command(_, _) => true,
+                AtomKind::Command { .. } => true,
                 _ => false,
             }
         });
@@ -490,80 +488,79 @@ impl<'atom> Formatter<'atom> {
     where
         I: Iterator<Item = Atom<'atom>>,
     {
-        use Atom::*;
-
-        match (&self.prev, &atom) {
+        match (self.prev_kind(), &atom.kind) {
             // Add an additional newline after each }
-            (Some(CloseBlock(_)), _) => self.newline(),
-            (Some(Other(_)), Other(_)) => (),
+            (Some(AtomKind::CloseBlock { .. }), _) => self.newline(),
+            (Some(AtomKind::Other { .. }), AtomKind::Other { .. }) => (),
             // Add a newline after a run of `Other` tokens
-            (Some(Other(_)), _) => self.newline(),
+            (Some(AtomKind::Other { .. }), _) => self.newline(),
             _ => (),
         }
 
-        match &atom {
-            Section(name) => self.section(name),
-            Define(_, name) => self.define(name),
-            Const(_, name, value) => self.const_(name, value),
-            Undefine(_, name) => self.undefine(name),
-            Command(name, args) => {
-                let is_block = if let Some(OpenBlock(_)) = input.peek() {
-                    true
-                } else {
-                    false
-                };
-                self.command(name, args, is_block);
+        match &atom.kind {
+            AtomKind::Section { name, .. } => self.section(name),
+            AtomKind::Define { name, .. } => self.define(name),
+            AtomKind::Const { name, value, .. } => self.const_(name, value),
+            AtomKind::Undefine { name, .. } => self.undefine(name),
+            AtomKind::Command { name, arguments } => {
+                let is_block =
+                    if let Some(AtomKind::OpenBlock { .. }) = input.peek().map(|atom| &atom.kind) {
+                        true
+                    } else {
+                        false
+                    };
+                self.command(name, arguments, is_block);
             }
-            OpenBlock(_) => {
+            AtomKind::OpenBlock { .. } => {
                 input = self.block(input);
             }
-            If(_, cond) => {
-                input = self.condition(cond, input);
+            AtomKind::If { condition, .. } => {
+                input = self.condition(condition, input);
             }
-            StartRandom(_) => {
+            AtomKind::StartRandom { .. } => {
                 input = self.random(input);
             }
-            Comment(_, content, _) => self.comment(content),
+            AtomKind::Comment { content, .. } => self.comment(content),
             // sometimes people use `//` comments even though that doesn't work
             // should just pass those through
-            Other(word) if word.value.starts_with("//") => {
-                self.text(word.value);
+            AtomKind::Other { value } if value.value.starts_with("//") => {
+                self.text(value.value);
             }
-            Other(word) => {
-                let arg_like = word.value.to_ascii_uppercase().as_str() == word.value
-                    || word.value.chars().all(|c| c.is_ascii_digit());
-                if let (true, Some(Other(_))) = (arg_like, &self.prev) {
+            AtomKind::Other { value } => {
+                let arg_like = value.value.to_ascii_uppercase().as_str() == value.value
+                    || value.value.chars().all(|c| c.is_ascii_digit());
+                if let (true, Some(AtomKind::Other { .. })) = (arg_like, self.prev_kind()) {
                     self.result.push(' ');
-                    self.text(word.value);
+                    self.text(value.value);
                 } else {
-                    self.text(word.value);
+                    self.text(value.value);
                 }
             }
 
             // Garbage non-matching branch statements
-            ElseIf(_, cond) => {
+            AtomKind::ElseIf { condition, .. } => {
                 self.text("elseif ");
-                self.text(cond.value);
+                self.text(condition.value);
                 self.newline();
             }
-            Else(_) => {
+            AtomKind::Else { .. } => {
                 self.text("else");
                 self.newline();
             }
-            EndIf(_) => {
+            AtomKind::EndIf { .. } => {
                 self.text("endif");
                 self.newline();
             }
-            CloseBlock(_) => {
+            AtomKind::CloseBlock { .. } => {
                 self.text("}");
                 self.newline();
             }
-            PercentChance(_, chance) => {
+            AtomKind::PercentChance { chance, .. } => {
                 self.text("percent_chance ");
                 self.text(chance.value);
                 self.newline();
             }
-            EndRandom(_) => {
+            AtomKind::EndRandom { .. } => {
                 self.text("end_random");
                 self.newline();
             }

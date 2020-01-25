@@ -1,4 +1,4 @@
-use crate::{ArgType, Atom, Lint, ParseState, Suggestion, Warning, Word, TOKENS};
+use crate::{ArgType, Atom, AtomKind, Lint, ParseState, Suggestion, Warning, Word, TOKENS};
 use codespan::Span;
 use strsim::levenshtein;
 
@@ -61,7 +61,7 @@ impl ArgTypesLint {
     fn check_number(
         &self,
         _state: &ParseState<'_>,
-        cmd: &Word<'_>,
+        name: &Word<'_>,
         arg: &Word<'_>,
     ) -> Option<Warning> {
         // This may be a valued (#const) constant,
@@ -72,7 +72,7 @@ impl ArgTypesLint {
             .map(|_| {
                 let warn = arg.error(format!(
                     "Expected a number argument to {}, but got {}",
-                    cmd.value, arg.value
+                    name.value, arg.value
                 ));
                 if arg.value.starts_with('(') {
                     let (_, replacement) = is_valid_rnd(&format!("rnd{}", arg.value));
@@ -101,15 +101,15 @@ impl ArgTypesLint {
         arg_type: ArgType,
         arg: Option<&Word<'_>>,
     ) -> Option<Warning> {
-        let cmd = if let Atom::Command(cmd, _) = atom {
-            cmd
+        let name = if let AtomKind::Command { name, .. } = atom.kind {
+            name
         } else {
             unreachable!()
         };
         let arg = if let Some(arg) = arg {
             arg
         } else {
-            return Some(atom.error(format!("Missing arguments to {}", cmd.value)));
+            return Some(atom.error(format!("Missing arguments to {}", name.value)));
         };
 
         fn unexpected_number_warning(arg: &Word<'_>) -> Option<Warning> {
@@ -122,7 +122,7 @@ impl ArgTypesLint {
         }
 
         match arg_type {
-            ArgType::Number => self.check_number(state, cmd, arg),
+            ArgType::Number => self.check_number(state, &name, arg),
             ArgType::Word => {
                 unexpected_number_warning(arg)
                     .or_else(|| if arg.value.chars().any(char::is_lowercase) {
@@ -219,23 +219,23 @@ impl Lint for ArgTypesLint {
         "arg-types"
     }
     fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
-        if let Atom::Command(cmd, args) = atom {
-            let token_type = &TOKENS[&cmd.value.to_ascii_lowercase()];
+        if let AtomKind::Command { name, arguments } = &atom.kind {
+            let token_type = &TOKENS[&name.value.to_ascii_lowercase()];
             let mut warnings = vec![];
             for i in 0..token_type.arg_len() {
                 if let Some(warning) = self.check_arg(
                     state,
                     atom,
                     token_type.arg_type(i).unwrap(),
-                    args.get(i as usize),
+                    arguments.get(i as usize),
                 ) {
                     warnings.push(warning);
                 }
             }
 
-            match cmd.value {
-                "base_elevation" if !args.is_empty() => {
-                    let arg = args[0];
+            match name.value {
+                "base_elevation" if !arguments.is_empty() => {
+                    let arg = arguments[0];
                     if let Ok(n) = arg.value.parse::<i32>() {
                         if n < 0 || n > 7 {
                             warnings.push(arg.warning("Elevation value out of range (0 or 1-7)"));
@@ -243,33 +243,35 @@ impl Lint for ArgTypesLint {
                     }
                 }
                 "land_position" => {
-                    if let Some(Ok(first)) = args.get(0).map(|f| f.value.parse::<i32>()) {
+                    if let Some(Ok(first)) = arguments.get(0).map(|f| f.value.parse::<i32>()) {
                         if first < 0 || first > 100 {
-                            warnings.push(args[0].warning("Land position out of range (0-100)"));
+                            warnings
+                                .push(arguments[0].warning("Land position out of range (0-100)"));
                         }
                     }
-                    if let Some(Ok(second)) = args.get(1).map(|f| f.value.parse::<i32>()) {
+                    if let Some(Ok(second)) = arguments.get(1).map(|f| f.value.parse::<i32>()) {
                         if second < 0 || second > 99 {
-                            warnings.push(args[1].warning("Land position out of range (0-99)"));
+                            warnings
+                                .push(arguments[1].warning("Land position out of range (0-99)"));
                         }
                     }
                 }
-                "zone" if !args.is_empty() => {
-                    if args[0].value == "99" {
-                        warnings.push(args[0].warning("`zone 99` crashes the game"));
+                "zone" if !arguments.is_empty() => {
+                    if arguments[0].value == "99" {
+                        warnings.push(arguments[0].warning("`zone 99` crashes the game"));
                     }
                 }
-                "assign_to" => self.check_assign_to(args, &mut warnings),
-                "actor_area" if !args.is_empty() => {
-                    if let Ok(n) = args[0].value.parse::<i32>() {
-                        self.actor_areas.push((n, args[0].span));
+                "assign_to" => self.check_assign_to(&arguments, &mut warnings),
+                "actor_area" if !arguments.is_empty() => {
+                    if let Ok(n) = arguments[0].value.parse::<i32>() {
+                        self.actor_areas.push((n, arguments[0].span));
                     }
                 }
-                "actor_area_to_place_in" | "avoid_actor_area" if !args.is_empty() => {
-                    if let Ok(to_place_in) = args[0].value.parse::<i32>() {
+                "actor_area_to_place_in" | "avoid_actor_area" if !arguments.is_empty() => {
+                    if let Ok(to_place_in) = arguments[0].value.parse::<i32>() {
                         if self.actor_areas.iter().all(|(n, _)| *n != to_place_in) {
                             warnings.push(
-                                args[0].warning(format!(
+                                arguments[0].warning(format!(
                                     "Actor area {} is never defined",
                                     to_place_in
                                 )),

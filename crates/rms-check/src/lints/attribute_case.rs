@@ -1,4 +1,4 @@
-use super::super::{Atom, Lint, ParseState, Suggestion, Warning, TOKENS};
+use crate::{Atom, AtomKind, Lint, ParseState, Suggestion, Warning, TOKENS};
 
 pub struct AttributeCaseLint {}
 
@@ -13,11 +13,11 @@ impl Lint for AttributeCaseLint {
         "attribute-case"
     }
     fn lint_atom(&mut self, _state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
-        match atom {
-            Atom::Command(cmd, _) if self.is_wrong_case(cmd.value) => {
-                let suggestion = Suggestion::from(cmd, "Convert to lowercase")
-                    .replace(cmd.value.to_ascii_lowercase());
-                let message = format!("Unknown attribute `{}`", cmd.value);
+        match atom.kind {
+            AtomKind::Command { name, .. } if self.is_wrong_case(name.value) => {
+                let suggestion = Suggestion::from(&name, "Convert to lowercase")
+                    .replace(name.value.to_ascii_lowercase());
+                let message = format!("Unknown attribute `{}`", name.value);
                 vec![atom.error(message).suggest(suggestion)]
             }
             _ => Default::default(),

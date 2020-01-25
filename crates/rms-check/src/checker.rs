@@ -1,9 +1,7 @@
-use crate::{
-    parser::{Atom, Parser},
-    tokens::TokenType,
-    wordize::Word,
-    RMSFile,
-};
+use crate::parser::{Atom, AtomKind, Parser};
+use crate::tokens::TokenType;
+use crate::wordize::Word;
+use crate::RMSFile;
 use codespan::{ByteIndex, FileId, Span};
 pub use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 use lazy_static::lazy_static;
@@ -263,7 +261,7 @@ impl Atom<'_> {
         Warning {
             diagnostic: Diagnostic::new_warning(
                 message.clone(),
-                Label::new(self.file_id(), self.span(), message),
+                Label::new(self.file, self.span, message),
             ),
             suggestions: vec![],
         }
@@ -275,7 +273,7 @@ impl Atom<'_> {
         Warning {
             diagnostic: Diagnostic::new_error(
                 message.clone(),
-                Label::new(self.file_id(), self.span(), message),
+                Label::new(self.file, self.span, message),
             ),
             suggestions: vec![],
         }
@@ -396,11 +394,11 @@ impl<'a> ParseState<'a> {
         let (file_id, content) = self.rms.definitions(compatibility);
 
         for (atom, _) in Parser::new(file_id, content) {
-            match atom {
-                Atom::Const(_, name, _) => {
+            match atom.kind {
+                AtomKind::Const { name, .. } => {
                     self.builtin_consts.insert(name.value.to_string());
                 }
-                Atom::Define(_, name) => {
+                AtomKind::Define { name, .. } => {
                     self.builtin_defines.insert(name.value.to_string());
                 }
                 _ => (),
@@ -409,14 +407,14 @@ impl<'a> ParseState<'a> {
     }
 
     fn update(&mut self, atom: &Atom<'a>) {
-        match atom {
-            Atom::Section(_) => {
+        match atom.kind {
+            AtomKind::Section { .. } => {
                 self.current_section = Some(atom.clone());
             }
-            Atom::Define(_, name) => {
+            AtomKind::Define { name, .. } => {
                 self.define(name.value);
             }
-            Atom::Const(_, name, _) => {
+            AtomKind::Const { name, .. } => {
                 self.define_const(name.value);
             }
             _ => (),
@@ -427,43 +425,39 @@ impl<'a> ParseState<'a> {
         fn unbalanced_error(name: &str, end: &Atom<'_>, nest: Option<&Nesting<'_>>) -> Warning {
             let msg = format!("Unbalanced `{}`", name);
             match nest {
-                Some(Nesting::Brace(start)) => end.error(msg).note_at(
-                    start.file_id(),
-                    start.span(),
-                    "Matches this open brace `{`",
-                ),
+                Some(Nesting::Brace(start)) => {
+                    end.error(msg)
+                        .note_at(start.file, start.span, "Matches this open brace `{`")
+                }
                 Some(Nesting::If(start)) => {
                     end.error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this `if`")
+                        .note_at(start.file, start.span, "Matches this `if`")
                 }
                 Some(Nesting::ElseIf(start)) => {
                     end.error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this `elseif`")
+                        .note_at(start.file, start.span, "Matches this `elseif`")
                 }
                 Some(Nesting::Else(start)) => {
                     end.error(msg)
-                        .note_at(start.file_id(), start.span(), "Matches this `else`")
+                        .note_at(start.file, start.span, "Matches this `else`")
                 }
-                Some(Nesting::StartRandom(start)) => end.error(msg).note_at(
-                    start.file_id(),
-                    start.span(),
-                    "Matches this `start_random`",
-                ),
-                Some(Nesting::PercentChance(start)) => end.error(msg).note_at(
-                    start.file_id(),
-                    start.span(),
-                    "Matches this `percent_chance`",
-                ),
+                Some(Nesting::StartRandom(start)) => {
+                    end.error(msg)
+                        .note_at(start.file, start.span, "Matches this `start_random`")
+                }
+                Some(Nesting::PercentChance(start)) => {
+                    end.error(msg)
+                        .note_at(start.file, start.span, "Matches this `percent_chance`")
+                }
                 None => end.error(format!("{}–nothing is open", msg)),
             }
         }
 
-        use Atom::*;
-        match atom {
-            OpenBlock(_) => {
+        match atom.kind {
+            AtomKind::OpenBlock { .. } => {
                 self.nesting.push(Nesting::Brace(atom.clone()));
             }
-            CloseBlock(_) => match self.nesting.last() {
+            AtomKind::CloseBlock { .. } => match self.nesting.last() {
                 Some(Nesting::Brace(_)) => {
                     self.nesting.pop();
                 }
@@ -471,8 +465,8 @@ impl<'a> ParseState<'a> {
                     return Some(unbalanced_error("}", atom, nest));
                 }
             },
-            If(_, _) => self.nesting.push(Nesting::If(atom.clone())),
-            ElseIf(_, _) => {
+            AtomKind::If { .. } => self.nesting.push(Nesting::If(atom.clone())),
+            AtomKind::ElseIf { .. } => {
                 match self.nesting.last() {
                     Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
                         self.nesting.pop();
@@ -483,7 +477,7 @@ impl<'a> ParseState<'a> {
                 }
                 self.nesting.push(Nesting::ElseIf(atom.clone()));
             }
-            Else(_) => {
+            AtomKind::Else { .. } => {
                 match self.nesting.last() {
                     Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) => {
                         self.nesting.pop();
@@ -494,7 +488,7 @@ impl<'a> ParseState<'a> {
                 }
                 self.nesting.push(Nesting::Else(atom.clone()));
             }
-            EndIf(_) => match self.nesting.last() {
+            AtomKind::EndIf { .. } => match self.nesting.last() {
                 Some(Nesting::If(_)) | Some(Nesting::ElseIf(_)) | Some(Nesting::Else(_)) => {
                     self.nesting.pop();
                 }
@@ -502,8 +496,8 @@ impl<'a> ParseState<'a> {
                     return Some(unbalanced_error("endif", atom, nest));
                 }
             },
-            StartRandom(_) => self.nesting.push(Nesting::StartRandom(atom.clone())),
-            PercentChance(_, _) => {
+            AtomKind::StartRandom { .. } => self.nesting.push(Nesting::StartRandom(atom.clone())),
+            AtomKind::PercentChance { .. } => {
                 if let Some(Nesting::PercentChance(_)) = self.nesting.last() {
                     self.nesting.pop();
                 }
@@ -517,7 +511,7 @@ impl<'a> ParseState<'a> {
 
                 self.nesting.push(Nesting::PercentChance(atom.clone()));
             }
-            EndRandom(_) => {
+            AtomKind::EndRandom { .. } => {
                 if let Some(Nesting::PercentChance(_)) = self.nesting.last() {
                     self.nesting.pop();
                 };

@@ -46,118 +46,116 @@ impl ParseError {
 
 /// A parsed piece of source code.
 #[derive(Debug, Clone)]
-pub enum Atom<'a> {
+pub enum AtomKind<'a> {
     /// A #const definition, with an optional value for incomplete #const statements.
-    Const(Word<'a>, Word<'a>, Option<Word<'a>>),
+    Const {
+        head: Word<'a>,
+        name: Word<'a>,
+        value: Option<Word<'a>>,
+    },
     /// A #define definition.
-    Define(Word<'a>, Word<'a>),
+    Define { head: Word<'a>, name: Word<'a> },
     /// An #undefine statement.
-    Undefine(Word<'a>, Word<'a>),
+    Undefine { head: Word<'a>, name: Word<'a> },
     /// A <SECTION> token.
-    Section(Word<'a>),
+    Section { name: Word<'a> },
     /// An if statement with a condition.
-    If(Word<'a>, Word<'a>),
+    If { head: Word<'a>, condition: Word<'a> },
     /// An elseif statement with a condition.
-    ElseIf(Word<'a>, Word<'a>),
+    ElseIf { head: Word<'a>, condition: Word<'a> },
     /// An else statement.
-    Else(Word<'a>),
+    Else { head: Word<'a> },
     /// An endif statement.
-    EndIf(Word<'a>),
+    EndIf { head: Word<'a> },
     /// A start_random statement.
-    StartRandom(Word<'a>),
+    StartRandom { head: Word<'a> },
     /// A percent_chance statement with a chance value.
-    PercentChance(Word<'a>, Word<'a>),
+    PercentChance { head: Word<'a>, chance: Word<'a> },
     /// An end_random statement.
-    EndRandom(Word<'a>),
+    EndRandom { head: Word<'a> },
     /// The start of a block, `{`.
-    OpenBlock(Word<'a>),
+    OpenBlock { head: Word<'a> },
     /// The end of a block, `}`.
-    CloseBlock(Word<'a>),
+    CloseBlock { head: Word<'a> },
     /// A command, with a name and arguments.
-    Command(Word<'a>, Vec<Word<'a>>),
+    Command {
+        name: Word<'a>,
+        arguments: Vec<Word<'a>>,
+    },
     /// A comment, with an optional close token in case the comment was not closed.
-    Comment(Word<'a>, String, Option<Word<'a>>),
+    Comment {
+        open: Word<'a>,
+        content: String,
+        close: Option<Word<'a>>,
+    },
     /// An unrecognised token.
-    Other(Word<'a>),
+    Other { value: Word<'a> },
 }
 
-impl Atom<'_> {
-    /// Get the file this atom was parsed from.
-    pub fn file_id(&self) -> FileId {
-        use Atom::*;
-        match self {
-            Section(def) | Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def)
-            | OpenBlock(def) | CloseBlock(def) | Other(def) => def.file,
-            Const(def, _, _) => def.file,
-            Define(def, _)
-            | Undefine(def, _)
-            | If(def, _)
-            | ElseIf(def, _)
-            | PercentChance(def, _) => def.file,
-            Command(name, _) => name.file,
-            Comment(left, _, _) => left.file,
+#[derive(Debug, Clone)]
+pub struct Atom<'a> {
+    /// The kind of atom, and data about this kind of atom.
+    pub kind: AtomKind<'a>,
+    /// ID of the file this atom was parsed from.
+    pub file: FileId,
+    /// The full span for this atom.
+    pub span: Span,
+}
+
+impl<'a> Atom<'a> {
+    fn from_word(kind: AtomKind<'a>, word: Word<'_>) -> Self {
+        Self {
+            kind,
+            file: word.file,
+            span: word.span,
         }
     }
 
-    /// Get the full span for an atom.
+    fn other(word: Word<'a>) -> Self {
+        Self::from_word(AtomKind::Other { value: word }, word)
+    }
+
+    pub fn file(&self) -> FileId {
+        self.file
+    }
+
     pub fn span(&self) -> Span {
-        use Atom::*;
-        match self {
-            Section(def) | Else(def) | EndIf(def) | StartRandom(def) | EndRandom(def)
-            | OpenBlock(def) | CloseBlock(def) | Other(def) => def.span,
-            Const(def, name, val) => def.span.merge(val.unwrap_or(*name).span),
-            Define(def, arg)
-            | Undefine(def, arg)
-            | If(def, arg)
-            | ElseIf(def, arg)
-            | PercentChance(def, arg) => def.span.merge(arg.span),
-            Command(name, args) => match args.last() {
-                Some(arg) => name.span.merge(arg.span),
-                None => name.span,
-            },
-            Comment(left, content, right) => match right {
-                Some(right) => left.span.merge(right.span),
-                None => Span::new(
-                    left.span.start(),
-                    left.span.end() + ByteOffset(content.as_bytes().len() as i64),
-                ),
-            },
-        }
+        self.span
     }
 }
 
 impl Display for Atom<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use Atom::*;
-        match self {
-            Const(_, name, val) => write!(
+        match &self.kind {
+            AtomKind::Const { name, value, .. } => write!(
                 f,
                 "Const<{}, {}>",
                 name.value,
-                val.map(|v| v.value).unwrap_or("()")
+                value.map(|v| v.value).unwrap_or("()")
             ),
-            Define(_, name) => write!(f, "Define<{}>", name.value),
-            Undefine(_, name) => write!(f, "Undefine<{}>", name.value),
-            Section(name) => write!(f, "Section{}", name.value),
-            If(_, condition) => write!(f, "If<{}>", condition.value),
-            ElseIf(_, condition) => write!(f, "ElseIf<{}>", condition.value),
-            Else(_) => write!(f, "Else"),
-            EndIf(_) => write!(f, "EndIf"),
-            StartRandom(_) => write!(f, "StartRandom"),
-            PercentChance(_, chance) => write!(f, "PercentChance<{}>", chance.value),
-            EndRandom(_) => write!(f, "EndRandom"),
-            OpenBlock(_) => write!(f, "OpenBlock"),
-            CloseBlock(_) => write!(f, "CloseBlock"),
-            Command(name, args) => write!(
+            AtomKind::Define { name, .. } => write!(f, "Define<{}>", name.value),
+            AtomKind::Undefine { name, .. } => write!(f, "Undefine<{}>", name.value),
+            AtomKind::Section { name } => write!(f, "Section{}", name.value),
+            AtomKind::If { condition, .. } => write!(f, "If<{}>", condition.value),
+            AtomKind::ElseIf { condition, .. } => write!(f, "ElseIf<{}>", condition.value),
+            AtomKind::Else { .. } => write!(f, "Else"),
+            AtomKind::EndIf { .. } => write!(f, "EndIf"),
+            AtomKind::StartRandom { .. } => write!(f, "StartRandom"),
+            AtomKind::PercentChance { chance, .. } => write!(f, "PercentChance<{}>", chance.value),
+            AtomKind::EndRandom { .. } => write!(f, "EndRandom"),
+            AtomKind::OpenBlock { .. } => write!(f, "OpenBlock"),
+            AtomKind::CloseBlock { .. } => write!(f, "CloseBlock"),
+            AtomKind::Command { name, arguments } => write!(
                 f,
                 "Command<{}{}>",
                 name.value,
-                args.iter()
+                arguments
+                    .iter()
                     .map(|a| format!(", {}", a.value))
                     .collect::<String>()
             ),
-            Comment(_, content, _) => write!(f, "Comment<{:?}>", content),
-            Other(other) => write!(f, "Other<{}>", other.value),
+            AtomKind::Comment { content, .. } => write!(f, "Comment<{:?}>", content),
+            AtomKind::Other { value } => write!(f, "Other<{}>", value.value),
         }
     }
 }
@@ -232,11 +230,15 @@ impl<'a> Parser<'a> {
             match self.iter.next() {
                 Some(token @ Word { value: "*/", .. }) => {
                     return Some((
-                        Atom::Comment(
-                            open_comment,
-                            self.slice(open_comment.end()..=token.span.start()),
-                            Some(token),
-                        ),
+                        Atom {
+                            kind: AtomKind::Comment {
+                                open: open_comment,
+                                content: self.slice(open_comment.end()..=token.span.start()),
+                                close: Some(token),
+                            },
+                            file: open_comment.file,
+                            span: open_comment.span.merge(token.span),
+                        },
                         vec![],
                     ));
                 }
@@ -245,7 +247,15 @@ impl<'a> Parser<'a> {
                 }
                 None => {
                     return Some((
-                        Atom::Comment(open_comment, self.slice(open_comment.end()..), None),
+                        Atom {
+                            kind: AtomKind::Comment {
+                                open: open_comment,
+                                content: self.slice(open_comment.end()..),
+                                close: None,
+                            },
+                            file: open_comment.file,
+                            span: open_comment.span.merge(last_span),
+                        },
                         vec![ParseError::new(
                             open_comment.span.merge(last_span),
                             ParseErrorKind::UnclosedComment,
@@ -259,29 +269,36 @@ impl<'a> Parser<'a> {
     /// Read a command with arguments.
     fn read_command(
         &mut self,
-        command_name: Word<'a>,
+        name: Word<'a>,
         lower_name: &str,
     ) -> Option<(Atom<'a>, Vec<ParseError>)> {
         let mut warnings = vec![];
 
         // token is guaranteed to exist at this point
         let token_type = &TOKENS[lower_name];
-        let mut args = vec![];
+        let mut arguments = vec![];
         for _ in 0..token_type.arg_len() {
             match self.read_arg() {
-                Some(arg) => args.push(arg),
+                Some(arg) => arguments.push(arg),
                 _ => break,
             }
         }
 
-        if args.len() != token_type.arg_len() as usize {
-            let span = match args.last() {
-                Some(arg) => command_name.span.merge(arg.span),
-                _ => command_name.span,
-            };
+        let span = match arguments.last() {
+            Some(arg) => name.span.merge(arg.span),
+            _ => name.span,
+        };
+        if arguments.len() != token_type.arg_len() as usize {
             warnings.push(ParseError::new(span, ParseErrorKind::MissingCommandArgs));
         }
-        Some((Atom::Command(command_name, args), warnings))
+        Some((
+            Atom {
+                kind: AtomKind::Command { name, arguments },
+                file: name.file,
+                span,
+            },
+            warnings,
+        ))
     }
 }
 
@@ -299,17 +316,24 @@ impl<'a> Iterator for Parser<'a> {
             && word.value.ends_with('>')
             && TOKENS.contains_key(word.value)
         {
-            return t(Atom::Section(word));
+            return t(Atom::from_word(AtomKind::Section { name: word }, word));
         }
 
         match word.value.to_ascii_lowercase().as_str() {
-            "{" => t(Atom::OpenBlock(word)),
-            "}" => t(Atom::CloseBlock(word)),
+            "{" => t(Atom::from_word(AtomKind::OpenBlock { head: word }, word)),
+            "}" => t(Atom::from_word(AtomKind::CloseBlock { head: word }, word)),
             "/*" => self.read_comment(word),
             "if" => match self.read_arg() {
-                Some(condition) => t(Atom::If(word, condition)),
+                Some(condition) => t(Atom {
+                    kind: AtomKind::If {
+                        head: word,
+                        condition,
+                    },
+                    file: word.file,
+                    span: Span::new(word.start(), condition.end()),
+                }),
                 None => Some((
-                    Atom::Other(word),
+                    Atom::other(word),
                     vec![ParseError::new(
                         word.span,
                         ParseErrorKind::MissingIfCondition,
@@ -317,33 +341,52 @@ impl<'a> Iterator for Parser<'a> {
                 )),
             },
             "elseif" => match self.read_arg() {
-                Some(condition) => t(Atom::ElseIf(word, condition)),
+                Some(condition) => t(Atom {
+                    kind: AtomKind::ElseIf {
+                        head: word,
+                        condition,
+                    },
+                    file: word.file,
+                    span: Span::new(word.start(), condition.end()),
+                }),
                 None => Some((
-                    Atom::Other(word),
+                    Atom::other(word),
                     vec![ParseError::new(
                         word.span,
                         ParseErrorKind::MissingIfCondition,
                     )],
                 )),
             },
-            "else" => t(Atom::Else(word)),
-            "endif" => t(Atom::EndIf(word)),
-            "start_random" => t(Atom::StartRandom(word)),
+            "else" => t(Atom::from_word(AtomKind::Else { head: word }, word)),
+            "endif" => t(Atom::from_word(AtomKind::EndIf { head: word }, word)),
+            "start_random" => t(Atom::from_word(AtomKind::StartRandom { head: word }, word)),
             "percent_chance" => match self.read_arg() {
-                Some(chance) => t(Atom::PercentChance(word, chance)),
+                Some(chance) => t(Atom {
+                    kind: AtomKind::PercentChance { head: word, chance },
+                    file: word.file,
+                    span: Span::new(word.start(), chance.end()),
+                }),
                 None => Some((
-                    Atom::Other(word),
+                    Atom::other(word),
                     vec![ParseError::new(
                         word.span,
                         ParseErrorKind::MissingPercentChance,
                     )],
                 )),
             },
-            "end_random" => t(Atom::EndRandom(word)),
+            "end_random" => t(Atom {
+                kind: AtomKind::EndRandom { head: word },
+                file: word.file,
+                span: word.span,
+            }),
             "#define" => match self.read_arg() {
-                Some(name) => t(Atom::Define(word, name)),
+                Some(name) => t(Atom {
+                    kind: AtomKind::Define { head: word, name },
+                    file: word.file,
+                    span: Span::new(word.start(), name.end()),
+                }),
                 None => Some((
-                    Atom::Other(word),
+                    Atom::other(word),
                     vec![ParseError::new(
                         word.span,
                         ParseErrorKind::MissingDefineName,
@@ -351,9 +394,13 @@ impl<'a> Iterator for Parser<'a> {
                 )),
             },
             "#undefine" => match self.read_arg() {
-                Some(name) => t(Atom::Undefine(word, name)),
+                Some(name) => t(Atom {
+                    kind: AtomKind::Undefine { head: word, name },
+                    file: word.file,
+                    span: Span::new(word.start(), name.end()),
+                }),
                 None => Some((
-                    Atom::Other(word),
+                    Atom::other(word),
                     vec![ParseError::new(
                         word.span,
                         ParseErrorKind::MissingDefineName,
@@ -361,16 +408,36 @@ impl<'a> Iterator for Parser<'a> {
                 )),
             },
             "#const" => match (self.read_arg(), self.peek_arg()) {
-                (Some(name), Some(_)) => t(Atom::Const(word, name, self.iter.next())),
+                (Some(name), Some(_)) => {
+                    let value = self.iter.next();
+                    let span = Span::new(word.start(), value.unwrap().end());
+                    t(Atom {
+                        kind: AtomKind::Const {
+                            head: word,
+                            name,
+                            value,
+                        },
+                        file: word.file,
+                        span,
+                    })
+                }
                 (Some(name), None) => Some((
-                    Atom::Const(word, name, None),
+                    Atom {
+                        kind: AtomKind::Const {
+                            head: word,
+                            name,
+                            value: None,
+                        },
+                        file: word.file,
+                        span: Span::new(word.start(), name.end()),
+                    },
                     vec![ParseError::new(
                         word.span.merge(name.span),
                         ParseErrorKind::MissingConstValue,
                     )],
                 )),
                 (None, _) => Some((
-                    Atom::Other(word),
+                    Atom::other(word),
                     vec![ParseError::new(word.span, ParseErrorKind::MissingConstName)],
                 )),
             },
@@ -382,22 +449,25 @@ impl<'a> Iterator for Parser<'a> {
             // pretend that it is a comment.
             val if val.starts_with("/*") && val.ends_with("*/") => {
                 // Split the word up
-                t(Atom::Comment(
-                    Word {
-                        file: word.file,
-                        value: &word.value[0..2],
-                        span: Span::new(word.span.start(), word.span.start() + ByteOffset(2)),
+                t(Atom::from_word(
+                    AtomKind::Comment {
+                        open: Word {
+                            file: word.file,
+                            value: &word.value[0..2],
+                            span: Span::new(word.span.start(), word.span.start() + ByteOffset(2)),
+                        },
+                        content: word.value[2..word.value.len() - 2].to_string(),
+                        close: Some(Word {
+                            file: word.file,
+                            value: &word.value[word.value.len() - 2..],
+                            span: Span::new(word.span.end() - ByteOffset(2), word.span.end()),
+                        }),
                     },
-                    word.value[2..word.value.len() - 2].to_string(),
-                    Some(Word {
-                        file: word.file,
-                        value: &word.value[word.value.len() - 2..],
-                        span: Span::new(word.span.end() - ByteOffset(2), word.span.end()),
-                    }),
+                    word,
                 ))
             }
             _ => Some((
-                Atom::Other(word),
+                Atom::other(word),
                 vec![ParseError::new(word.span, ParseErrorKind::UnknownWord)],
             )),
         }
@@ -414,13 +484,14 @@ mod tests {
 
     #[test]
     fn const_ok() {
-        let atoms =
-            Parser::new(file_id(), "#const A B").collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
-        if let (Atom::Const(def, name, val), warnings) = &atoms[0] {
-            assert_eq!(def.value, "#const");
+        let atoms = Parser::new(file_id(), "#const A B")
+            .map(|(atom, errors)| (atom.kind, errors))
+            .collect::<Vec<_>>();
+        if let (AtomKind::Const { head, name, value }, warnings) = &atoms[0] {
+            assert_eq!(head.value, "#const");
             assert_eq!(name.value, "A");
-            assert!(val.is_some());
-            assert_eq!(val.unwrap().value, "B");
+            assert!(value.is_some());
+            assert_eq!(value.unwrap().value, "B");
             assert!(warnings.is_empty());
         } else {
             assert!(false);
@@ -429,12 +500,13 @@ mod tests {
 
     #[test]
     fn const_missing_value() {
-        let atoms =
-            Parser::new(file_id(), "#const B").collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
-        if let (Atom::Const(def, name, val), warnings) = &atoms[0] {
-            assert_eq!(def.value, "#const");
+        let atoms = Parser::new(file_id(), "#const B")
+            .map(|(atom, errors)| (atom.kind, errors))
+            .collect::<Vec<_>>();
+        if let (AtomKind::Const { head, name, value }, warnings) = &atoms[0] {
+            assert_eq!(head.value, "#const");
             assert_eq!(name.value, "B");
-            assert!(val.is_none());
+            assert!(value.is_none());
             assert_eq!(warnings.len(), 1);
             assert_eq!(warnings[0].kind, ParseErrorKind::MissingConstValue);
         } else {
@@ -444,9 +516,11 @@ mod tests {
 
     #[test]
     fn const_missing_name() {
-        let atoms = Parser::new(file_id(), "#const").collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
-        if let (Atom::Other(token), warnings) = &atoms[0] {
-            assert_eq!(token.value, "#const");
+        let atoms = Parser::new(file_id(), "#const")
+            .map(|(atom, errors)| (atom.kind, errors))
+            .collect::<Vec<_>>();
+        if let (AtomKind::Other { value }, warnings) = &atoms[0] {
+            assert_eq!(value.value, "#const");
             assert_eq!(warnings.len(), 1);
             assert_eq!(warnings[0].kind, ParseErrorKind::MissingConstName);
         } else {
@@ -456,10 +530,11 @@ mod tests {
 
     #[test]
     fn define_ok() {
-        let atoms =
-            Parser::new(file_id(), "#define B").collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
-        if let (Atom::Define(def, name), warnings) = &atoms[0] {
-            assert_eq!(def.value, "#define");
+        let atoms = Parser::new(file_id(), "#define B")
+            .map(|(atom, errors)| (atom.kind, errors))
+            .collect::<Vec<_>>();
+        if let (AtomKind::Define { head, name }, warnings) = &atoms[0] {
+            assert_eq!(head.value, "#define");
             assert_eq!(name.value, "B");
             assert!(warnings.is_empty());
         } else {
@@ -469,9 +544,11 @@ mod tests {
 
     #[test]
     fn define_missing_name() {
-        let atoms = Parser::new(file_id(), "#define").collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
-        if let (Atom::Other(token), warnings) = &atoms[0] {
-            assert_eq!(token.value, "#define");
+        let atoms = Parser::new(file_id(), "#define")
+            .map(|(atom, errors)| (atom.kind, errors))
+            .collect::<Vec<_>>();
+        if let (AtomKind::Other { value }, warnings) = &atoms[0] {
+            assert_eq!(value.value, "#define");
             assert_eq!(warnings.len(), 1);
             assert_eq!(warnings[0].kind, ParseErrorKind::MissingDefineName);
         } else {
@@ -482,11 +559,12 @@ mod tests {
     #[test]
     fn command_noargs() {
         let atoms = Parser::new(file_id(), "random_placement")
-            .collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
+            .map(|(atom, errors)| (atom.kind, errors))
+            .collect::<Vec<_>>();
         assert_eq!(atoms.len(), 1);
-        if let (Atom::Command(name, args), warnings) = &atoms[0] {
+        if let (AtomKind::Command { name, arguments }, warnings) = &atoms[0] {
             assert_eq!(name.value, "random_placement");
-            assert!(args.is_empty());
+            assert!(arguments.is_empty());
             assert!(warnings.is_empty());
         } else {
             assert!(false);
@@ -496,19 +574,20 @@ mod tests {
     #[test]
     fn command_1arg() {
         let atoms = Parser::new(file_id(), "land_percent 10 grouped_by_team")
-            .collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
+            .map(|(atom, errors)| (atom.kind, errors))
+            .collect::<Vec<_>>();
         assert_eq!(atoms.len(), 2);
-        if let (Atom::Command(name, args), warnings) = &atoms[0] {
+        if let (AtomKind::Command { name, arguments }, warnings) = &atoms[0] {
             assert_eq!(name.value, "land_percent");
-            assert_eq!(args.len(), 1);
-            assert_eq!(args[0].value, "10");
+            assert_eq!(arguments.len(), 1);
+            assert_eq!(arguments[0].value, "10");
             assert!(warnings.is_empty());
         } else {
             assert!(false);
         }
-        if let (Atom::Command(name, args), warnings) = &atoms[1] {
+        if let (AtomKind::Command { name, arguments }, warnings) = &atoms[1] {
             assert_eq!(name.value, "grouped_by_team");
-            assert!(args.is_empty());
+            assert!(arguments.is_empty());
             assert!(warnings.is_empty());
         } else {
             assert!(false);
@@ -519,19 +598,20 @@ mod tests {
     #[test]
     fn command_wrong_case() {
         let atoms = Parser::new(file_id(), "land_Percent 10 grouped_BY_team")
-            .collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
+            .map(|(atom, errors)| (atom.kind, errors))
+            .collect::<Vec<_>>();
         assert_eq!(atoms.len(), 2);
-        if let (Atom::Command(name, args), warnings) = &atoms[0] {
+        if let (AtomKind::Command { name, arguments }, warnings) = &atoms[0] {
             assert_eq!(name.value, "land_Percent");
-            assert_eq!(args.len(), 1);
-            assert_eq!(args[0].value, "10");
+            assert_eq!(arguments.len(), 1);
+            assert_eq!(arguments[0].value, "10");
             assert!(warnings.is_empty());
         } else {
             assert!(false);
         }
-        if let (Atom::Command(name, args), warnings) = &atoms[1] {
+        if let (AtomKind::Command { name, arguments }, warnings) = &atoms[1] {
             assert_eq!(name.value, "grouped_BY_team");
-            assert!(args.is_empty());
+            assert!(arguments.is_empty());
             assert!(warnings.is_empty());
         } else {
             assert!(false);
@@ -541,29 +621,30 @@ mod tests {
     #[test]
     fn command_block() {
         let mut atoms = Parser::new(file_id(), "create_terrain SNOW { base_size 15 }")
-            .collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
+            .map(|(atom, errors)| (atom.kind, errors))
+            .collect::<Vec<_>>();
         assert_eq!(atoms.len(), 4);
-        if let (Atom::Command(name, args), _) = atoms.remove(0) {
+        if let (AtomKind::Command { name, arguments }, _) = atoms.remove(0) {
             assert_eq!(name.value, "create_terrain");
-            assert_eq!(args.len(), 1);
-            assert_eq!(args[0].value, "SNOW");
+            assert_eq!(arguments.len(), 1);
+            assert_eq!(arguments[0].value, "SNOW");
         } else {
             assert!(false)
         }
-        if let (Atom::OpenBlock(tok), _) = atoms.remove(0) {
-            assert_eq!(tok.value, "{");
+        if let (AtomKind::OpenBlock { head }, _) = atoms.remove(0) {
+            assert_eq!(head.value, "{");
         } else {
             assert!(false)
         }
-        if let (Atom::Command(name, args), _) = atoms.remove(0) {
+        if let (AtomKind::Command { name, arguments }, _) = atoms.remove(0) {
             assert_eq!(name.value, "base_size");
-            assert_eq!(args.len(), 1);
-            assert_eq!(args[0].value, "15");
+            assert_eq!(arguments.len(), 1);
+            assert_eq!(arguments[0].value, "15");
         } else {
             assert!(false)
         }
-        if let (Atom::CloseBlock(tok), _) = atoms.remove(0) {
-            assert_eq!(tok.value, "}");
+        if let (AtomKind::CloseBlock { head }, _) = atoms.remove(0) {
+            assert_eq!(head.value, "}");
         } else {
             assert!(false)
         }
@@ -572,27 +653,36 @@ mod tests {
     #[test]
     fn comment_basic() {
         let mut atoms = Parser::new(file_id(), "create_terrain SNOW /* this is a comment */ { }")
-            .collect::<Vec<(Atom<'_>, Vec<ParseError>)>>();
+            .map(|(atom, errors)| (atom.kind, errors))
+            .collect::<Vec<_>>();
         assert_eq!(atoms.len(), 4);
-        if let (Atom::Command(_, _), _) = atoms.remove(0) {
+        if let (AtomKind::Command { .. }, _) = atoms.remove(0) {
             // ok
         } else {
             assert!(false)
         }
-        if let (Atom::Comment(start, content, end), _) = atoms.remove(0) {
-            assert_eq!(start.value, "/*");
+        if let (
+            AtomKind::Comment {
+                open,
+                content,
+                close,
+            },
+            _,
+        ) = atoms.remove(0)
+        {
+            assert_eq!(open.value, "/*");
             assert_eq!(content, " this is a comment ");
-            assert_eq!(end.unwrap().value, "*/");
+            assert_eq!(close.unwrap().value, "*/");
         } else {
             assert!(false)
         }
-        if let (Atom::OpenBlock(tok), _) = atoms.remove(0) {
-            assert_eq!(tok.value, "{");
+        if let (AtomKind::OpenBlock { head }, _) = atoms.remove(0) {
+            assert_eq!(head.value, "{");
         } else {
             assert!(false)
         }
-        if let (Atom::CloseBlock(tok), _) = atoms.remove(0) {
-            assert_eq!(tok.value, "}");
+        if let (AtomKind::CloseBlock { head }, _) = atoms.remove(0) {
+            assert_eq!(head.value, "}");
         } else {
             assert!(false)
         }
@@ -603,7 +693,7 @@ mod tests {
         let f = std::fs::read("tests/rms/Dry Arabia.rms").unwrap();
         let source = std::str::from_utf8(&f).unwrap();
         for (atom, _) in Parser::new(file_id(), source) {
-            if let Atom::Other(_) = atom {
+            if let AtomKind::Other { .. } = atom.kind {
                 panic!("unrecognised atom");
             }
         }
