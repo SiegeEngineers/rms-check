@@ -489,6 +489,9 @@ impl<'file> Formatter<'file> {
         self.newline();
     }
 
+    /// Is there a padding line between the atoms `prev` and `next`?
+    ///
+    /// A padding line is defined as a newline, followed by whitespace, followed by another newline.
     fn has_padding_line(&self, prev: &Atom<'_>, next: &Atom<'_>) -> bool {
         let input = &self.source[prev.span.end().to_usize()..next.span.start().to_usize()];
         let empty_lines = input.lines().filter(|line| line.trim().is_empty());
@@ -496,6 +499,10 @@ impl<'file> Formatter<'file> {
         empty_lines.take(3).count() >= 3
     }
 
+    /// Should the `next` atom be written at the end of the line `prev` is on?
+    ///
+    /// If the `next` atom is a comment, and the input did not put a newline between the `prev` and
+    /// `next` atoms, it should.
     fn should_comment_be_on_same_line(&self, prev: &Atom<'_>, next: &Atom<'_>) -> bool {
         let input = &self.source[prev.span.end().to_usize()..next.span.start().to_usize()];
         if let AtomKind::Comment { .. } = &next.kind {
@@ -518,12 +525,12 @@ impl<'file> Formatter<'file> {
             _ => (),
         }
 
-        // special whitespace handling:
-        // - Maintain padding lines.
-        // - TODO: Do not add linebreak before comments at the end of a line
-        // - TODO: Dry Arabia has some issues with comments as well
-
         if let Some(prev) = &self.prev {
+            // special whitespace handling:
+            // - Maintain padding lines.
+            // Do not add linebreak before comments at the end of a line
+            // - TODO: Dry Arabia has some issues with comments as well
+
             if self.has_padding_line(&prev, &atom) {
                 self.newline();
             } else if self.should_comment_be_on_same_line(&prev, &atom) {
@@ -548,15 +555,6 @@ impl<'file> Formatter<'file> {
                         false
                     };
                 self.command(name, arguments, is_block);
-            }
-            AtomKind::OpenBlock { .. } => {
-                input = self.block(input);
-            }
-            AtomKind::If { condition, .. } => {
-                input = self.condition(condition, input);
-            }
-            AtomKind::StartRandom { .. } => {
-                input = self.random(input);
             }
             AtomKind::Comment { content, .. } => self.comment(content),
             // sometimes people use `//` comments even though that doesn't work
@@ -601,6 +599,25 @@ impl<'file> Formatter<'file> {
             AtomKind::EndRandom { .. } => {
                 self.text("end_random");
                 self.newline();
+            }
+
+            // These call into methods that do nested `write_atom` calls. They need to update
+            // `prev` first and not do anything _after_ calling the method to avoid getting in a
+            // bad state.
+            //
+            // FIXME It would be nice to approach this differently!
+            AtomKind::OpenBlock { .. } => {
+                self.prev = Some(atom);
+                return self.block(input);
+            }
+            AtomKind::If { condition, .. } => {
+                let condition = *condition;
+                self.prev = Some(atom);
+                return self.condition(&condition, input);
+            }
+            AtomKind::StartRandom { .. } => {
+                self.prev = Some(atom);
+                return self.random(input);
             }
         }
         self.prev = Some(atom);
