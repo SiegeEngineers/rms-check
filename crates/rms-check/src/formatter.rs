@@ -2,7 +2,7 @@
 
 use crate::parser::{Atom, AtomKind, Parser};
 use crate::wordize::Word;
-use codespan::Files;
+use codespan::{FileId, Files};
 use std::iter::Peekable;
 
 /// Keeps track of alignment widths for commands/attributes.
@@ -83,14 +83,16 @@ impl FormatOptions {
         }
     }
 
-    pub fn format<'atom>(self, script: impl Iterator<Item = Atom<'atom>>) -> String {
-        Formatter::new(self).format(script)
+    pub fn format(self, files: &Files, file: FileId) -> String {
+        let script = Parser::new(file, files.source(file)).map(|(atom, _errors)| atom);
+        Formatter::new(self, files.source(file)).format(script)
     }
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct Formatter<'atom> {
+pub struct Formatter<'file> {
     options: FormatOptions,
+    source: &'file str,
     /// The current indentation level.
     indent: u32,
     /// Whether this line still needs indentation. A line needs indentation if no text has been
@@ -103,13 +105,14 @@ pub struct Formatter<'atom> {
     /// The formatted text.
     result: String,
     /// The last-written atom.
-    prev: Option<Atom<'atom>>,
+    prev: Option<Atom<'file>>,
 }
 
-impl<'atom> Formatter<'atom> {
-    fn new(options: FormatOptions) -> Self {
+impl<'file> Formatter<'file> {
+    fn new(options: FormatOptions, source: &'file str) -> Self {
         Self {
             options,
+            source,
             ..Default::default()
         }
     }
@@ -203,7 +206,7 @@ impl<'atom> Formatter<'atom> {
     /// writes both the command and any attributes it may contain.
     fn block<I>(&mut self, mut input: Peekable<I>) -> Peekable<I>
     where
-        I: Iterator<Item = Atom<'atom>>,
+        I: Iterator<Item = Atom<'file>>,
     {
         let is_end = |atom: &Atom<'_>| match atom.kind {
             AtomKind::CloseBlock { .. } => true,
@@ -263,7 +266,7 @@ impl<'atom> Formatter<'atom> {
 
     fn condition<I>(&mut self, cond: &Word<'_>, mut input: Peekable<I>) -> Peekable<I>
     where
-        I: Iterator<Item = Atom<'atom>>,
+        I: Iterator<Item = Atom<'file>>,
     {
         self.text("if ");
         self.text(cond.value);
@@ -282,7 +285,7 @@ impl<'atom> Formatter<'atom> {
         });
 
         let mut depth = 1;
-        let content: Vec<Atom<'atom>> = input
+        let content: Vec<Atom<'file>> = input
             .by_ref()
             .take_while(|atom| {
                 match atom.kind {
@@ -335,7 +338,7 @@ impl<'atom> Formatter<'atom> {
 
     fn random<I>(&mut self, mut input: Peekable<I>) -> Peekable<I>
     where
-        I: Iterator<Item = Atom<'atom>>,
+        I: Iterator<Item = Atom<'file>>,
     {
         self.text("start_random");
         self.newline();
@@ -486,9 +489,25 @@ impl<'atom> Formatter<'atom> {
         self.newline();
     }
 
-    fn write_atom<I>(&mut self, atom: Atom<'atom>, mut input: Peekable<I>) -> Peekable<I>
+    fn has_padding_line(&self, prev: &Atom<'_>, next: &Atom<'_>) -> bool {
+        let input = &self.source[prev.span.end().to_usize()..next.span.start().to_usize()];
+        let empty_lines = input.lines().filter(|line| line.trim().is_empty());
+        // at least 2 subsequent newlines? i.e., at least 3 lines?
+        empty_lines.take(3).count() >= 3
+    }
+
+    fn should_comment_be_on_same_line(&self, prev: &Atom<'_>, next: &Atom<'_>) -> bool {
+        let input = &self.source[prev.span.end().to_usize()..next.span.start().to_usize()];
+        if let AtomKind::Comment { .. } = &next.kind {
+            !input.contains('\n')
+        } else {
+            false
+        }
+    }
+
+    fn write_atom<I>(&mut self, atom: Atom<'file>, mut input: Peekable<I>) -> Peekable<I>
     where
-        I: Iterator<Item = Atom<'atom>>,
+        I: Iterator<Item = Atom<'file>>,
     {
         match (self.prev_kind(), &atom.kind) {
             // Add an additional newline after each }
@@ -497,6 +516,23 @@ impl<'atom> Formatter<'atom> {
             // Add a newline after a run of `Other` tokens
             (Some(AtomKind::Other { .. }), _) => self.newline(),
             _ => (),
+        }
+
+        // special whitespace handling:
+        // - Maintain padding lines.
+        // - TODO: Do not add linebreak before comments at the end of a line
+        // - TODO: Dry Arabia has some issues with comments as well
+
+        if let Some(prev) = &self.prev {
+            if self.has_padding_line(&prev, &atom) {
+                self.newline();
+            } else if self.should_comment_be_on_same_line(&prev, &atom) {
+                if self.result.ends_with("\r\n") {
+                    self.result.pop();
+                    self.result.pop();
+                }
+                self.text(" ");
+            }
         }
 
         match &atom.kind {
@@ -572,7 +608,7 @@ impl<'atom> Formatter<'atom> {
     }
 
     /// Format a script. Takes an iterator over atoms.
-    pub fn format(mut self, input: impl Iterator<Item = Atom<'atom>>) -> String {
+    pub fn format(mut self, input: impl Iterator<Item = Atom<'file>>) -> String {
         let mut input = input.peekable();
         while let Some(atom) = input.next() {
             input = self.write_atom(atom, input);
@@ -585,8 +621,7 @@ impl<'atom> Formatter<'atom> {
 pub fn format(source: &str, options: FormatOptions) -> String {
     let mut files = Files::new();
     let f = files.add("format.rms", source);
-    let parser = Parser::new(f, files.source(f));
-    options.format(parser.map(|(atom, _)| atom))
+    options.format(&files, f)
 }
 
 #[cfg(test)]
