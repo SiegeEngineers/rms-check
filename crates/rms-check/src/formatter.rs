@@ -409,6 +409,8 @@ impl<'file> Formatter<'file> {
                 if !branch.is_empty() {
                     self.text(" ");
                     input = self.write_atom(branch.remove(0), input);
+                } else {
+                    self.newline();
                 }
             }
         } else {
