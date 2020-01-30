@@ -541,7 +541,11 @@ impl<'file> Formatter<'file> {
             // - Do not add linebreak before comments at the end of a line
 
             if self.has_padding_line(&prev, &atom) {
-                self.newline();
+                // A padding line may already have been added by the formatter for another reason,
+                // like after top-level `endif`s. Don't add another in that case.
+                if !self.result.ends_with("\r\n\r\n") {
+                    self.newline();
+                }
             } else if self.should_comment_be_on_same_line(&prev, &atom) {
                 if self.result.ends_with("\r\n") {
                     self.result.pop();
