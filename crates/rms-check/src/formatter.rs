@@ -53,10 +53,12 @@ impl FormatOptions {
     pub const fn tab_size(self, tab_size: u32) -> Self {
         Self { tab_size, ..self }
     }
+
     /// Whether to use spaces instead of tabs for indentation (default true).
     pub const fn use_spaces(self, use_spaces: bool) -> Self {
         Self { use_spaces, ..self }
     }
+
     /// Whether to align arguments in a list of commands (default true).
     ///
     /// ## Example
@@ -496,7 +498,13 @@ impl<'file> Formatter<'file> {
         let input = &self.source[prev.span.end().to_usize()..next.span.start().to_usize()];
         let empty_lines = input.lines().filter(|line| line.trim().is_empty());
         // at least 2 subsequent newlines? i.e., at least 3 lines?
-        empty_lines.take(3).count() >= 3
+        // If input ends with a newline, `.lines()` doesn't generate a final empty item, so it will
+        // only output two items.
+        if input.ends_with('\n') {
+            empty_lines.take(2).count() >= 2
+        } else {
+            empty_lines.take(3).count() >= 3
+        }
     }
 
     /// Should the `next` atom be written at the end of the line `prev` is on?
@@ -528,8 +536,7 @@ impl<'file> Formatter<'file> {
         if let Some(prev) = &self.prev {
             // special whitespace handling:
             // - Maintain padding lines.
-            // Do not add linebreak before comments at the end of a line
-            // - TODO: Dry Arabia has some issues with comments as well
+            // - Do not add linebreak before comments at the end of a line
 
             if self.has_padding_line(&prev, &atom) {
                 self.newline();
