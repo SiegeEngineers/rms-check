@@ -306,18 +306,10 @@ impl<'file> Formatter<'file> {
 
         let mut sub_input = content.into_iter().peekable();
         while let Some(atom) = sub_input.next() {
-            match atom.kind {
-                AtomKind::ElseIf { condition, .. } => {
+            match &atom.kind {
+                AtomKind::ElseIf { .. } | AtomKind::Else { .. } => {
                     self.indent -= 1;
-                    self.text("elseif ");
-                    self.text(condition.value);
-                    self.newline();
-                    self.indent += 1;
-                }
-                AtomKind::Else { .. } => {
-                    self.indent -= 1;
-                    self.text("else");
-                    self.newline();
+                    sub_input = self.write_atom(atom, sub_input);
                     self.indent += 1;
                 }
                 _ => {
@@ -333,7 +325,8 @@ impl<'file> Formatter<'file> {
         let mut input = self.write_atom(endif, input);
 
         if self.inside_block == 0 {
-            if let Some(AtomKind::OpenBlock { .. }) = input.peek().map(|atom| &atom.kind) {
+            let next_kind = input.peek().map(|atom| &atom.kind);
+            if let Some(AtomKind::OpenBlock { .. }) = next_kind {
                 // No newline before an open brace:
                 // ```
                 // if X
@@ -341,7 +334,7 @@ impl<'file> Formatter<'file> {
                 // endif
                 // {
                 // ```
-            } else {
+            } else if next_kind.is_some() {
                 // TODO maybe get rid of this entirely?
                 self.newline();
             }
@@ -562,6 +555,7 @@ impl<'file> Formatter<'file> {
                 if self.result.ends_with("\r\n") {
                     self.result.pop();
                     self.result.pop();
+                    self.needs_indent = false;
                 }
                 self.text(" ");
             }
@@ -693,6 +687,55 @@ mod tests {
                 FormatOptions::default()
             ),
             "create_terrain GRASS3 {\r\n  base_terrain     DESERT\r\n  border_fuzziness 5\r\n}\r\n"
+        );
+    }
+
+    #[test]
+    fn retain_whitespace() {
+        assert_eq!(
+            format(
+                "create_terrain GRASS3 {\r\n\r\nbase_terrain DESERT\r\n\r\nborder_fuzziness 5 }",
+                FormatOptions::default()
+            ),
+            "create_terrain GRASS3 {\r\n\r\n  base_terrain     DESERT\r\n\r\n  border_fuzziness 5\r\n}\r\n"
+        );
+    }
+
+    /// This one fails with one too many newline
+    #[ignore]
+    #[test]
+    fn retain_whitespace_comment() {
+        assert_eq!(
+            format(
+                "if A /* comment */ endif\r\n",
+                FormatOptions::default()
+            ),
+            "if A /* comment */\r\nendif\r\n"
+        );
+        assert_eq!(
+            format(
+                "#define A\r\n\r\n/* *** *** */\r\n\r\n<PLAYER_SETUP>",
+                FormatOptions::default()
+            ),
+            "#define A\r\n\r\n/* *** *** */\r\n\r\n<PLAYER_SETUP>\r\n"
+        );
+    }
+
+    #[test]
+    fn retain_whitespace_if() {
+        assert_eq!(
+            format(
+                "if A #define X else endif",
+                FormatOptions::default()
+            ),
+            "if A\r\n  #define X\r\nelse\r\nendif\r\n"
+        );
+        assert_eq!(
+            format(
+                "if A\n\n#define X\n\n\n\nelse\n\n\n\n\n\n\nendif",
+                FormatOptions::default()
+            ),
+            "if A\r\n\r\n  #define X\r\n\r\nelse\r\n\r\nendif\r\n"
         );
     }
 }
