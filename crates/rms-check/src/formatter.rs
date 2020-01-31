@@ -4,6 +4,7 @@ use crate::parser::{Atom, AtomKind, Parser};
 use crate::wordize::Word;
 use codespan::{FileId, Files};
 use std::iter::Peekable;
+use itertools::Itertools;
 
 /// Keeps track of alignment widths for commands/attributes.
 #[derive(Debug, Default, Clone, Copy)]
@@ -289,7 +290,7 @@ impl<'file> Formatter<'file> {
         let mut depth = 1;
         let content: Vec<Atom<'file>> = input
             .by_ref()
-            .take_while(|atom| {
+            .peeking_take_while(|atom| {
                 match atom.kind {
                     AtomKind::If { .. } => depth += 1,
                     AtomKind::EndIf { .. } => depth -= 1,
@@ -328,11 +329,22 @@ impl<'file> Formatter<'file> {
         self.widths.pop();
 
         self.indent -= 1;
-        self.text("endif");
-        self.newline();
+        let endif = input.next().unwrap();
+        let mut input = self.write_atom(endif, input);
 
         if self.inside_block == 0 {
-            self.newline();
+            if let Some(AtomKind::OpenBlock { .. }) = input.peek().map(|atom| &atom.kind) {
+                // No newline before an open brace:
+                // ```
+                // if X
+                //   create_object Y
+                // endif
+                // {
+                // ```
+            } else {
+                // TODO maybe get rid of this entirely?
+                self.newline();
+            }
         }
 
         input
@@ -586,7 +598,11 @@ impl<'file> Formatter<'file> {
                 }
             }
 
-            // Garbage non-matching branch statements
+            // Chunks of other control flow constructs. When encountering the start of one of these
+            // constructs, the formatter calls a separate method that will deal with the entire
+            // construct. They do not need special handling here. These atoms may also appear in
+            // incorrect positions, and then we don't want special handling either. So, for these
+            // cases we only print the command as is.
             AtomKind::ElseIf { condition, .. } => {
                 self.text("elseif ");
                 self.text(condition.value);
