@@ -83,5 +83,10 @@ jobs:
           args: wasm-pack
       - run: npm install
         working-directory: vscode
-      - run: npm run build
+      - run: npm run package
         working-directory: vscode
+      - run: 'mkdir artifact && cp vscode/*.vsix artifact'
+      - uses: actions/upload-artifact@v1
+        with:
+          name: rms-check-vscode
+          path: artifact
