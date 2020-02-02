@@ -247,6 +247,7 @@ pub trait Lint {
 }
 
 /// Builtin #define or #const names for AoE2: The Age of Conquerors.
+#[allow(dead_code)] // need to use this at some point?
 const AOC_OPTION_DEFINES: [&str; 8] = [
     "TINY_MAP",
     "SMALL_MAP",
@@ -260,6 +261,7 @@ const AOC_OPTION_DEFINES: [&str; 8] = [
 
 lazy_static! {
     /// Builtin #define or #const names for UserPatch.
+    #[allow(dead_code)] // need to use this at some point?
     static ref UP_OPTION_DEFINES: Vec<String> = {
         let mut list = vec![
             "FIXED_POSITIONS".to_string(),
