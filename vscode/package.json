@@ -119,7 +119,7 @@
     "aoe2-rms": "github:mangudai/vscode",
     "cpy-cli": "^2.0.0",
     "simple-concat": "^1.0.0",
-    "vsce": "^1.71.0",
+    "vsce": "^1.72.0",
     "vscode": "^1.1.34",
     "vscode-jsonrpc": "^4.0.0",
     "vscode-languageclient": "^5.2.1",
