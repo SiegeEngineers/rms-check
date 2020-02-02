@@ -6,7 +6,6 @@
 #![deny(unsafe_code)]
 // #![warn(missing_docs)]
 #![warn(unused)]
-#![warn(clippy::missing_const_for_fn)]
 
 mod checker;
 mod formatter;
@@ -266,6 +265,7 @@ impl RMSCheck {
     /// Configure the default compatibility for the script.
     ///
     /// The compatibility setting can be overridden by scripts using `Compatibility: ` comments.
+    #[allow(clippy::missing_const_for_fn)] // false positive
     pub fn compatibility(self, compatibility: Compatibility) -> Self {
         Self {
             checker: self.checker.compatibility(compatibility),

@@ -79,6 +79,7 @@ impl TokenMapBuilder {
     }
 
     /// Finish the TokenMap.
+    #[allow(clippy::missing_const_for_fn)] // false positive
     fn build(self) -> TokenMap {
         self.0
     }
