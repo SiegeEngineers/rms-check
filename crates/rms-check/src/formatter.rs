@@ -3,8 +3,8 @@
 use crate::parser::{Atom, AtomKind, Parser};
 use crate::wordize::Word;
 use codespan::{FileId, Files};
-use std::iter::Peekable;
 use itertools::Itertools;
+use std::iter::Peekable;
 
 /// Keeps track of alignment widths for commands/attributes.
 #[derive(Debug, Default, Clone, Copy)]
@@ -706,10 +706,7 @@ mod tests {
     #[test]
     fn retain_whitespace_comment() {
         assert_eq!(
-            format(
-                "if A /* comment */ endif\r\n",
-                FormatOptions::default()
-            ),
+            format("if A /* comment */ endif\r\n", FormatOptions::default()),
             "if A /* comment */\r\nendif\r\n"
         );
         assert_eq!(
@@ -724,10 +721,7 @@ mod tests {
     #[test]
     fn retain_whitespace_if() {
         assert_eq!(
-            format(
-                "if A #define X else endif",
-                FormatOptions::default()
-            ),
+            format("if A #define X else endif", FormatOptions::default()),
             "if A\r\n  #define X\r\nelse\r\nendif\r\n"
         );
         assert_eq!(
