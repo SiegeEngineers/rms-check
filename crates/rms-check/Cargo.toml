@@ -9,8 +9,8 @@ edition = "2018"
 
 [dependencies]
 chardet = "0.2"
-codespan = "0.6"
-codespan-reporting = "0.6"
+codespan = "0.7"
+codespan-reporting = "0.7"
 encoding_rs = "0.8"
 itertools = "0.8"
 lazy_static = "1.4"

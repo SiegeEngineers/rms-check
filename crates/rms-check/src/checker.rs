@@ -304,7 +304,7 @@ pub struct CheckerBuilder {
 }
 
 impl CheckerBuilder {
-    pub fn build(self, rms: &RMSFile) -> Checker<'_> {
+    pub fn build<'source>(self, rms: &'source RMSFile<'source>) -> Checker<'source> {
         // Default to UP 1.5 if it's a ZR@ map
         let compatibility = if rms.is_zip_rms() && self.compatibility < Compatibility::UserPatch15 {
             Compatibility::UserPatch15

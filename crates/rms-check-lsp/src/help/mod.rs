@@ -5,6 +5,7 @@ use lsp_types::{
     Documentation, ParameterInformation, ParameterLabel, SignatureHelp, SignatureInformation,
 };
 use rms_check::{ArgType, AtomKind, Parser, TOKENS};
+use std::borrow::Cow;
 
 /// Helper struct to create SignatureInformation structures.
 #[derive(Debug, Clone)]
@@ -80,7 +81,7 @@ fn get_signature(command_name: &str) -> Option<&SignatureInformation> {
 }
 
 pub fn find_signature_help(
-    files: &Files,
+    files: &Files<Cow<'_, str>>,
     file_id: FileId,
     position: ByteIndex,
 ) -> Option<SignatureHelp> {

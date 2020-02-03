@@ -69,7 +69,7 @@ impl FromStr for HeaderName {
 #[derive(Debug)]
 pub struct ParseState<'a> {
     /// The files.
-    pub rms: &'a RMSFile,
+    pub rms: &'a RMSFile<'a>,
     /// The target compatibility for this map script.
     pub compatibility: Compatibility,
     /// Whether this map should be treated as a builtin map. If true, #include and #include_drs should be made available.
@@ -95,7 +95,7 @@ pub struct ParseState<'a> {
 }
 
 impl<'a> ParseState<'a> {
-    pub(crate) fn new(rms: &'a RMSFile, compatibility: Compatibility) -> Self {
+    pub(crate) fn new(rms: &'a RMSFile<'a>, compatibility: Compatibility) -> Self {
         let mut state = Self {
             rms,
             compatibility,
