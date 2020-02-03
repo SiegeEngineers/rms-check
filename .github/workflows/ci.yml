@@ -81,11 +81,13 @@ jobs:
         with:
           command: install
           args: wasm-pack
+      - run: npm install --global wasm-opt
       - run: npm install
         working-directory: vscode
       - run: npm run package
         working-directory: vscode
       - run: 'mkdir artifact && cp vscode/*.vsix artifact'
+        name: Prepare artifact
       - uses: actions/upload-artifact@v1
         with:
           name: rms-check-vscode
