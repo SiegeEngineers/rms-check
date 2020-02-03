@@ -81,7 +81,6 @@ jobs:
         with:
           command: install
           args: wasm-pack
-      - run: npm install --global wasm-opt
       - run: npm install
         working-directory: vscode
       - run: npm run package
