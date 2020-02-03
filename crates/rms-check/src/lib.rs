@@ -282,7 +282,7 @@ impl RMSCheck {
     }
 
     /// Run the lints and get the result.
-    pub fn check<'source>(self, rms: RMSFile<'source>) -> RMSCheckResult<'source> {
+    pub fn check(self, rms: RMSFile<'_>) -> RMSCheckResult<'_> {
         let mut checker = self.checker.build(&rms);
 
         let mut warnings = vec![];
