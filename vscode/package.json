@@ -148,9 +148,10 @@
   "scripts": {
     "build-ext": "cpy node_modules/aoe2-rms/{language-configuration.json,aoe2-rms.tmLanguage} .",
     "build-client": "ncc build client/extension.js -e vscode -o dist/client",
-    "build-server-wasm": "cd .. && wasm-pack build vscode/server --release --target nodejs",
+    "build-server-wasm": "npm run wasm-pack -- --profiling",
     "build-server-js": "ncc build server/index.js -o dist/server",
     "build-server": "npm run build-server-wasm && npm run build-server-js",
+    "wasm-pack": "cd .. && wasm-pack build vscode/server --target nodejs",
     "prepare": "npm run build-ext && npm run build-server && npm run build-client",
     "package": "npm run prepare && vsce package"
   }
