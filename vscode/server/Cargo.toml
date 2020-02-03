@@ -7,9 +7,6 @@ description = "Detect common problems with AoE Random Map Scripts"
 repository = "https://github.com/goto-bus-stop/rms-check.git"
 edition = "2018"
 
-[package.metadata.wasm-pack.profile.release]
-wasm-opt = false
-
 [lib]
 crate-type = ["cdylib"]
 
