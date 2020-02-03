@@ -27,19 +27,19 @@ use encoding_rs::Encoding;
 use std::{borrow::Cow, fs::File, io, path::Path};
 use zip::ZipArchive;
 
-fn to_chardet_string(bytes: &[u8]) -> Cow<'_, str> {
-    let (encoding_name, _, _) = chardet::detect(bytes);
+fn to_chardet_string(bytes: Vec<u8>) -> String {
+    let (encoding_name, _, _) = chardet::detect(&bytes);
     if let Some(encoding) = Encoding::for_label(encoding_name.as_bytes()) {
-        encoding.decode(bytes).0
+        encoding.decode(&bytes).0.to_string()
     } else {
-        String::from_utf8_lossy(bytes)
+        String::from_utf8_lossy(&bytes).to_string()
     }
 }
 
 /// Container for a random map script, generalising various formats.
 #[derive(Debug)]
-pub struct RMSFile {
-    files: Files,
+pub struct RMSFile<'source> {
+    files: Files<Cow<'source, str>>,
     file_ids: Vec<FileId>,
     /// File ID of the AoC random_map.def file.
     def_aoc: FileId,
@@ -49,11 +49,11 @@ pub struct RMSFile {
     def_wk: FileId,
 }
 
-impl RMSFile {
-    fn new(mut files: Files, file_ids: Vec<FileId>) -> Self {
-        let def_aoc = files.add("random_map.def", include_str!("def_aoc.rms"));
-        let def_hd = files.add("random_map.def", include_str!("def_hd.rms"));
-        let def_wk = files.add("random_map.def", include_str!("def_wk.rms"));
+impl<'source> RMSFile<'source> {
+    fn new(mut files: Files<Cow<'source, str>>, file_ids: Vec<FileId>) -> Self {
+        let def_aoc = files.add("random_map.def", include_str!("def_aoc.rms").into());
+        let def_hd = files.add("random_map.def", include_str!("def_hd.rms").into());
+        let def_wk = files.add("random_map.def", include_str!("def_wk.rms").into());
 
         Self {
             files,
@@ -75,15 +75,15 @@ impl RMSFile {
         if filename.starts_with("ZR@") {
             Self::from_zip_rms(name.as_ref().to_string_lossy(), &source)
         } else {
-            let source = to_chardet_string(&source);
+            let source = to_chardet_string(source);
             Ok(Self::from_string(name.as_ref().to_string_lossy(), source))
         }
     }
 
     /// Create an RMSFile from a source string.
-    pub fn from_string(name: impl AsRef<str>, source: impl AsRef<str>) -> Self {
+    pub fn from_string(name: impl AsRef<str>, source: impl Into<Cow<'source, str>>) -> Self {
         let mut files = Files::new();
-        let main_file = files.add(name.as_ref(), source.as_ref());
+        let main_file = files.add(name.as_ref(), source.into());
         Self::new(files, vec![main_file])
     }
 
@@ -99,8 +99,8 @@ impl RMSFile {
             let mut bytes = vec![];
             std::io::copy(&mut file, &mut bytes)?;
             if file.name().ends_with(".rms") || file.name().ends_with(".inc") {
-                let source = to_chardet_string(&bytes);
-                file_ids.push(files.add(file.name(), source));
+                let source = to_chardet_string(bytes);
+                file_ids.push(files.add(file.name(), Cow::Owned(source)));
                 // If this is an .rms file, move it to the front so main_file() does the right thing
                 if file.name().ends_with(".rms") {
                     file_ids.rotate_right(1);
@@ -124,8 +124,8 @@ impl RMSFile {
             let path = entry?.path();
             let name = path.to_string_lossy();
             let bytes = std::fs::read(&path)?;
-            let source = to_chardet_string(&bytes);
-            file_ids.push(files.add(name.as_ref(), source));
+            let source = to_chardet_string(bytes);
+            file_ids.push(files.add(name.as_ref(), Cow::Owned(source)));
             // If this is an .rms file, move it to the front so main_file() does the right thing
             if name.ends_with(".rms") {
                 file_ids.rotate_right(1);
@@ -175,7 +175,7 @@ impl RMSFile {
     }
 
     /// Get the codespan Files instance.
-    pub(crate) const fn files(&self) -> &Files {
+    pub(crate) const fn files(&self) -> &Files<Cow<'source, str>> {
         &self.files
     }
 
@@ -186,14 +186,14 @@ impl RMSFile {
 }
 
 /// The result of a lint run.
-pub struct RMSCheckResult {
+pub struct RMSCheckResult<'source> {
     warnings: Vec<Warning>,
-    rms: RMSFile,
+    rms: RMSFile<'source>,
 }
 
-impl RMSCheckResult {
+impl<'source> RMSCheckResult<'source> {
     /// The files that were linted, and a list of the file IDs so they can be iterated over.
-    pub const fn files(&self) -> &Files {
+    pub const fn files(&self) -> &Files<Cow<'source, str>> {
         self.rms.files()
     }
 
@@ -204,7 +204,9 @@ impl RMSCheckResult {
 
     /// Get a file's source code by the file name.
     pub fn file(&self, name: &str) -> Option<&str> {
-        self.rms.find_file(name).map(|id| self.files().source(id))
+        self.rms
+            .find_file(name)
+            .map(|id| self.files().source(id).as_ref())
     }
 
     pub fn main_source(&self) -> &str {
@@ -227,7 +229,7 @@ impl RMSCheckResult {
     }
 }
 
-impl IntoIterator for RMSCheckResult {
+impl IntoIterator for RMSCheckResult<'_> {
     type Item = Warning;
     type IntoIter = std::vec::IntoIter<Self::Item>;
     /// Iterate over the warnings.
@@ -280,7 +282,7 @@ impl RMSCheck {
     }
 
     /// Run the lints and get the result.
-    pub fn check(self, rms: RMSFile) -> RMSCheckResult {
+    pub fn check(self, rms: RMSFile<'_>) -> RMSCheckResult<'_> {
         let mut checker = self.checker.build(&rms);
 
         let mut warnings = vec![];

@@ -25,10 +25,9 @@ use rms_check::{
     AutoFixReplacement, Compatibility, FormatOptions, RMSCheck, RMSCheckResult, RMSFile, Warning,
 };
 use serde_json::{self, json};
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 mod folds;
 mod help;
@@ -54,7 +53,7 @@ where
     }
 
     /// Convert an rms-check warning to an LSP diagnostic.
-    fn make_lsp_diagnostic(&self, files: &Files, warn: &Warning) -> Diagnostic {
+    fn make_lsp_diagnostic(&self, files: &Files<Cow<'_, str>>, warn: &Warning) -> Diagnostic {
         let diag = codespan_lsp::make_lsp_diagnostic(
             files,
             "rms-check".to_string(),
@@ -127,7 +126,7 @@ where
             }
 
             let mut files = Files::new();
-            let file_id = files.add(doc.uri.as_str(), &doc.text);
+            let file_id = files.add(doc.uri.as_str(), Cow::Borrowed(doc.text.as_ref()));
             let mut splicer = Multisplice::new(&doc.text);
             for change in &params.content_changes {
                 let span = change
@@ -218,7 +217,7 @@ where
     fn folding_ranges(&self, params: FoldingRangeParams) -> RpcResult {
         let doc = self.documents.get(&params.text_document.uri).unwrap();
         let mut files = Files::new();
-        let file_id = files.add(doc.uri.as_str(), &doc.text);
+        let file_id = files.add(doc.uri.as_str(), Cow::Borrowed(doc.text.as_ref()));
         let folder = folds::FoldingRanges::new(&files, file_id);
 
         let folds: Vec<FoldingRange> = folder.collect();
@@ -230,7 +229,7 @@ where
     fn signature_help(&self, params: TextDocumentPositionParams) -> RpcResult {
         let doc = self.documents.get(&params.text_document.uri).unwrap();
         let mut files = Files::new();
-        let file_id = files.add(doc.uri.as_str(), &doc.text);
+        let file_id = files.add(doc.uri.as_str(), Cow::Borrowed(doc.text.as_ref()));
         let help = help::find_signature_help(
             &files,
             file_id,
@@ -245,7 +244,7 @@ where
     fn format(&self, params: DocumentFormattingParams) -> RpcResult {
         let doc = self.documents.get(&params.text_document.uri).unwrap();
         let mut files = Files::new();
-        let file_id = files.add(doc.uri.as_str(), &doc.text);
+        let file_id = files.add(doc.uri.as_str(), Cow::Borrowed(doc.text.as_ref()));
 
         let options = FormatOptions::default()
             .tab_size(params.options.tab_size as u32)
@@ -261,7 +260,7 @@ where
     }
 
     /// Run rms-check.
-    fn check(&self, doc: &TextDocumentItem) -> RMSCheckResult {
+    fn check<'source>(&self, doc: &'source TextDocumentItem) -> RMSCheckResult<'source> {
         let file = RMSFile::from_string(doc.uri.as_str(), &doc.text);
         RMSCheck::default()
             .compatibility(Compatibility::Conquerors)

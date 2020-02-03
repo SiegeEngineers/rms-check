@@ -1,23 +1,24 @@
 use codespan::{ByteIndex, ByteOffset, FileId, Files, Location};
 use lsp_types::{FoldingRange, FoldingRangeKind};
 use rms_check::{AtomKind, Parser};
+use std::borrow::Cow;
 use std::ops::{Bound, RangeBounds};
 
 #[derive(Debug)]
 pub struct FoldingRanges<'a> {
     file_id: FileId,
-    files: &'a Files,
+    files: &'a Files<Cow<'a, str>>,
     inner: Parser<'a>,
     waiting_folds: Vec<AtomKind<'a>>,
     queued: Vec<FoldingRange>,
 }
 
 impl<'a> FoldingRanges<'a> {
-    pub fn new(files: &'a Files, file_id: FileId) -> Self {
+    pub fn new(files: &'a Files<Cow<'a, str>>, file_id: FileId) -> Self {
         Self {
             file_id,
             files,
-            inner: Parser::new(file_id, files.source(file_id)),
+            inner: Parser::new(file_id, files.source(file_id).as_ref()),
             waiting_folds: vec![],
             queued: vec![],
         }
