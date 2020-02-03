@@ -13,10 +13,8 @@ use check::{cli_check, cli_fix, CheckArgs};
 use failure::Fallible;
 use language_server::cli_server;
 use rms_check::{Compatibility, FormatOptions};
-use std::{
-    io::{self, Read},
-    path::{Path, PathBuf},
-};
+use std::io::{self, Read};
+use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 use zip_rms::{cli_pack, cli_unpack};
 

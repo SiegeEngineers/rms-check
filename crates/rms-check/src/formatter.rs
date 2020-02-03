@@ -2,7 +2,9 @@
 
 use crate::parser::{Atom, AtomKind, Parser};
 use crate::wordize::Word;
-use codespan::Files;
+use codespan::{FileId, Files};
+use itertools::Itertools;
+use std::borrow::Cow;
 use std::iter::Peekable;
 
 /// Keeps track of alignment widths for commands/attributes.
@@ -53,10 +55,12 @@ impl FormatOptions {
     pub const fn tab_size(self, tab_size: u32) -> Self {
         Self { tab_size, ..self }
     }
+
     /// Whether to use spaces instead of tabs for indentation (default true).
     pub const fn use_spaces(self, use_spaces: bool) -> Self {
         Self { use_spaces, ..self }
     }
+
     /// Whether to align arguments in a list of commands (default true).
     ///
     /// ## Example
@@ -83,14 +87,16 @@ impl FormatOptions {
         }
     }
 
-    pub fn format<'atom>(self, script: impl Iterator<Item = Atom<'atom>>) -> String {
-        Formatter::new(self).format(script)
+    pub fn format(self, files: &Files<Cow<'_, str>>, file: FileId) -> String {
+        let script = Parser::new(file, files.source(file)).map(|(atom, _errors)| atom);
+        Formatter::new(self, files.source(file)).format(script)
     }
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct Formatter<'atom> {
+pub struct Formatter<'file> {
     options: FormatOptions,
+    source: &'file str,
     /// The current indentation level.
     indent: u32,
     /// Whether this line still needs indentation. A line needs indentation if no text has been
@@ -103,13 +109,14 @@ pub struct Formatter<'atom> {
     /// The formatted text.
     result: String,
     /// The last-written atom.
-    prev: Option<Atom<'atom>>,
+    prev: Option<Atom<'file>>,
 }
 
-impl<'atom> Formatter<'atom> {
-    fn new(options: FormatOptions) -> Self {
+impl<'file> Formatter<'file> {
+    fn new(options: FormatOptions, source: &'file str) -> Self {
         Self {
             options,
+            source,
             ..Default::default()
         }
     }
@@ -203,7 +210,7 @@ impl<'atom> Formatter<'atom> {
     /// writes both the command and any attributes it may contain.
     fn block<I>(&mut self, mut input: Peekable<I>) -> Peekable<I>
     where
-        I: Iterator<Item = Atom<'atom>>,
+        I: Iterator<Item = Atom<'file>>,
     {
         let is_end = |atom: &Atom<'_>| match atom.kind {
             AtomKind::CloseBlock { .. } => true,
@@ -263,7 +270,7 @@ impl<'atom> Formatter<'atom> {
 
     fn condition<I>(&mut self, cond: &Word<'_>, mut input: Peekable<I>) -> Peekable<I>
     where
-        I: Iterator<Item = Atom<'atom>>,
+        I: Iterator<Item = Atom<'file>>,
     {
         self.text("if ");
         self.text(cond.value);
@@ -282,9 +289,9 @@ impl<'atom> Formatter<'atom> {
         });
 
         let mut depth = 1;
-        let content: Vec<Atom<'atom>> = input
+        let content: Vec<Atom<'file>> = input
             .by_ref()
-            .take_while(|atom| {
+            .peeking_take_while(|atom| {
                 match atom.kind {
                     AtomKind::If { .. } => depth += 1,
                     AtomKind::EndIf { .. } => depth -= 1,
@@ -300,18 +307,10 @@ impl<'atom> Formatter<'atom> {
 
         let mut sub_input = content.into_iter().peekable();
         while let Some(atom) = sub_input.next() {
-            match atom.kind {
-                AtomKind::ElseIf { condition, .. } => {
+            match &atom.kind {
+                AtomKind::ElseIf { .. } | AtomKind::Else { .. } => {
                     self.indent -= 1;
-                    self.text("elseif ");
-                    self.text(condition.value);
-                    self.newline();
-                    self.indent += 1;
-                }
-                AtomKind::Else { .. } => {
-                    self.indent -= 1;
-                    self.text("else");
-                    self.newline();
+                    sub_input = self.write_atom(atom, sub_input);
                     self.indent += 1;
                 }
                 _ => {
@@ -323,11 +322,23 @@ impl<'atom> Formatter<'atom> {
         self.widths.pop();
 
         self.indent -= 1;
-        self.text("endif");
-        self.newline();
+        let endif = input.next().unwrap();
+        let mut input = self.write_atom(endif, input);
 
         if self.inside_block == 0 {
-            self.newline();
+            let next_kind = input.peek().map(|atom| &atom.kind);
+            if let Some(AtomKind::OpenBlock { .. }) = next_kind {
+                // No newline before an open brace:
+                // ```
+                // if X
+                //   create_object Y
+                // endif
+                // {
+                // ```
+            } else if next_kind.is_some() {
+                // TODO maybe get rid of this entirely?
+                self.newline();
+            }
         }
 
         input
@@ -335,7 +346,7 @@ impl<'atom> Formatter<'atom> {
 
     fn random<I>(&mut self, mut input: Peekable<I>) -> Peekable<I>
     where
-        I: Iterator<Item = Atom<'atom>>,
+        I: Iterator<Item = Atom<'file>>,
     {
         self.text("start_random");
         self.newline();
@@ -404,6 +415,8 @@ impl<'atom> Formatter<'atom> {
                 if !branch.is_empty() {
                     self.text(" ");
                     input = self.write_atom(branch.remove(0), input);
+                } else {
+                    self.newline();
                 }
             }
         } else {
@@ -486,9 +499,38 @@ impl<'atom> Formatter<'atom> {
         self.newline();
     }
 
-    fn write_atom<I>(&mut self, atom: Atom<'atom>, mut input: Peekable<I>) -> Peekable<I>
+    /// Is there a padding line between the atoms `prev` and `next`?
+    ///
+    /// A padding line is defined as a newline, followed by whitespace, followed by another newline.
+    fn has_padding_line(&self, prev: &Atom<'_>, next: &Atom<'_>) -> bool {
+        let input = &self.source[prev.span.end().to_usize()..next.span.start().to_usize()];
+        let empty_lines = input.lines().filter(|line| line.trim().is_empty());
+        // at least 2 subsequent newlines? i.e., at least 3 lines?
+        // If input ends with a newline, `.lines()` doesn't generate a final empty item, so it will
+        // only output two items.
+        if input.ends_with('\n') {
+            empty_lines.take(2).count() >= 2
+        } else {
+            empty_lines.take(3).count() >= 3
+        }
+    }
+
+    /// Should the `next` atom be written at the end of the line `prev` is on?
+    ///
+    /// If the `next` atom is a comment, and the input did not put a newline between the `prev` and
+    /// `next` atoms, it should.
+    fn should_comment_be_on_same_line(&self, prev: &Atom<'_>, next: &Atom<'_>) -> bool {
+        let input = &self.source[prev.span.end().to_usize()..next.span.start().to_usize()];
+        if let AtomKind::Comment { .. } = &next.kind {
+            !input.contains('\n')
+        } else {
+            false
+        }
+    }
+
+    fn write_atom<I>(&mut self, atom: Atom<'file>, mut input: Peekable<I>) -> Peekable<I>
     where
-        I: Iterator<Item = Atom<'atom>>,
+        I: Iterator<Item = Atom<'file>>,
     {
         match (self.prev_kind(), &atom.kind) {
             // Add an additional newline after each }
@@ -497,6 +539,27 @@ impl<'atom> Formatter<'atom> {
             // Add a newline after a run of `Other` tokens
             (Some(AtomKind::Other { .. }), _) => self.newline(),
             _ => (),
+        }
+
+        if let Some(prev) = &self.prev {
+            // special whitespace handling:
+            // - Maintain padding lines.
+            // - Do not add linebreak before comments at the end of a line
+
+            if self.has_padding_line(&prev, &atom) {
+                // A padding line may already have been added by the formatter for another reason,
+                // like after top-level `endif`s. Don't add another in that case.
+                if !self.result.ends_with("\r\n\r\n") {
+                    self.newline();
+                }
+            } else if self.should_comment_be_on_same_line(&prev, &atom) {
+                if self.result.ends_with("\r\n") {
+                    self.result.pop();
+                    self.result.pop();
+                    self.needs_indent = false;
+                }
+                self.text(" ");
+            }
         }
 
         match &atom.kind {
@@ -512,15 +575,6 @@ impl<'atom> Formatter<'atom> {
                         false
                     };
                 self.command(name, arguments, is_block);
-            }
-            AtomKind::OpenBlock { .. } => {
-                input = self.block(input);
-            }
-            AtomKind::If { condition, .. } => {
-                input = self.condition(condition, input);
-            }
-            AtomKind::StartRandom { .. } => {
-                input = self.random(input);
             }
             AtomKind::Comment { content, .. } => self.comment(content),
             // sometimes people use `//` comments even though that doesn't work
@@ -539,7 +593,11 @@ impl<'atom> Formatter<'atom> {
                 }
             }
 
-            // Garbage non-matching branch statements
+            // Chunks of other control flow constructs. When encountering the start of one of these
+            // constructs, the formatter calls a separate method that will deal with the entire
+            // construct. They do not need special handling here. These atoms may also appear in
+            // incorrect positions, and then we don't want special handling either. So, for these
+            // cases we only print the command as is.
             AtomKind::ElseIf { condition, .. } => {
                 self.text("elseif ");
                 self.text(condition.value);
@@ -566,13 +624,32 @@ impl<'atom> Formatter<'atom> {
                 self.text("end_random");
                 self.newline();
             }
+
+            // These call into methods that do nested `write_atom` calls. They need to update
+            // `prev` first and not do anything _after_ calling the method to avoid getting in a
+            // bad state.
+            //
+            // FIXME It would be nice to approach this differently!
+            AtomKind::OpenBlock { .. } => {
+                self.prev = Some(atom);
+                return self.block(input);
+            }
+            AtomKind::If { condition, .. } => {
+                let condition = *condition;
+                self.prev = Some(atom);
+                return self.condition(&condition, input);
+            }
+            AtomKind::StartRandom { .. } => {
+                self.prev = Some(atom);
+                return self.random(input);
+            }
         }
         self.prev = Some(atom);
         input
     }
 
     /// Format a script. Takes an iterator over atoms.
-    pub fn format(mut self, input: impl Iterator<Item = Atom<'atom>>) -> String {
+    pub fn format(mut self, input: impl Iterator<Item = Atom<'file>>) -> String {
         let mut input = input.peekable();
         while let Some(atom) = input.next() {
             input = self.write_atom(atom, input);
@@ -584,9 +661,8 @@ impl<'atom> Formatter<'atom> {
 /// Format an rms source string.
 pub fn format(source: &str, options: FormatOptions) -> String {
     let mut files = Files::new();
-    let f = files.add("format.rms", source);
-    let parser = Parser::new(f, files.source(f));
-    options.format(parser.map(|(atom, _)| atom))
+    let f = files.add("format.rms", Cow::Borrowed(source));
+    options.format(&files, f)
 }
 
 #[cfg(test)]
@@ -612,6 +688,49 @@ mod tests {
                 FormatOptions::default()
             ),
             "create_terrain GRASS3 {\r\n  base_terrain     DESERT\r\n  border_fuzziness 5\r\n}\r\n"
+        );
+    }
+
+    #[test]
+    fn retain_whitespace() {
+        assert_eq!(
+            format(
+                "create_terrain GRASS3 {\r\n\r\nbase_terrain DESERT\r\n\r\nborder_fuzziness 5 }",
+                FormatOptions::default()
+            ),
+            "create_terrain GRASS3 {\r\n\r\n  base_terrain     DESERT\r\n\r\n  border_fuzziness 5\r\n}\r\n"
+        );
+    }
+
+    /// This one fails with one too many newline
+    #[ignore]
+    #[test]
+    fn retain_whitespace_comment() {
+        assert_eq!(
+            format("if A /* comment */ endif\r\n", FormatOptions::default()),
+            "if A /* comment */\r\nendif\r\n"
+        );
+        assert_eq!(
+            format(
+                "#define A\r\n\r\n/* *** *** */\r\n\r\n<PLAYER_SETUP>",
+                FormatOptions::default()
+            ),
+            "#define A\r\n\r\n/* *** *** */\r\n\r\n<PLAYER_SETUP>\r\n"
+        );
+    }
+
+    #[test]
+    fn retain_whitespace_if() {
+        assert_eq!(
+            format("if A #define X else endif", FormatOptions::default()),
+            "if A\r\n  #define X\r\nelse\r\nendif\r\n"
+        );
+        assert_eq!(
+            format(
+                "if A\n\n#define X\n\n\n\nelse\n\n\n\n\n\n\nendif",
+                FormatOptions::default()
+            ),
+            "if A\r\n\r\n  #define X\r\n\r\nelse\r\n\r\nendif\r\n"
         );
     }
 }

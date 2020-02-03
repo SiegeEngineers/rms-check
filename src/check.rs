@@ -2,10 +2,8 @@ use crate::cli_reporter::report as cli_report;
 use failure::{bail, Fallible};
 use multisplice::Multisplice;
 use rms_check::{AutoFixReplacement, Compatibility, RMSCheck, RMSFile};
-use std::{
-    fs::{remove_file, write},
-    path::PathBuf,
-};
+use std::fs::{remove_file, write};
+use std::path::PathBuf;
 
 #[derive(Debug, Default)]
 pub struct CheckArgs {
