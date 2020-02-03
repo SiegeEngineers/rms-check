@@ -104,7 +104,7 @@ impl ArgTypesLint {
         let name = if let AtomKind::Command { name, .. } = atom.kind {
             name
         } else {
-            unreachable!()
+            unreachable!("Expected AtomKind::Command, got {:?}", atom.kind)
         };
         let arg = if let Some(arg) = arg {
             arg

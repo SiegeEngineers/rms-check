@@ -64,7 +64,7 @@ impl SignatureBuilder {
             if let ParameterLabel::Simple(arg_name) = &arg.label {
                 label += &format!(" {}", arg_name);
             } else {
-                unreachable!();
+                unreachable!("Expected ParameterLabel::Simple(), got {:?}", arg.label);
             }
         }
         SignatureInformation {

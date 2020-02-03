@@ -1,7 +1,9 @@
 # rms-check For VS Code
 rms-check is a syntax checker and linter for Age of Empires 2 random map scripts.
 
-![Linting errors screenshot](screenshot.png)
+![Linting errors screenshot][screenshot]
+
+[screenshot]: https://raw.githubusercontent.com/goto-bus-stop/rms-check/default/vscode/screenshot.png
 
 ## Syntax Highlighting
 The syntax highlighting was developed by Nikita Litvin (deltaidea) for the AoE2 Random Map Scripting extension, released under the MIT license, available [here](https://github.com/mangudai/vscode).

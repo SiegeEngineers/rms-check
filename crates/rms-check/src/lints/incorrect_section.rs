@@ -22,7 +22,7 @@ impl Lint for IncorrectSectionLint {
                     Some(current_section) => {
                         let section_name = match &current_section.kind {
                             AtomKind::Section { name } => name,
-                            _ => unreachable!(),
+                            kind => unreachable!("Expected AtomKind::Section, got {:?}", kind),
                         };
                         if section_name.value != *expected_section {
                             return vec![atom
