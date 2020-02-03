@@ -195,7 +195,10 @@ where
                                     .unwrap(),
                                     new_text: match sugg.replacement() {
                                         AutoFixReplacement::Safe(s) => s.clone(),
-                                        replacement => unreachable!("Expected AutoFixReplacement::Safe(), got {:?}", replacement),
+                                        replacement => unreachable!(
+                                            "Expected AutoFixReplacement::Safe(), got {:?}",
+                                            replacement
+                                        ),
                                     },
                                 }],
                             );
