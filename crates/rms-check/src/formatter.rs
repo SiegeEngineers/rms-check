@@ -4,6 +4,7 @@ use crate::parser::{Atom, AtomKind, Parser};
 use crate::wordize::Word;
 use codespan::{FileId, Files};
 use itertools::Itertools;
+use std::borrow::Cow;
 use std::iter::Peekable;
 
 /// Keeps track of alignment widths for commands/attributes.
@@ -86,7 +87,7 @@ impl FormatOptions {
         }
     }
 
-    pub fn format(self, files: &Files, file: FileId) -> String {
+    pub fn format(self, files: &Files<Cow<'_, str>>, file: FileId) -> String {
         let script = Parser::new(file, files.source(file)).map(|(atom, _errors)| atom);
         Formatter::new(self, files.source(file)).format(script)
     }
@@ -660,7 +661,7 @@ impl<'file> Formatter<'file> {
 /// Format an rms source string.
 pub fn format(source: &str, options: FormatOptions) -> String {
     let mut files = Files::new();
-    let f = files.add("format.rms", source);
+    let f = files.add("format.rms", Cow::Borrowed(source));
     options.format(&files, f)
 }
 
