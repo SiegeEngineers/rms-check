@@ -98,6 +98,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "codespan"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "unicode-segmentation 1.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "codespan-lsp"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -303,7 +311,7 @@ name = "rms-check"
 version = "0.1.0"
 dependencies = [
  "chardet 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "codespan 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "codespan 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "codespan-reporting 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "encoding_rs 0.8.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -332,7 +340,7 @@ dependencies = [
 name = "rms-check-lsp"
 version = "0.1.0"
 dependencies = [
- "codespan 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "codespan 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "codespan-lsp 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 14.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -639,6 +647,7 @@ dependencies = [
 "checksum chardet 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)" = "1a48563284b67c003ba0fb7243c87fab68885e1532c605704228a80238512e31"
 "checksum clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5067f5bb2d80ef5d68b4c87db81601f0b75bca627bc2ef76b141d7b846a3c6d9"
 "checksum codespan 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "21094c000d5db8035900662bbfddec754e79f795324254ac0817f36e5ccfc3f5"
+"checksum codespan 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "52899426b69706219a1aaee2e95868fd01a0bd8006bb163f069578a0af5b5bb2"
 "checksum codespan-lsp 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "15b7729b8f5d692b796dae83436a217d0a7d8155cce082e69a30f952c9be55ff"
 "checksum codespan-reporting 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "657b2c99e1f17bc3e5153808d9f704c8ba6171c3fe45e69fde26e2876156938b"
 "checksum crc32fast 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ba125de2af0df55319f41944744ad91c71113bf74a4646efff39afe1f6842db1"
