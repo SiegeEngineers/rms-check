@@ -12,9 +12,12 @@ mod zip_rms;
 use check::{cli_check, cli_fix, CheckArgs};
 use failure::Fallible;
 use language_server::cli_server;
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use rms_check::{Compatibility, FormatOptions};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::Duration;
 use structopt::StructOpt;
 use zip_rms::{cli_pack, cli_unpack};
 
@@ -76,6 +79,8 @@ enum CliCommand {
         output: PathBuf,
         #[structopt(long, short = "d")]
         indir: PathBuf,
+        #[structopt(long, short = "w")]
+        watch: bool,
     },
     /// Unpack a Zip-RMS map into a folder.
     #[structopt(name = "unpack")]
@@ -144,12 +149,44 @@ fn read_input(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     }
 }
 
+fn cli_watch(indir: impl AsRef<Path>, callback: impl Fn() -> Fallible<()>) -> Fallible<()> {
+    callback()?;
+    let (tx, rx) = mpsc::channel();
+    let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_millis(500))?;
+    watcher.watch(indir.as_ref(), RecursiveMode::Recursive)?;
+
+    while let Ok(_event) = rx.recv() {
+        match callback() {
+            Ok(_) => (),
+            Err(err) => {
+                eprintln!("{}", err);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn main() -> Fallible<()> {
     let args = Cli::from_args();
 
     match args.command {
         Some(CliCommand::Unpack { outdir, input }) => cli_unpack(input, outdir),
-        Some(CliCommand::Pack { indir, output }) => cli_pack(indir, output),
+        Some(CliCommand::Pack {
+            indir,
+            output,
+            watch,
+        }) => {
+            if watch {
+                cli_watch(&indir, || {
+                    cli_pack(&indir, &output)?;
+                    println!("wrote {:?}", output);
+                    Ok(())
+                })
+            } else {
+                cli_pack(indir, output)
+            }
+        }
         Some(CliCommand::Fix {
             dry_run,
             fix_unsafe,
