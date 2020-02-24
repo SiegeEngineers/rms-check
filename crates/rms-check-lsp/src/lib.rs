@@ -58,7 +58,7 @@ where
             files,
             "rms-check".to_string(),
             warn.diagnostic().clone(),
-            |f| self.codespan_name_to_url(files.name(f)),
+            |f| self.codespan_name_to_url(files.name(f).to_string_lossy().as_ref()),
         )
         .expect("could not convert diagnostic to lsp");
 

@@ -180,7 +180,7 @@ impl<'source> RMSFile<'source> {
     }
 
     fn is_zip_rms(&self) -> bool {
-        let name = self.files.name(self.file_id());
+        let name = self.files.name(self.file_id()).to_string_lossy();
         name.starts_with("ZR@")
     }
 }
