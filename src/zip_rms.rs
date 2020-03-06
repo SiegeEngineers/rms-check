@@ -29,7 +29,7 @@ pub fn cli_pack(indir: impl AsRef<Path>, output: impl AsRef<Path>) -> Fallible<(
         let ext = path
             .extension()
             .map(|os_str| os_str.to_string_lossy())
-            .unwrap_or("".into());
+            .unwrap_or_else(|| "".into());
         if !allowed_extensions.contains(&ext.as_ref()) {
             continue;
         }
