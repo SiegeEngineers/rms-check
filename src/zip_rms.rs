@@ -1,7 +1,10 @@
 use failure::{bail, Fallible};
-use std::{ffi::OsStr, fs::File, path::Path};
-use zip::{write::FileOptions, CompressionMethod, ZipArchive, ZipWriter};
+use std::fs::File;
+use std::path::Path;
+use zip::write::FileOptions;
+use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
+/// Unpack a ZR@ map file into a directory.
 pub fn cli_unpack(input: impl AsRef<Path>, outdir: impl AsRef<Path>) -> Fallible<()> {
     let f = File::open(input)?;
     let mut zip = ZipArchive::new(f)?;
@@ -14,13 +17,23 @@ pub fn cli_unpack(input: impl AsRef<Path>, outdir: impl AsRef<Path>) -> Fallible
     Ok(())
 }
 
+/// Pack up a directory into a ZR@ map file.
 pub fn cli_pack(indir: impl AsRef<Path>, output: impl AsRef<Path>) -> Fallible<()> {
     let mut files = vec![];
+
+    let allowed_extensions = [".inc", ".rms", ".scx", ".slp"];
 
     let mut saw_rms = false;
     for entry in std::fs::read_dir(indir)? {
         let path = entry?.path();
-        if path.extension() == Some(OsStr::new(".rms")) {
+        let ext = path
+            .extension()
+            .map(|os_str| os_str.to_string_lossy())
+            .unwrap_or("".into());
+        if !allowed_extensions.contains(&ext.as_ref()) {
+            continue;
+        }
+        if ext == ".rms" {
             if saw_rms {
                 bail!("multiple .rms files found--only one is allowed per ZR@ map");
             }

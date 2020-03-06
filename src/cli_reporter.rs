@@ -12,6 +12,7 @@ fn format_suggestion(suggestion: &Suggestion) -> String {
     string
 }
 
+/// Print rms-check results to standard output.
 pub fn report(result: RMSCheckResult) {
     let mut num_warnings = 0;
     let mut num_errors = 0;

@@ -9,9 +9,10 @@ mod cli_reporter;
 mod language_server;
 mod zip_rms;
 
-use check::{cli_check, cli_fix, CheckArgs};
+use crate::check::{cli_check, cli_fix, CheckArgs};
+use crate::language_server::cli_server;
+use crate::zip_rms::{cli_pack, cli_unpack};
 use failure::Fallible;
-use language_server::cli_server;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use rms_check::{Compatibility, FormatOptions};
 use std::io::{self, Read};
@@ -19,8 +20,8 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
 use structopt::StructOpt;
-use zip_rms::{cli_pack, cli_unpack};
 
+// CLI flags for selecting a compatibility level.
 #[derive(Debug, StructOpt)]
 struct CliCompat {
     /// Set the default compatibility to Age of Conquerors. Scripts can override this using
@@ -126,6 +127,7 @@ enum CliCommand {
     Server,
 }
 
+/// Syntax checking and linting tool suite for Age of Empires 2 random map scripts.
 #[derive(Debug, StructOpt)]
 #[structopt(name = "rms-check")]
 pub struct Cli {
@@ -149,6 +151,7 @@ fn read_input(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     }
 }
 
+/// Watch a directory for changes, and call the `callback` when something changes.
 fn cli_watch(indir: impl AsRef<Path>, callback: impl Fn() -> Fallible<()>) -> Fallible<()> {
     callback()?;
     let (tx, rx) = mpsc::channel();

@@ -7,7 +7,9 @@ use std::path::PathBuf;
 
 #[derive(Debug, Default)]
 pub struct CheckArgs {
+    /// Path to the RMS file.
     pub file: PathBuf,
+    /// Compatibility level to use when checking the script.
     pub compatibility: Compatibility,
     /// Do not a actually apply fixes.
     pub dry_run: bool,
