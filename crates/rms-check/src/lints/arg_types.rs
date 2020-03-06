@@ -1,6 +1,6 @@
 use crate::{ArgType, Atom, AtomKind, Lint, ParseState, Suggestion, Warning, Word, TOKENS};
 use codespan::Span;
-use strsim::levenshtein;
+use strsim::jaro_winkler;
 
 #[derive(Default)]
 pub struct ArgTypesLint {
@@ -290,22 +290,18 @@ impl Lint for ArgTypesLint {
 }
 
 fn meant<'a>(actual: &str, possible: impl Iterator<Item = &'a str>) -> Option<&'a str> {
-    let mut lowest = 10000;
+    let mut highest = 0.8;
     let mut result = None;
 
     for expected in possible {
-        let lev = levenshtein(actual, expected);
-        if lev < lowest {
+        let similarity = jaro_winkler(actual, expected);
+        if similarity > highest {
             result = Some(expected);
-            lowest = lev;
+            highest = similarity;
         }
     }
 
-    if lowest < actual.len() {
-        result
-    } else {
-        None
-    }
+    result
 }
 
 /// Check if a string is numeric.
