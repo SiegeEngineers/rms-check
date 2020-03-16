@@ -12,18 +12,18 @@ use codespan::{ByteIndex, Files, Span};
 use codespan_lsp::range_to_byte_span;
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use lsp_types::{
-    CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic, DiagnosticSeverity,
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DocumentFormattingParams, FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability,
-    InitializeParams, InitializeResult, NumberOrString, PublishDiagnosticsParams,
-    ServerCapabilities, ServerInfo, SignatureHelpOptions, TextDocumentItem,
-    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
-    WorkDoneProgressOptions, WorkspaceEdit,
+    CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
+    DiagnosticRelatedInformation, DiagnosticSeverity, DidChangeTextDocumentParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams, FoldingRange,
+    FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams, InitializeResult,
+    Location, NumberOrString, PublishDiagnosticsParams, ServerCapabilities, ServerInfo,
+    SignatureHelpOptions, TextDocumentItem, TextDocumentPositionParams, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
 };
 use multisplice::Multisplice;
 use rms_check::{
-    AutoFixReplacement, Compatibility, FormatOptions, RMSCheck, RMSCheckResult, RMSFile, Warning,
-    Severity,
+    AutoFixReplacement, Compatibility, FormatOptions, RMSCheck, RMSCheckResult, RMSFile, Severity,
+    Warning,
 };
 use serde_json::{self, json};
 use std::borrow::Cow;
@@ -52,6 +52,7 @@ where
     fn make_lsp_diagnostic(&self, files: &Files<Cow<'_, str>>, warn: &Warning) -> Diagnostic {
         let main_label = warn.main_label();
         let span = Span::new(main_label.range.start as u32, main_label.range.end as u32);
+        let more_labels = warn.labels();
 
         let diag = Diagnostic {
             range: codespan_lsp::byte_span_to_range(files, main_label.file_id, span).unwrap(),
@@ -63,9 +64,29 @@ where
                 Severity::Help => DiagnosticSeverity::Hint,
             }),
             source: Some("rms-check".into()),
-            code: warn.diagnostic().code.clone().map(lsp_types::NumberOrString::String),
+            code: warn
+                .diagnostic()
+                .code
+                .clone()
+                .map(lsp_types::NumberOrString::String),
             message: warn.message().into(),
-            related_information: Some(vec![]),
+            related_information: Some(
+                more_labels
+                    .iter()
+                    .map(|label| DiagnosticRelatedInformation {
+                        location: Location {
+                            uri: files.name(label.file_id).to_string_lossy().parse().unwrap(),
+                            range: codespan_lsp::byte_span_to_range(
+                                files,
+                                label.file_id,
+                                Span::new(label.range.start as u32, label.range.end as u32),
+                            )
+                            .unwrap(),
+                        },
+                        message: label.message.clone(),
+                    })
+                    .collect(),
+            ),
             tags: None,
         };
 

@@ -162,7 +162,12 @@ impl Warning {
         Warning {
             diagnostic: Diagnostic::warning()
                 .with_message(message.clone())
-                .with_labels(vec![Label::new(LabelStyle::Primary, file_id, span_to_range(span)).with_message(message)]),
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    file_id,
+                    span_to_range(span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }
@@ -174,7 +179,12 @@ impl Warning {
         Warning {
             diagnostic: Diagnostic::error()
                 .with_message(message.clone())
-                .with_labels(vec![Label::new(LabelStyle::Primary, file_id, span_to_range(span)).with_message(message)]),
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    file_id,
+                    span_to_range(span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }
@@ -187,10 +197,12 @@ impl Warning {
 
     /// Add a note referencing a snippet of code.
     pub(crate) fn note_at(mut self, file_id: FileId, span: Span, message: &str) -> Self {
-        self.diagnostic =
-            self.diagnostic.with_labels(vec![
-                Label::new(LabelStyle::Secondary, file_id, span_to_range(span)).with_message(message)
-            ]);
+        self.diagnostic = self.diagnostic.with_labels(vec![Label::new(
+            LabelStyle::Secondary,
+            file_id,
+            span_to_range(span),
+        )
+        .with_message(message)]);
         self
     }
 
@@ -209,9 +221,12 @@ impl Word<'_> {
         Warning {
             diagnostic: Diagnostic::warning()
                 .with_message(message.clone())
-                .with_labels(vec![
-                    Label::new(LabelStyle::Primary, self.file, span_to_range(self.span)).with_message(message)
-                ]),
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    self.file,
+                    span_to_range(self.span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }
@@ -222,9 +237,12 @@ impl Word<'_> {
         Warning {
             diagnostic: Diagnostic::error()
                 .with_message(message.clone())
-                .with_labels(vec![
-                    Label::new(LabelStyle::Primary, self.file, span_to_range(self.span)).with_message(message)
-                ]),
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    self.file,
+                    span_to_range(self.span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }
@@ -238,9 +256,12 @@ impl Atom<'_> {
         Warning {
             diagnostic: Diagnostic::warning()
                 .with_message(message.clone())
-                .with_labels(vec![
-                    Label::new(LabelStyle::Primary, self.file, span_to_range(self.span)).with_message(message)
-                ]),
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    self.file,
+                    span_to_range(self.span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }
@@ -251,9 +272,12 @@ impl Atom<'_> {
         Warning {
             diagnostic: Diagnostic::error()
                 .with_message(message.clone())
-                .with_labels(vec![
-                    Label::new(LabelStyle::Primary, self.file, span_to_range(self.span)).with_message(message)
-                ]),
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    self.file,
+                    span_to_range(self.span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }
