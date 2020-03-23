@@ -197,12 +197,9 @@ impl Warning {
 
     /// Add a note referencing a snippet of code.
     pub(crate) fn note_at(mut self, file_id: FileId, span: Span, message: &str) -> Self {
-        self.diagnostic = self.diagnostic.with_labels(vec![Label::new(
-            LabelStyle::Secondary,
-            file_id,
-            span_to_range(span),
-        )
-        .with_message(message)]);
+        self.diagnostic.labels.push(
+            Label::new(LabelStyle::Secondary, file_id, span_to_range(span)).with_message(message),
+        );
         self
     }
 
