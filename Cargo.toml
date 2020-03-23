@@ -16,7 +16,7 @@ lto = true
 
 [dependencies]
 ansi_term = "0.12"
-codespan-reporting = "0.8"
+codespan-reporting = "0.9"
 failure = "0.1"
 multisplice = "^0.3.0"
 rms-check = { path = "crates/rms-check" }

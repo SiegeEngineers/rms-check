@@ -5,8 +5,22 @@ use crate::state::{Compatibility, ParseState};
 use crate::wordize::Word;
 use crate::RMSFile;
 use codespan::{ByteIndex, FileId, Span};
-pub use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
+use codespan_reporting::diagnostic::LabelStyle;
+pub use codespan_reporting::diagnostic::Severity;
 use lazy_static::lazy_static;
+use std::ops::Range;
+
+/// Represents a diagnostic message that can provide information like errors and warnings to the user.
+pub type Diagnostic = codespan_reporting::diagnostic::Diagnostic<FileId>;
+/// A label describing an underlined region of code associated with a diagnostic.
+pub type Label = codespan_reporting::diagnostic::Label<FileId>;
+
+fn span_to_range(span: Span) -> Range<usize> {
+    Range {
+        start: span.start().to_usize(),
+        end: span.end().to_usize(),
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum AutoFixReplacement {
@@ -103,7 +117,7 @@ impl Suggestion {
 }
 
 /// A warning.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Warning {
     diagnostic: Diagnostic,
     /// A change suggestion: when present, the problem can be fixed by replacing the
@@ -120,9 +134,12 @@ impl Warning {
     pub const fn severity(&self) -> Severity {
         self.diagnostic.severity
     }
+    pub fn main_label(&self) -> &Label {
+        &self.diagnostic.labels[0]
+    }
     /// Get additional labels for this warning.
-    pub const fn labels(&self) -> &Vec<Label> {
-        &self.diagnostic.secondary_labels
+    pub fn labels(&self) -> &[Label] {
+        &self.diagnostic.labels[1..]
     }
     /// Get the human-readable error message.
     pub fn message(&self) -> &str {
@@ -143,10 +160,14 @@ impl Warning {
     pub(crate) fn warning(file_id: FileId, span: Span, message: impl Into<String>) -> Self {
         let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_warning(
-                message.clone(),
-                Label::new(file_id, span, message),
-            ),
+            diagnostic: Diagnostic::warning()
+                .with_message(message.clone())
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    file_id,
+                    span_to_range(span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }
@@ -156,7 +177,14 @@ impl Warning {
     pub(crate) fn error(file_id: FileId, span: Span, message: impl Into<String>) -> Self {
         let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_error(message.clone(), Label::new(file_id, span, message)),
+            diagnostic: Diagnostic::error()
+                .with_message(message.clone())
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    file_id,
+                    span_to_range(span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }
@@ -169,9 +197,9 @@ impl Warning {
 
     /// Add a note referencing a snippet of code.
     pub(crate) fn note_at(mut self, file_id: FileId, span: Span, message: &str) -> Self {
-        self.diagnostic = self
-            .diagnostic
-            .with_secondary_labels(vec![Label::new(file_id, span, message)]);
+        self.diagnostic.labels.push(
+            Label::new(LabelStyle::Secondary, file_id, span_to_range(span)).with_message(message),
+        );
         self
     }
 
@@ -188,10 +216,14 @@ impl Word<'_> {
     pub(crate) fn warning(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_warning(
-                message.clone(),
-                Label::new(self.file, self.span, message),
-            ),
+            diagnostic: Diagnostic::warning()
+                .with_message(message.clone())
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    self.file,
+                    span_to_range(self.span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }
@@ -200,10 +232,14 @@ impl Word<'_> {
     pub(crate) fn error(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_error(
-                message.clone(),
-                Label::new(self.file, self.span, message),
-            ),
+            diagnostic: Diagnostic::error()
+                .with_message(message.clone())
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    self.file,
+                    span_to_range(self.span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }
@@ -215,10 +251,14 @@ impl Atom<'_> {
     pub(crate) fn warning(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_warning(
-                message.clone(),
-                Label::new(self.file, self.span, message),
-            ),
+            diagnostic: Diagnostic::warning()
+                .with_message(message.clone())
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    self.file,
+                    span_to_range(self.span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }
@@ -227,10 +267,14 @@ impl Atom<'_> {
     pub(crate) fn error(&self, message: impl Into<String>) -> Warning {
         let message: String = message.into();
         Warning {
-            diagnostic: Diagnostic::new_error(
-                message.clone(),
-                Label::new(self.file, self.span, message),
-            ),
+            diagnostic: Diagnostic::error()
+                .with_message(message.clone())
+                .with_labels(vec![Label::new(
+                    LabelStyle::Primary,
+                    self.file,
+                    span_to_range(self.span),
+                )
+                .with_message(message)]),
             suggestions: vec![],
         }
     }

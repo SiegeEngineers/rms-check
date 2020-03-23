@@ -13,16 +13,17 @@ use codespan_lsp::range_to_byte_span;
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use lsp_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DocumentFormattingParams, FoldingRange, FoldingRangeParams, FoldingRangeProviderCapability,
-    InitializeParams, InitializeResult, NumberOrString, PublishDiagnosticsParams,
-    ServerCapabilities, ServerInfo, SignatureHelpOptions, TextDocumentItem,
-    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
-    WorkDoneProgressOptions, WorkspaceEdit,
+    DiagnosticRelatedInformation, DiagnosticSeverity, DidChangeTextDocumentParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams, FoldingRange,
+    FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams, InitializeResult,
+    Location, NumberOrString, PublishDiagnosticsParams, ServerCapabilities, ServerInfo,
+    SignatureHelpOptions, TextDocumentItem, TextDocumentPositionParams, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
 };
 use multisplice::Multisplice;
 use rms_check::{
-    AutoFixReplacement, Compatibility, FormatOptions, RMSCheck, RMSCheckResult, RMSFile, Warning,
+    AutoFixReplacement, Compatibility, FormatOptions, RMSCheck, RMSCheckResult, RMSFile, Severity,
+    Warning,
 };
 use serde_json::{self, json};
 use std::borrow::Cow;
@@ -47,20 +48,47 @@ impl<Emit> Inner<Emit>
 where
     Emit: Fn(serde_json::Value) + Send + 'static,
 {
-    /// Convert a codespan file name to an LSP file URL.
-    fn codespan_name_to_url(&self, filename: &str) -> Result<Url, ()> {
-        filename.parse().map_err(|_| ())
-    }
-
     /// Convert an rms-check warning to an LSP diagnostic.
     fn make_lsp_diagnostic(&self, files: &Files<Cow<'_, str>>, warn: &Warning) -> Diagnostic {
-        let diag = codespan_lsp::make_lsp_diagnostic(
-            files,
-            "rms-check".to_string(),
-            warn.diagnostic().clone(),
-            |f| self.codespan_name_to_url(files.name(f).to_string_lossy().as_ref()),
-        )
-        .expect("could not convert diagnostic to lsp");
+        let main_label = warn.main_label();
+        let span = Span::new(main_label.range.start as u32, main_label.range.end as u32);
+        let more_labels = warn.labels();
+
+        let diag = Diagnostic {
+            range: codespan_lsp::byte_span_to_range(files, main_label.file_id, span).unwrap(),
+            severity: Some(match warn.severity() {
+                Severity::Bug => DiagnosticSeverity::Error,
+                Severity::Error => DiagnosticSeverity::Error,
+                Severity::Warning => DiagnosticSeverity::Warning,
+                Severity::Note => DiagnosticSeverity::Information,
+                Severity::Help => DiagnosticSeverity::Hint,
+            }),
+            source: Some("rms-check".into()),
+            code: warn
+                .diagnostic()
+                .code
+                .clone()
+                .map(lsp_types::NumberOrString::String),
+            message: warn.message().into(),
+            related_information: Some(
+                more_labels
+                    .iter()
+                    .map(|label| DiagnosticRelatedInformation {
+                        location: Location {
+                            uri: files.name(label.file_id).to_string_lossy().parse().unwrap(),
+                            range: codespan_lsp::byte_span_to_range(
+                                files,
+                                label.file_id,
+                                Span::new(label.range.start as u32, label.range.end as u32),
+                            )
+                            .unwrap(),
+                        },
+                        message: label.message.clone(),
+                    })
+                    .collect(),
+            ),
+            tags: None,
+        };
 
         Diagnostic {
             code: warn
@@ -166,9 +194,8 @@ where
             .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
 
         let warnings = result.iter().filter(|warn| {
-            let label = &warn.diagnostic().primary_label;
-            start >= label.span.start() && start <= label.span.end()
-                || end >= label.span.start() && end <= label.span.end()
+            let label = &warn.diagnostic().labels[0];
+            label.range.contains(&start.to_usize()) && label.range.contains(&end.to_usize())
         });
 
         let mut actions = vec![];

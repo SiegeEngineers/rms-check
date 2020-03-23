@@ -37,7 +37,12 @@ impl Lint for IncludeLint {
 mod tests {
     use super::IncludeLint;
     use crate::{RMSCheck, RMSFile, Severity};
-    use codespan::Location;
+    use codespan::{Location, Span};
+    use std::ops::Range;
+
+    fn to_span(range: Range<usize>) -> Span {
+        Span::new(range.start as u32, range.end as u32)
+    }
 
     #[test]
     fn include() {
@@ -58,7 +63,7 @@ mod tests {
             first.message(),
             "#include_drs can only be used by builtin maps"
         );
-        let first_span = first.diagnostic().primary_label.span;
+        let first_span = to_span(first.diagnostic().labels[0].range.clone());
         assert_eq!(
             result.resolve_position(file, first_span.start()).unwrap(),
             Location::new(0, 0)
@@ -69,7 +74,7 @@ mod tests {
             second.message(),
             "#include can only be used by builtin maps"
         );
-        let second_span = second.diagnostic().primary_label.span;
+        let second_span = to_span(second.diagnostic().labels[0].range.clone());
         assert_eq!(
             result.resolve_position(file, second_span.start()).unwrap(),
             Location::new(2, 0)

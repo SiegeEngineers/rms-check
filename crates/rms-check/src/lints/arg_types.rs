@@ -335,6 +335,11 @@ mod tests {
     use super::*;
     use crate::{Compatibility, RMSCheck, RMSFile, Severity};
     use codespan::{ColumnIndex, LineIndex, Location};
+    use std::ops::Range;
+
+    fn to_span(range: Range<usize>) -> Span {
+        Span::new(range.start as u32, range.end as u32)
+    }
 
     #[test]
     fn is_numeric_test() {
@@ -374,7 +379,7 @@ mod tests {
         assert_eq!(first.diagnostic().severity, Severity::Error);
         assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
         assert_eq!(first.message(), "Expected a const name, but got a number 0");
-        let first_span = first.diagnostic().primary_label.span;
+        let first_span = to_span(first.diagnostic().labels[0].range.clone());
         assert_eq!(
             result.resolve_position(file, first_span.start()).unwrap(),
             Location::new(LineIndex(1), ColumnIndex(17))
@@ -386,7 +391,7 @@ mod tests {
             second.message(),
             "Expected a const name, but got a number 10"
         );
-        let second_span = second.diagnostic().primary_label.span;
+        let second_span = to_span(second.diagnostic().labels[0].range.clone());
         assert_eq!(
             result.resolve_position(file, second_span.start()).unwrap(),
             Location::new(LineIndex(3), ColumnIndex(13))
@@ -398,7 +403,7 @@ mod tests {
             third.message(),
             "Expected a number argument to number_of_objects, but got SOMEVAL"
         );
-        let third_span = third.diagnostic().primary_label.span;
+        let third_span = to_span(third.diagnostic().labels[0].range.clone());
         assert_eq!(
             result.resolve_position(file, third_span.start()).unwrap(),
             Location::new(LineIndex(7), ColumnIndex(18))
@@ -407,7 +412,7 @@ mod tests {
         assert_eq!(fourth.diagnostic().severity, Severity::Error);
         assert_eq!(fourth.diagnostic().code, Some("arg-types".to_string()));
         assert_eq!(fourth.message(), "Missing arguments to create_object");
-        let fourth_span = fourth.diagnostic().primary_label.span;
+        let fourth_span = to_span(fourth.diagnostic().labels[0].range.clone());
         assert_eq!(
             result.resolve_position(file, fourth_span.start()).unwrap(),
             Location::new(LineIndex(10), ColumnIndex(0))
@@ -429,7 +434,7 @@ mod tests {
         assert_eq!(first.diagnostic().severity, Severity::Warning);
         assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
         assert_eq!(first.message(), "Elevation value out of range (0 or 1-7)");
-        let first_span = first.diagnostic().primary_label.span;
+        let first_span = to_span(first.diagnostic().labels[0].range.clone());
         assert_eq!(
             result.resolve_position(file, first_span.start()).unwrap(),
             Location::new(LineIndex(0), ColumnIndex(29))
@@ -457,7 +462,7 @@ mod tests {
             first.message(),
             "`assign_to` Target must be AT_COLOR, AT_PLAYER, AT_TEAM"
         );
-        let first_span = first.diagnostic().primary_label.span;
+        let first_span = to_span(first.diagnostic().labels[0].range.clone());
         assert_eq!(
             result.resolve_position(file, first_span.start()).unwrap(),
             Location::new(LineIndex(0), ColumnIndex(24))
