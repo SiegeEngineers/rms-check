@@ -1,11 +1,11 @@
-use failure::{bail, Fallible};
+use anyhow::{bail, Result};
 use std::fs::File;
 use std::path::Path;
 use zip::write::FileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 /// Unpack a ZR@ map file into a directory.
-pub fn cli_unpack(input: impl AsRef<Path>, outdir: impl AsRef<Path>) -> Fallible<()> {
+pub fn cli_unpack(input: impl AsRef<Path>, outdir: impl AsRef<Path>) -> Result<()> {
     let f = File::open(input)?;
     let mut zip = ZipArchive::new(f)?;
     std::fs::create_dir_all(outdir.as_ref())?;
@@ -18,7 +18,7 @@ pub fn cli_unpack(input: impl AsRef<Path>, outdir: impl AsRef<Path>) -> Fallible
 }
 
 /// Pack up a directory into a ZR@ map file.
-pub fn cli_pack(indir: impl AsRef<Path>, output: impl AsRef<Path>) -> Fallible<()> {
+pub fn cli_pack(indir: impl AsRef<Path>, output: impl AsRef<Path>) -> Result<()> {
     let mut files = vec![];
 
     let allowed_extensions = [".inc", ".rms", ".scx", ".slp"];

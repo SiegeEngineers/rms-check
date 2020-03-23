@@ -12,7 +12,7 @@ mod zip_rms;
 use crate::check::{cli_check, cli_fix, CheckArgs};
 use crate::language_server::cli_server;
 use crate::zip_rms::{cli_pack, cli_unpack};
-use failure::Fallible;
+use anyhow::Result;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use rms_check::{Compatibility, FormatOptions};
 use std::io::{self, Read};
@@ -152,7 +152,7 @@ fn read_input(path: impl AsRef<Path>) -> io::Result<Vec<u8>> {
 }
 
 /// Watch a directory for changes, and call the `callback` when something changes.
-fn cli_watch(indir: impl AsRef<Path>, callback: impl Fn() -> Fallible<()>) -> Fallible<()> {
+fn cli_watch(indir: impl AsRef<Path>, callback: impl Fn() -> Result<()>) -> Result<()> {
     callback()?;
     let (tx, rx) = mpsc::channel();
     let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_millis(500))?;
@@ -170,7 +170,7 @@ fn cli_watch(indir: impl AsRef<Path>, callback: impl Fn() -> Fallible<()>) -> Fa
     Ok(())
 }
 
-fn main() -> Fallible<()> {
+fn main() -> Result<()> {
     let args = Cli::from_args();
 
     match args.command {

@@ -1,5 +1,5 @@
 use crate::cli_reporter::report as cli_report;
-use failure::{bail, Fallible};
+use anyhow::{bail, Result};
 use multisplice::Multisplice;
 use rms_check::{AutoFixReplacement, Compatibility, RMSCheck, RMSFile};
 use std::fs::{remove_file, write};
@@ -17,7 +17,7 @@ pub struct CheckArgs {
     pub fix_unsafe: bool,
 }
 
-pub fn cli_check(args: CheckArgs) -> Fallible<()> {
+pub fn cli_check(args: CheckArgs) -> Result<()> {
     let file = RMSFile::from_path(args.file)?;
     let checker = RMSCheck::default().compatibility(args.compatibility);
     let result = checker.check(file);
@@ -31,7 +31,7 @@ pub fn cli_check(args: CheckArgs) -> Fallible<()> {
     Ok(())
 }
 
-pub fn cli_fix(args: CheckArgs) -> Fallible<()> {
+pub fn cli_fix(args: CheckArgs) -> Result<()> {
     let file = RMSFile::from_path(&args.file)?;
 
     let checker = RMSCheck::default().compatibility(args.compatibility);
