@@ -12,7 +12,7 @@ impl AttributeCaseLint {
             Cow::Owned(lower_value)
                 if !TOKENS.contains_key(value) && TOKENS.contains_key(lower_value.as_str()) =>
             {
-                Some(lower_value.to_owned())
+                Some(lower_value)
             }
             // If the value wasn't lowercase, but the lowercase value _also_ isn't an attribute, we
             // can't fix it.
