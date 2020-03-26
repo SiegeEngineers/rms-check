@@ -1,5 +1,5 @@
 use crate::{Atom, AtomKind, Lint, ParseState, Suggestion, Warning, TOKENS};
-use strsim::levenshtein;
+use strsim::jaro_winkler;
 
 #[allow(unused)]
 pub struct UnknownAttributeLint {}
@@ -34,20 +34,9 @@ impl Lint for UnknownAttributeLint {
 }
 
 fn meant<'a>(actual: &str, possible: impl Iterator<Item = &'a str>) -> Option<&'a str> {
-    let mut lowest = 10000;
-    let mut result = None;
-
-    for expected in possible {
-        let lev = levenshtein(actual, expected);
-        if lev < lowest {
-            result = Some(expected);
-            lowest = lev;
-        }
-    }
-
-    if lowest < actual.len() {
-        result
-    } else {
-        None
-    }
+    possible
+        .map(|expected| (expected, jaro_winkler(actual, expected)))
+        .filter(|(_, similarity)| *similarity >= 0.8)
+        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(string, _)| string)
 }
