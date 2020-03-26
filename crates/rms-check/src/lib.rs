@@ -28,12 +28,15 @@ use std::{borrow::Cow, fs::File, io, path::Path};
 use zip::ZipArchive;
 
 fn to_chardet_string(bytes: Vec<u8>) -> String {
-    let (encoding_name, _, _) = chardet::detect(&bytes);
-    if let Some(encoding) = Encoding::for_label(encoding_name.as_bytes()) {
-        encoding.decode(&bytes).0.to_string()
-    } else {
-        String::from_utf8_lossy(&bytes).to_string()
-    }
+    String::from_utf8(bytes).unwrap_or_else(|err| {
+        let bytes = err.as_bytes();
+        let (encoding_name, _, _) = chardet::detect(bytes);
+        if let Some(encoding) = Encoding::for_label(encoding_name.as_bytes()) {
+            encoding.decode(bytes).0.to_string()
+        } else {
+            String::from_utf8_lossy(bytes).to_string()
+        }
+    })
 }
 
 /// Container for a random map script, generalising various formats.
