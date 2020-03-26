@@ -4,6 +4,7 @@ use crate::checker::Warning;
 use crate::parser::{Atom, AtomKind, Parser};
 use crate::tokens::TokenType;
 use crate::RMSFile;
+use cow_utils::CowUtils;
 use std::collections::HashSet;
 use std::str::FromStr;
 
@@ -59,7 +60,8 @@ impl FromStr for HeaderName {
     type Err = ();
 
     fn from_str(name: &str) -> Result<Self, Self::Err> {
-        match name.to_ascii_lowercase().trim() {
+        let lower_name = name.cow_to_ascii_lowercase();
+        match lower_name.trim() {
             "compatibility" => Ok(HeaderName::Compatibility),
             _ => Err(()),
         }
@@ -205,7 +207,8 @@ impl<'a> ParseState<'a> {
     fn set_header(&mut self, name: HeaderName, value: &str) {
         match name {
             HeaderName::Compatibility => {
-                let compat = match value.to_ascii_lowercase().trim() {
+                let lower_value = value.cow_to_ascii_lowercase();
+                let compat = match lower_value.trim() {
                     "hd edition" | "hd" => Compatibility::HDEdition,
                     "conquerors" | "aoc" => Compatibility::Conquerors,
                     "userpatch 1.5" | "up 1.5" => Compatibility::UserPatch15,

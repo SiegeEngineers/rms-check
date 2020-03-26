@@ -1,5 +1,6 @@
 use crate::{ArgType, Atom, AtomKind, Lint, ParseState, Suggestion, Warning, Word, TOKENS};
 use codespan::Span;
+use cow_utils::CowUtils;
 use strsim::jaro_winkler;
 
 #[derive(Default)]
@@ -220,7 +221,7 @@ impl Lint for ArgTypesLint {
     }
     fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
         if let AtomKind::Command { name, arguments } = &atom.kind {
-            let token_type = &TOKENS[&name.value.to_ascii_lowercase()];
+            let token_type = &TOKENS[name.value.cow_to_ascii_lowercase().as_ref()];
             let mut warnings = vec![];
             for i in 0..token_type.arg_len() {
                 if let Some(warning) = self.check_arg(

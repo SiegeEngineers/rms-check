@@ -3,6 +3,7 @@
 use crate::tokens::TOKENS;
 use crate::wordize::{Word, Wordize};
 use codespan::{ByteIndex, ByteOffset, FileId, Span};
+use cow_utils::CowUtils;
 use itertools::MultiPeek;
 use std::fmt::{self, Display};
 use std::ops::RangeBounds;
@@ -320,7 +321,7 @@ impl<'a> Iterator for Parser<'a> {
             return t(Atom::from_word(AtomKind::Section { name: word }, word));
         }
 
-        match word.value.to_ascii_lowercase().as_str() {
+        match word.value.cow_to_ascii_lowercase().as_ref() {
             "{" => t(Atom::from_word(AtomKind::OpenBlock { head: word }, word)),
             "}" => t(Atom::from_word(AtomKind::CloseBlock { head: word }, word)),
             "/*" => self.read_comment(word),

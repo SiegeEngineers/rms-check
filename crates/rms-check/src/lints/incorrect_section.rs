@@ -1,4 +1,5 @@
 use crate::{Atom, AtomKind, Lint, ParseState, TokenContext, Warning, TOKENS};
+use cow_utils::CowUtils;
 
 #[derive(Default)]
 pub struct IncorrectSectionLint {}
@@ -16,7 +17,7 @@ impl Lint for IncorrectSectionLint {
 
     fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
         if let AtomKind::Command { name, .. } = atom.kind {
-            let token_type = &TOKENS[&name.value.to_ascii_lowercase()];
+            let token_type = &TOKENS[name.value.cow_to_ascii_lowercase().as_ref()];
             if let TokenContext::Command(Some(expected_section)) = token_type.context() {
                 match &state.current_section {
                     Some(current_section) => {
