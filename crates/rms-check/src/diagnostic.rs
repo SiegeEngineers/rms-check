@@ -136,7 +136,7 @@ impl Fix {
     }
 
     pub fn replacement(&self) -> Option<&str> {
-        self.replacement.as_ref().map(|string| string.as_str())
+        self.replacement.as_deref()
     }
 }
 
@@ -230,7 +230,7 @@ impl Diagnostic {
     }
 
     pub fn code(&self) -> Option<&str> {
-        self.code.as_ref().map(|s| s.as_str())
+        self.code.as_deref()
     }
 
     pub fn message(&self) -> &str {

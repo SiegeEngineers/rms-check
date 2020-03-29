@@ -53,7 +53,7 @@ impl<'source> FileData<'source> {
         let line_indices = std::iter::once(ByteIndex::from(0))
             .chain(
                 source
-                    .match_indices("\n")
+                    .match_indices('\n')
                     .map(|(index, _nl)| ByteIndex::from(index + 1)),
             )
             .collect();

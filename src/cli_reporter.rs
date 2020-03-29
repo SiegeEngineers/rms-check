@@ -67,12 +67,10 @@ pub fn report(file: &RMSFile<'_>, result: RMSCheckResult) {
             .with_message(diag.message())
             .with_labels(labels.collect());
 
-        let diagnostic = match diag.code() {
+        match diag.code() {
             Some(code) => diagnostic.with_code(code),
             None => diagnostic,
-        };
-
-        diagnostic
+        }
     };
 
     let config = Config::default();
