@@ -1,4 +1,5 @@
-use crate::{Atom, AtomKind, Lint, ParseState, Suggestion, Warning};
+use crate::diagnostic::{Diagnostic, Fix};
+use crate::{Atom, AtomKind, Lint, ParseState};
 
 #[derive(Default)]
 pub struct IncludeLint {}
@@ -13,20 +14,22 @@ impl Lint for IncludeLint {
     fn name(&self) -> &'static str {
         "include"
     }
-    fn lint_atom(&mut self, _state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
+    fn lint_atom(&mut self, _state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Diagnostic> {
         match atom.kind {
             AtomKind::Command { name, .. } if name.value == "#include_drs" => {
-                vec![atom.error("#include_drs can only be used by builtin maps")]
+                vec![Diagnostic::error(
+                    atom.location,
+                    "#include_drs can only be used by builtin maps",
+                )]
             }
             AtomKind::Command { name, .. } if name.value == "#include" => {
-                let suggestion = Suggestion::new(
-                    atom.file,
-                    atom.span,
-                    "If you're trying to make a map pack, use a map pack generator instead.",
-                );
-                vec![atom
-                    .error("#include can only be used by builtin maps")
-                    .suggest(suggestion)]
+                vec![
+                    Diagnostic::error(atom.location, "#include can only be used by builtin maps")
+                        .suggest(Fix::new(
+                        atom.location,
+                        "If you're trying to make a map pack, use a map pack generator instead.",
+                    )),
+                ]
             }
             _ => Default::default(),
         }
@@ -36,13 +39,8 @@ impl Lint for IncludeLint {
 #[cfg(test)]
 mod tests {
     use super::IncludeLint;
+    use crate::diagnostic::{ByteIndex, SourceLocation};
     use crate::{RMSCheck, RMSFile, Severity};
-    use codespan::{Location, Span};
-    use std::ops::Range;
-
-    fn to_span(range: Range<usize>) -> Span {
-        Span::new(range.start as u32, range.end as u32)
-    }
 
     #[test]
     fn include() {
@@ -57,27 +55,25 @@ mod tests {
         let first = warnings.next().unwrap();
         let second = warnings.next().unwrap();
         assert!(warnings.next().is_none());
-        assert_eq!(first.diagnostic().severity, Severity::Error);
-        assert_eq!(first.diagnostic().code, Some("include".to_string()));
+        assert_eq!(first.severity(), Severity::Error);
+        assert_eq!(first.code(), Some("include"));
         assert_eq!(
             first.message(),
             "#include_drs can only be used by builtin maps"
         );
-        let first_span = to_span(first.diagnostic().labels[0].range.clone());
         assert_eq!(
-            result.resolve_position(file, first_span.start()).unwrap(),
-            Location::new(0, 0)
+            first.location(),
+            SourceLocation::new(file, ByteIndex::from(0)..ByteIndex::from(33))
         );
-        assert_eq!(second.diagnostic().severity, Severity::Error);
-        assert_eq!(second.diagnostic().code, Some("include".to_string()));
+        assert_eq!(second.severity(), Severity::Error);
+        assert_eq!(second.code(), Some("include"));
         assert_eq!(
             second.message(),
             "#include can only be used by builtin maps"
         );
-        let second_span = to_span(second.diagnostic().labels[0].range.clone());
         assert_eq!(
-            result.resolve_position(file, second_span.start()).unwrap(),
-            Location::new(2, 0)
+            second.location(),
+            SourceLocation::new(file, ByteIndex::from(35)..ByteIndex::from(51))
         );
     }
 }

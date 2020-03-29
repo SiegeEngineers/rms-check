@@ -1,11 +1,11 @@
-use crate::{ArgType, Atom, AtomKind, Lint, ParseState, Suggestion, Warning, Word, TOKENS};
-use codespan::Span;
+use crate::diagnostic::{Diagnostic, Fix, SourceLocation};
+use crate::{ArgType, Atom, AtomKind, Lint, ParseState, Word, TOKENS};
 use cow_utils::CowUtils;
 use strsim::jaro_winkler;
 
 #[derive(Default)]
 pub struct ArgTypesLint {
-    actor_areas: Vec<(i32, Span)>,
+    actor_areas: Vec<(i32, SourceLocation)>,
 }
 
 impl ArgTypesLint {
@@ -13,16 +13,19 @@ impl ArgTypesLint {
         Default::default()
     }
 
-    fn check_ever_defined(&self, state: &ParseState<'_>, token: &Word<'_>) -> Option<Warning> {
+    fn check_ever_defined(&self, state: &ParseState<'_>, token: &Word<'_>) -> Option<Diagnostic> {
         if !state.may_have_define(token.value) {
-            let warn = token.warning(format!(
-                "Token `{}` is never defined, this condition will always fail",
-                token.value
-            ));
+            let warn = Diagnostic::warning(
+                token.location,
+                format_args!(
+                    "Token `{}` is never defined, this condition will always fail",
+                    token.value
+                ),
+            );
             Some(if let Some(similar) = meant(token.value, state.defines()) {
                 warn.suggest(
-                    Suggestion::from(token, format!("Did you mean `{}`?", similar))
-                        .replace_unsafe(similar.to_string()),
+                    Fix::new(token.location, format_args!("Did you mean `{}`?", similar))
+                        .replace(similar),
                 )
             } else {
                 warn
@@ -37,18 +40,21 @@ impl ArgTypesLint {
         &self,
         state: &ParseState<'_>,
         token: &Word<'_>,
-    ) -> Option<Warning> {
+    ) -> Option<Diagnostic> {
         // 1. Check if this may or may not be defined—else warn
         if !state.has_const(token.value) {
             if state.has_define(token.value) {
                 // 2. Check if this has a value (is defined using #const)—else warn
-                Some(token.warning(format!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
+                Some(Diagnostic::warning(token.location, format_args!("Expected a valued token (defined using #const), got a valueless token `{}` (defined using #define)", token.value)))
             } else {
-                let warn = token.warning(format!("Token `{}` is never defined", token.value));
+                let warn = Diagnostic::warning(
+                    token.location,
+                    format_args!("Token `{}` is never defined", token.value),
+                );
                 Some(if let Some(similar) = meant(token.value, state.consts()) {
                     warn.suggest(
-                        Suggestion::from(token, format!("Did you mean `{}`?", similar))
-                            .replace_unsafe(similar.to_string()),
+                        Fix::new(token.location, format_args!("Did you mean `{}`?", similar))
+                            .replace(similar),
                     )
                 } else {
                     warn
@@ -64,21 +70,24 @@ impl ArgTypesLint {
         _state: &ParseState<'_>,
         name: &Word<'_>,
         arg: &Word<'_>,
-    ) -> Option<Warning> {
+    ) -> Option<Diagnostic> {
         // This may be a valued (#const) constant,
         // or a number (12, -35),
         arg.value
             .parse::<i32>()
             .err()
             .map(|_| {
-                let warn = arg.error(format!(
-                    "Expected a number argument to {}, but got {}",
-                    name.value, arg.value
-                ));
+                let warn = Diagnostic::error(
+                    arg.location,
+                    format_args!(
+                        "Expected a number argument to {}, but got {}",
+                        name.value, arg.value
+                    ),
+                );
                 if arg.value.starts_with('(') {
                     let (_, replacement) = is_valid_rnd(&format!("rnd{}", arg.value));
                     warn.suggest(
-                        Suggestion::from(arg, "Did you forget the `rnd`?")
+                        Fix::new(arg.location, "Did you forget the `rnd`?")
                             .replace(replacement.unwrap_or_else(|| format!("rnd{}", arg.value))),
                     )
                 } else {
@@ -101,7 +110,7 @@ impl ArgTypesLint {
         atom: &Atom<'_>,
         arg_type: ArgType,
         arg: Option<&Word<'_>>,
-    ) -> Option<Warning> {
+    ) -> Option<Diagnostic> {
         let name = if let AtomKind::Command { name, .. } = atom.kind {
             name
         } else {
@@ -110,15 +119,18 @@ impl ArgTypesLint {
         let arg = if let Some(arg) = arg {
             arg
         } else {
-            return Some(atom.error(format!("Missing arguments to {}", name.value)));
+            return Some(Diagnostic::error(
+                atom.location,
+                format_args!("Missing arguments to {}", name.value),
+            ));
         };
 
-        fn unexpected_number_warning(arg: &Word<'_>) -> Option<Warning> {
+        fn unexpected_number_warning(arg: &Word<'_>) -> Option<Diagnostic> {
             arg.value.parse::<i32>().ok().map(|_| {
-                arg.error(format!(
-                    "Expected a const name, but got a number {}",
-                    arg.value
-                ))
+                Diagnostic::error(
+                    arg.location,
+                    format_args!("Expected a const name, but got a number {}", arg.value),
+                )
             })
         }
 
@@ -127,9 +139,9 @@ impl ArgTypesLint {
             ArgType::Word => {
                 unexpected_number_warning(arg)
                     .or_else(|| if arg.value.chars().any(char::is_lowercase) {
-                        Some(arg.warning("Using lowercase for constant names may cause confusion with attribute or command names")
-                             .suggest(Suggestion::from(arg, "Use uppercase for constants")
-                                      .replace(arg.value.to_uppercase())))
+                        Some(Diagnostic::warning(arg.location, "Using lowercase for constant names may cause confusion with attribute or command names")
+                             .suggest(Fix::new(arg.location, "Use uppercase for constants")
+                                      .replace(arg.value.cow_to_uppercase())))
                     } else {
                         None
                     })
@@ -145,7 +157,7 @@ impl ArgTypesLint {
     }
 
     /// Check the arguments to an `assign_to` attribute.
-    fn check_assign_to(&self, args: &[Word<'_>], warnings: &mut Vec<Warning>) {
+    fn check_assign_to(&self, args: &[Word<'_>], warnings: &mut Vec<Diagnostic>) {
         enum AssignTarget {
             Color,
             Player,
@@ -157,9 +169,10 @@ impl ArgTypesLint {
                 "AT_PLAYER" => Some(AssignTarget::Player),
                 "AT_TEAM" => Some(AssignTarget::Team),
                 _ => {
-                    warnings.push(
-                        arg.warning("`assign_to` Target must be AT_COLOR, AT_PLAYER, AT_TEAM"),
-                    );
+                    warnings.push(Diagnostic::warning(
+                        arg.location,
+                        "`assign_to` Target must be AT_COLOR, AT_PLAYER, AT_TEAM",
+                    ));
                     None
                 }
             }
@@ -171,17 +184,18 @@ impl ArgTypesLint {
             match target {
                 Some(AssignTarget::Color) | Some(AssignTarget::Player) => {
                     if number < 0 || number > 8 {
-                        warnings.push(args[1].warning(
+                        warnings.push(Diagnostic::warning(
+                            args[1].location,
                             "`assign_to` Number must be 1-8 when targeting AT_COLOR or AT_PLAYER",
                         ));
                     }
                 }
                 Some(AssignTarget::Team) => {
                     if (number < -4 || number > 4) && number != -10 {
-                        warnings.push(
-                            args[1]
-                                .warning("`assign_to` Number must be 1-4 when targeting AT_TEAM"),
-                        );
+                        warnings.push(Diagnostic::warning(
+                            args[1].location,
+                            "`assign_to` Number must be 1-4 when targeting AT_TEAM",
+                        ));
                     }
                 }
                 _ => (),
@@ -192,12 +206,13 @@ impl ArgTypesLint {
             match target {
                 Some(AssignTarget::Team) => {
                     if mode != -1 && mode != 0 {
-                        warnings.push(args[2].warning("`assign_to` Mode must be 0 (random selection) or -1 (ordered selection) when targeting AT_TEAM"));
+                        warnings.push(Diagnostic::warning(args[2].location,"`assign_to` Mode must be 0 (random selection) or -1 (ordered selection) when targeting AT_TEAM"));
                     }
                 }
                 Some(_) => {
                     if mode != 0 {
-                        warnings.push(args[2].warning(
+                        warnings.push(Diagnostic::warning(
+                            args[2].location,
                             "`assign_to` Mode should be 0 when targeting AT_COLOR or AT_PLAYER",
                         ));
                     }
@@ -209,7 +224,10 @@ impl ArgTypesLint {
         if let Some(Ok(flags)) = args.get(3).map(|f| f.value.parse::<i32>()) {
             let mask = 1 | 2;
             if (flags & mask) != flags {
-                warnings.push(args[3].warning("`assign_to` Flags must only combine flags 1 and 2"));
+                warnings.push(Diagnostic::warning(
+                    args[3].location,
+                    "`assign_to` Flags must only combine flags 1 and 2",
+                ));
             }
         }
     }
@@ -219,7 +237,7 @@ impl Lint for ArgTypesLint {
     fn name(&self) -> &'static str {
         "arg-types"
     }
-    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
+    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Diagnostic> {
         if let AtomKind::Command { name, arguments } = &atom.kind {
             let token_type = &TOKENS[name.value.cow_to_ascii_lowercase().as_ref()];
             let mut warnings = vec![];
@@ -239,44 +257,52 @@ impl Lint for ArgTypesLint {
                     let arg = arguments[0];
                     if let Ok(n) = arg.value.parse::<i32>() {
                         if n < 0 || n > 7 {
-                            warnings.push(arg.warning("Elevation value out of range (0 or 1-7)"));
+                            warnings.push(Diagnostic::warning(
+                                arg.location,
+                                "Elevation value out of range (0 or 1-7)",
+                            ));
                         }
                     }
                 }
                 "land_position" => {
                     if let Some(Ok(first)) = arguments.get(0).map(|f| f.value.parse::<i32>()) {
                         if first < 0 || first > 100 {
-                            warnings
-                                .push(arguments[0].warning("Land position out of range (0-100)"));
+                            warnings.push(Diagnostic::warning(
+                                arguments[0].location,
+                                "Land position out of range (0-100)",
+                            ));
                         }
                     }
                     if let Some(Ok(second)) = arguments.get(1).map(|f| f.value.parse::<i32>()) {
                         if second < 0 || second > 99 {
-                            warnings
-                                .push(arguments[1].warning("Land position out of range (0-99)"));
+                            warnings.push(Diagnostic::warning(
+                                arguments[1].location,
+                                "Land position out of range (0-99)",
+                            ));
                         }
                     }
                 }
                 "zone" if !arguments.is_empty() => {
                     if arguments[0].value == "99" {
-                        warnings.push(arguments[0].warning("`zone 99` crashes the game"));
+                        warnings.push(Diagnostic::warning(
+                            arguments[0].location,
+                            "`zone 99` crashes the game",
+                        ));
                     }
                 }
                 "assign_to" => self.check_assign_to(&arguments, &mut warnings),
                 "actor_area" if !arguments.is_empty() => {
                     if let Ok(n) = arguments[0].value.parse::<i32>() {
-                        self.actor_areas.push((n, arguments[0].span));
+                        self.actor_areas.push((n, arguments[0].location));
                     }
                 }
                 "actor_area_to_place_in" | "avoid_actor_area" if !arguments.is_empty() => {
                     if let Ok(to_place_in) = arguments[0].value.parse::<i32>() {
                         if self.actor_areas.iter().all(|(n, _)| *n != to_place_in) {
-                            warnings.push(
-                                arguments[0].warning(format!(
-                                    "Actor area {} is never defined",
-                                    to_place_in
-                                )),
-                            );
+                            warnings.push(Diagnostic::warning(
+                                arguments[0].location,
+                                format_args!("Actor area {} is never defined", to_place_in),
+                            ));
                         }
                     }
                 }
@@ -327,13 +353,8 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diagnostic::ByteIndex;
     use crate::{Compatibility, RMSCheck, RMSFile, Severity};
-    use codespan::{ColumnIndex, LineIndex, Location};
-    use std::ops::Range;
-
-    fn to_span(range: Range<usize>) -> Span {
-        Span::new(range.start as u32, range.end as u32)
-    }
 
     #[test]
     fn is_numeric_test() {
@@ -370,46 +391,42 @@ mod tests {
         let third = warnings.next().unwrap();
         let fourth = warnings.next().unwrap();
         assert!(warnings.next().is_none());
-        assert_eq!(first.diagnostic().severity, Severity::Error);
-        assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(first.severity(), Severity::Error);
+        assert_eq!(first.code(), Some("arg-types"));
         assert_eq!(first.message(), "Expected a const name, but got a number 0");
-        let first_span = to_span(first.diagnostic().labels[0].range.clone());
         assert_eq!(
-            result.resolve_position(file, first_span.start()).unwrap(),
-            Location::new(LineIndex(1), ColumnIndex(17))
+            first.location(),
+            SourceLocation::new(file, ByteIndex::from(63)..ByteIndex::from(64))
         );
 
-        assert_eq!(second.diagnostic().severity, Severity::Error);
-        assert_eq!(second.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(second.severity(), Severity::Error);
+        assert_eq!(second.code(), Some("arg-types"));
         assert_eq!(
             second.message(),
             "Expected a const name, but got a number 10"
         );
-        let second_span = to_span(second.diagnostic().labels[0].range.clone());
         assert_eq!(
-            result.resolve_position(file, second_span.start()).unwrap(),
-            Location::new(LineIndex(3), ColumnIndex(13))
+            second.location(),
+            SourceLocation::new(file, ByteIndex::from(106)..ByteIndex::from(108))
         );
 
-        assert_eq!(third.diagnostic().severity, Severity::Error);
-        assert_eq!(third.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(third.severity(), Severity::Error);
+        assert_eq!(third.code(), Some("arg-types"));
         assert_eq!(
             third.message(),
             "Expected a number argument to number_of_objects, but got SOMEVAL"
         );
-        let third_span = to_span(third.diagnostic().labels[0].range.clone());
         assert_eq!(
-            result.resolve_position(file, third_span.start()).unwrap(),
-            Location::new(LineIndex(7), ColumnIndex(18))
+            third.location(),
+            SourceLocation::new(file, ByteIndex::from(169)..ByteIndex::from(176))
         );
 
-        assert_eq!(fourth.diagnostic().severity, Severity::Error);
-        assert_eq!(fourth.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(fourth.severity(), Severity::Error);
+        assert_eq!(fourth.code(), Some("arg-types"));
         assert_eq!(fourth.message(), "Missing arguments to create_object");
-        let fourth_span = to_span(fourth.diagnostic().labels[0].range.clone());
         assert_eq!(
-            result.resolve_position(file, fourth_span.start()).unwrap(),
-            Location::new(LineIndex(10), ColumnIndex(0))
+            fourth.location(),
+            SourceLocation::new(file, ByteIndex::from(205)..ByteIndex::from(218))
         );
     }
 
@@ -425,13 +442,12 @@ mod tests {
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
         assert!(warnings.next().is_none());
-        assert_eq!(first.diagnostic().severity, Severity::Warning);
-        assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(first.severity(), Severity::Warning);
+        assert_eq!(first.code(), Some("arg-types"));
         assert_eq!(first.message(), "Elevation value out of range (0 or 1-7)");
-        let first_span = to_span(first.diagnostic().labels[0].range.clone());
         assert_eq!(
-            result.resolve_position(file, first_span.start()).unwrap(),
-            Location::new(LineIndex(0), ColumnIndex(29))
+            first.location(),
+            SourceLocation::new(file, ByteIndex::from(29)..ByteIndex::from(30))
         );
     }
 
@@ -450,16 +466,15 @@ mod tests {
         );
         let first = warnings.next().unwrap();
         assert!(warnings.next().is_none());
-        assert_eq!(first.diagnostic().severity, Severity::Warning);
-        assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(first.severity(), Severity::Warning);
+        assert_eq!(first.code(), Some("arg-types"));
         assert_eq!(
             first.message(),
             "`assign_to` Target must be AT_COLOR, AT_PLAYER, AT_TEAM"
         );
-        let first_span = to_span(first.diagnostic().labels[0].range.clone());
         assert_eq!(
-            result.resolve_position(file, first_span.start()).unwrap(),
-            Location::new(LineIndex(0), ColumnIndex(24))
+            first.location(),
+            SourceLocation::new(file, ByteIndex::from(24)..ByteIndex::from(25))
         );
 
         let file = RMSFile::from_string(filename, "create_land { assign_to AT_TEAM 0 0 0 }");
@@ -476,19 +491,19 @@ mod tests {
             .check(file);
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
-        assert_eq!(first.diagnostic().severity, Severity::Warning);
-        assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(first.severity(), Severity::Warning);
+        assert_eq!(first.code(), Some("arg-types"));
         assert_eq!(
             first.message(),
             "`assign_to` Number must be 1-4 when targeting AT_TEAM"
         );
         let second = warnings.next().unwrap();
-        assert_eq!(second.diagnostic().severity, Severity::Warning);
-        assert_eq!(second.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(second.severity(), Severity::Warning);
+        assert_eq!(second.code(), Some("arg-types"));
         assert_eq!(second.message(), "`assign_to` Mode must be 0 (random selection) or -1 (ordered selection) when targeting AT_TEAM");
         let third = warnings.next().unwrap();
-        assert_eq!(third.diagnostic().severity, Severity::Warning);
-        assert_eq!(third.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(third.severity(), Severity::Warning);
+        assert_eq!(third.code(), Some("arg-types"));
         assert_eq!(
             third.message(),
             "`assign_to` Flags must only combine flags 1 and 2"
@@ -525,12 +540,12 @@ mod tests {
         let mut warnings = result.iter();
 
         let first = warnings.next().unwrap();
-        assert_eq!(first.diagnostic().severity, Severity::Warning);
-        assert_eq!(first.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(first.severity(), Severity::Warning);
+        assert_eq!(first.code(), Some("arg-types"));
         assert_eq!(first.message(), "Actor area 17 is never defined");
         let second = warnings.next().unwrap();
-        assert_eq!(second.diagnostic().severity, Severity::Warning);
-        assert_eq!(second.diagnostic().code, Some("arg-types".to_string()));
+        assert_eq!(second.severity(), Severity::Warning);
+        assert_eq!(second.code(), Some("arg-types"));
         assert_eq!(second.message(), "Actor area 18 is never defined");
         assert!(warnings.next().is_none());
     }

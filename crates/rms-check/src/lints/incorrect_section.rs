@@ -1,4 +1,5 @@
-use crate::{Atom, AtomKind, Lint, ParseState, TokenContext, Warning, TOKENS};
+use crate::diagnostic::{Diagnostic, Label};
+use crate::{Atom, AtomKind, Lint, ParseState, TokenContext, TOKENS};
 use cow_utils::CowUtils;
 
 #[derive(Default)]
@@ -15,7 +16,7 @@ impl Lint for IncorrectSectionLint {
         "incorrect-section"
     }
 
-    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
+    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Diagnostic> {
         if let AtomKind::Command { name, .. } = atom.kind {
             let token_type = &TOKENS[name.value.cow_to_ascii_lowercase().as_ref()];
             if let TokenContext::Command(Some(expected_section)) = token_type.context() {
@@ -26,20 +27,21 @@ impl Lint for IncorrectSectionLint {
                             kind => unreachable!("Expected AtomKind::Section, got {:?}", kind),
                         };
                         if section_name.value != *expected_section {
-                            return vec![atom
-                                .error(format!(
+                            return vec![Diagnostic::error(
+                                atom.location,
+                                format_args!(
                                     "Command is invalid in section {}, it can only appear in {}",
                                     section_name.value, expected_section
-                                ))
-                                .note_at(
-                                    current_section.file,
-                                    current_section.span,
-                                    "Section started here",
-                                )];
+                                ),
+                            )
+                            .add_label(Label::new(
+                                current_section.location,
+                                "Section started here",
+                            ))];
                         }
                     }
                     None => {
-                        return vec![atom.error(format!("Command can only appear in section {}, but no section has been started.", expected_section))];
+                        return vec![Diagnostic::error(atom.location, format_args!("Command can only appear in section {}, but no section has been started.", expected_section))];
                     }
                 }
             }
