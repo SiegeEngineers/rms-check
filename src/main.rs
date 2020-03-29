@@ -96,9 +96,6 @@ enum CliCommand {
         /// Don't write the results.
         #[structopt(long = "dry-run")]
         dry_run: bool,
-        /// Run unsafe autofixes. These may break your map!
-        #[structopt(long = "unsafe")]
-        fix_unsafe: bool,
         /// The file to check.
         file: PathBuf,
         #[structopt(flatten)]
@@ -192,14 +189,12 @@ fn main() -> Result<()> {
         }
         Some(CliCommand::Fix {
             dry_run,
-            fix_unsafe,
             file,
             compat_flags,
         }) => cli_fix(CheckArgs {
             compatibility: compat_flags.to_compatibility(),
             file,
             dry_run,
-            fix_unsafe,
         }),
         Some(CliCommand::Format {
             file,
