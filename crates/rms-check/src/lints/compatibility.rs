@@ -112,7 +112,7 @@ mod tests {
         let file = RMSFile::from_path("./tests/rms/compatibility.rms").unwrap();
         let result = RMSCheck::new()
             .with_lint(Box::new(CompatibilityLint::new()))
-            .check(file);
+            .check(&file);
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();

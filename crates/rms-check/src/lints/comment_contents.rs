@@ -107,7 +107,7 @@ mod tests {
         let file = RMSFile::from_path("./tests/rms/comment-contents.rms").unwrap();
         let result = RMSCheck::new()
             .with_lint(Box::new(CommentContentsLint::new()))
-            .check(file);
+            .check(&file);
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();

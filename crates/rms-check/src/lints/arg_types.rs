@@ -382,8 +382,8 @@ mod tests {
         let file = RMSFile::from_path(filename).unwrap();
         let result = RMSCheck::new()
             .with_lint(Box::new(ArgTypesLint::new()))
-            .check(file);
-        let file = result.file_id(filename).unwrap();
+            .check(&file);
+        let file = file.file_id();
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
@@ -436,8 +436,8 @@ mod tests {
         let file = RMSFile::from_string(filename, "create_land { base_elevation 8 }");
         let result = RMSCheck::new()
             .with_lint(Box::new(ArgTypesLint::new()))
-            .check(file);
-        let file = result.file_id(filename).unwrap();
+            .check(&file);
+        let file = file.file_id();
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
@@ -457,8 +457,8 @@ mod tests {
         let file = RMSFile::from_string(filename, "create_land { assign_to X 0 0 0 }");
         let result = RMSCheck::new()
             .with_lint(Box::new(ArgTypesLint::new()))
-            .check(file);
-        let file = result.file_id(filename).unwrap();
+            .check(&file);
+        let file = file.file_id();
         let mut warnings = result.iter();
         assert_eq!(
             warnings.next().unwrap().message(),
@@ -481,14 +481,14 @@ mod tests {
         let result = RMSCheck::new()
             .compatibility(Compatibility::WololoKingdoms)
             .with_lint(Box::new(ArgTypesLint::new()))
-            .check(file);
+            .check(&file);
         assert_eq!(result.iter().count(), 0);
 
         let file = RMSFile::from_string(filename, "create_land { assign_to AT_TEAM 7 -2 4 }");
         let result = RMSCheck::new()
             .compatibility(Compatibility::WololoKingdoms)
             .with_lint(Box::new(ArgTypesLint::new()))
-            .check(file);
+            .check(&file);
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
         assert_eq!(first.severity(), Severity::Warning);
@@ -536,7 +536,7 @@ mod tests {
         );
         let result = RMSCheck::new()
             .with_lint(Box::new(ArgTypesLint::new()))
-            .check(file);
+            .check(&file);
         let mut warnings = result.iter();
 
         let first = warnings.next().unwrap();

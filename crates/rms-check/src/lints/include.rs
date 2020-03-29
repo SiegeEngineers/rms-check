@@ -48,8 +48,8 @@ mod tests {
         let file = RMSFile::from_path(filename).unwrap();
         let result = RMSCheck::new()
             .with_lint(Box::new(IncludeLint::new()))
-            .check(file);
-        let file = result.file_id(filename).unwrap();
+            .check(&file);
+        let file = file.file_id();
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
