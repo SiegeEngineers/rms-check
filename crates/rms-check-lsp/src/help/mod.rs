@@ -1,11 +1,9 @@
 mod en;
 
-use codespan::{ByteIndex, FileId, Files};
 use lsp_types::{
     Documentation, ParameterInformation, ParameterLabel, SignatureHelp, SignatureInformation,
 };
-use rms_check::{ArgType, AtomKind, Parser, TOKENS};
-use std::borrow::Cow;
+use rms_check::{ArgType, AtomKind, ByteIndex, Parser, RMSFile, TOKENS};
 
 /// Helper struct to create SignatureInformation structures.
 #[derive(Debug, Clone)]
@@ -80,12 +78,8 @@ fn get_signature(command_name: &str) -> Option<&SignatureInformation> {
     en::SIGNATURES.get(command_name)
 }
 
-pub fn find_signature_help(
-    files: &Files<Cow<'_, str>>,
-    file_id: FileId,
-    position: ByteIndex,
-) -> Option<SignatureHelp> {
-    let parser = Parser::new(file_id, files.source(file_id));
+pub fn find_signature_help(file: &RMSFile<'_>, position: ByteIndex) -> Option<SignatureHelp> {
+    let parser = Parser::new(file.file_id(), file.main_source());
     for (atom, _) in parser {
         let (name, args) = match &atom.kind {
             // Turn args from a Vec<Word> into a Vec<&Word>
@@ -103,11 +97,11 @@ pub fn find_signature_help(
             } => (head, vec![name, value]),
             _ => continue,
         };
-        let span = atom.span();
-        if span.start() <= position && span.end() >= position {
+        let range = atom.location.range();
+        if range.contains(&position) {
             let active_parameter = args
                 .iter()
-                .position(|word| word.start() <= position && word.end() >= position)
+                .position(|word| word.location.range().contains(&position))
                 .map(|index| index as i64);
             return get_signature(name.value).map(|sig| SignatureHelp {
                 signatures: vec![sig.clone()],

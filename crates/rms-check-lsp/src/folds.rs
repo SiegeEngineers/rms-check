@@ -1,35 +1,31 @@
-use codespan::{ByteIndex, ByteOffset, FileId, Files, Location};
 use lsp_types::{FoldingRange, FoldingRangeKind};
-use rms_check::{AtomKind, Parser};
-use std::borrow::Cow;
+use rms_check::{AtomKind, ByteIndex, Parser, RMSFile};
 use std::ops::{Bound, RangeBounds};
 
 #[derive(Debug)]
 pub struct FoldingRanges<'a> {
-    file_id: FileId,
-    files: &'a Files<Cow<'a, str>>,
-    inner: Parser<'a>,
+    file: &'a RMSFile<'a>,
+    parser: Parser<'a>,
     waiting_folds: Vec<AtomKind<'a>>,
     queued: Vec<FoldingRange>,
 }
 
 impl<'a> FoldingRanges<'a> {
-    pub fn new(files: &'a Files<Cow<'a, str>>, file_id: FileId) -> Self {
+    pub fn new(file: &'a RMSFile<'a>) -> Self {
+        let parser = Parser::new(file.file_id(), file.main_source());
         Self {
-            file_id,
-            files,
-            inner: Parser::new(file_id, files.source(file_id).as_ref()),
+            file,
+            parser,
             waiting_folds: vec![],
             queued: vec![],
         }
     }
 
     fn line(&self, index: ByteIndex) -> u64 {
-        self.files
-            .location(self.file_id, index)
+        self.file
+            .get_location(self.file.file_id(), index)
             .unwrap()
-            .line
-            .to_usize() as u64
+            .0
     }
 
     fn push(&mut self, range: FoldingRange) {
@@ -61,28 +57,18 @@ impl<'a> FoldingRanges<'a> {
     fn fold(&mut self, range: impl RangeBounds<ByteIndex>, kind: Option<FoldingRangeKind>) {
         let (start_line, start_character) = match range.start_bound() {
             Bound::Unbounded => (0u64, 0u64),
-            Bound::Included(index) => {
-                let Location { line, column } = self.files.location(self.file_id, *index).unwrap();
-                (line.to_usize() as u64, column.to_usize() as u64)
-            }
-            Bound::Excluded(index) => {
-                let Location { line, column } = self
-                    .files
-                    .location(self.file_id, *index + ByteOffset(1))
-                    .unwrap();
-                (line.to_usize() as u64, column.to_usize() as u64)
-            }
+            Bound::Included(index) => self.file.get_location(self.file.file_id(), *index).unwrap(),
+            Bound::Excluded(index) => self
+                .file
+                .get_location(self.file.file_id(), *index + 1)
+                .unwrap(),
         };
         let (end_line, end_character) = match range.end_bound() {
             Bound::Unbounded => (0u64, 0u64),
-            Bound::Included(index) => {
-                let Location { line, column } = self.files.location(self.file_id, *index).unwrap();
-                (line.to_usize() as u64, column.to_usize() as u64)
-            }
+            Bound::Included(index) => self.file.get_location(self.file.file_id(), *index).unwrap(),
             Bound::Excluded(index) => self
-                .files
-                .location(self.file_id, *index - ByteOffset(1))
-                .map(|Location { line, column }| (line.to_usize() as u64, column.to_usize() as u64))
+                .file
+                .get_location(self.file.file_id(), *index - 1)
                 .unwrap_or((0, 0)),
         };
         self.push(FoldingRange {
@@ -102,7 +88,7 @@ impl Iterator for FoldingRanges<'_> {
             return Some(self.queued.remove(0));
         }
 
-        let atom = match self.inner.next() {
+        let atom = match self.parser.next() {
             Some((atom, _)) => atom,
             _ => return None,
         };
@@ -113,14 +99,14 @@ impl Iterator for FoldingRanges<'_> {
                 ..
             } => {
                 self.fold_lines(
-                    open.span.start()..=close.span.start(),
+                    open.location.start()..=close.location.start(),
                     Some(FoldingRangeKind::Comment),
                 );
             }
             AtomKind::OpenBlock { .. } => self.waiting_folds.push(atom.kind),
             AtomKind::CloseBlock { head: end } => {
                 if let Some(AtomKind::OpenBlock { head: start }) = self.waiting_folds.pop() {
-                    self.fold(start.span.end()..end.span.start(), None);
+                    self.fold(start.location.end()..end.location.start(), None);
                 }
             }
             AtomKind::If { .. } => self.waiting_folds.push(atom.kind),
@@ -129,14 +115,14 @@ impl Iterator for FoldingRanges<'_> {
                     Some(AtomKind::If { head, .. }) | Some(AtomKind::ElseIf { head, .. }) => head,
                     _ => return self.next(),
                 };
-                self.fold_lines(start.span.start()..end.span.start(), None);
+                self.fold_lines(start.location.start()..end.location.start(), None);
                 self.waiting_folds.push(atom.kind);
             }
             AtomKind::EndIf { head: end } => match self.waiting_folds.pop() {
                 Some(AtomKind::If { head: start, .. })
                 | Some(AtomKind::ElseIf { head: start, .. })
                 | Some(AtomKind::Else { head: start }) => {
-                    self.fold_lines(start.span.start()..=end.span.start(), None);
+                    self.fold_lines(start.location.start()..=end.location.start(), None);
                 }
                 _ => (),
             },
@@ -144,8 +130,8 @@ impl Iterator for FoldingRanges<'_> {
             AtomKind::PercentChance { head: end, .. } => {
                 if let Some(AtomKind::PercentChance { head: start, .. }) = self.waiting_folds.last()
                 {
-                    let start = start.span.start();
-                    self.fold_lines(start..end.span.start(), None);
+                    let start = start.location.start();
+                    self.fold_lines(start..end.location.start(), None);
                     self.waiting_folds.pop();
                 }
                 self.waiting_folds.push(atom.kind);
@@ -153,13 +139,13 @@ impl Iterator for FoldingRanges<'_> {
             AtomKind::EndRandom { head: end } => {
                 if let Some(AtomKind::PercentChance { head: start, .. }) = self.waiting_folds.last()
                 {
-                    let start = start.span.start();
-                    self.fold_lines(start..end.span.start(), None);
+                    let start = start.location.start();
+                    self.fold_lines(start..end.location.start(), None);
                     self.waiting_folds.pop();
                 }
                 if let Some(AtomKind::StartRandom { head: start }) = self.waiting_folds.last() {
-                    let start = start.span.start();
-                    self.fold_lines(start..=end.span.start(), None);
+                    let start = start.location.start();
+                    self.fold_lines(start..=end.location.start(), None);
                     self.waiting_folds.pop();
                 }
             }

@@ -22,7 +22,7 @@ impl FileId {
 }
 
 /// Byte index in a file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash)]
 pub struct ByteIndex(usize);
 
 impl From<usize> for ByteIndex {
@@ -126,6 +126,18 @@ impl Fix {
             ..self
         }
     }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub fn location(&self) -> SourceLocation {
+        self.location
+    }
+
+    pub fn replacement(&self) -> Option<&str> {
+        self.replacement.as_ref().map(|string| string.as_str())
+    }
 }
 
 /// A label describing an underlined region of code associated with a diagnostic.
@@ -141,6 +153,14 @@ impl Label {
             location,
             message: message.to_string(),
         }
+    }
+
+    pub fn location(&self) -> SourceLocation {
+        self.location
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
     }
 }
 
@@ -219,5 +239,17 @@ impl Diagnostic {
 
     pub fn location(&self) -> SourceLocation {
         self.label.location
+    }
+
+    pub fn suggestions(&self) -> impl Iterator<Item = &Fix> {
+        self.suggestions.iter()
+    }
+
+    pub fn fixes(&self) -> impl Iterator<Item = &Fix> {
+        self.fixes.iter()
+    }
+
+    pub fn labels(&self) -> impl Iterator<Item = &Label> {
+        self.labels.iter()
     }
 }

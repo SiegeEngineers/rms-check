@@ -25,6 +25,7 @@ pub use crate::state::{Compatibility, Nesting, ParseState};
 pub use crate::tokens::{ArgType, TokenContext, TokenType, TOKENS};
 pub use crate::wordize::Word;
 use encoding_rs::Encoding;
+use itertools::Itertools;
 use std::{borrow::Cow, fs::File, io, path::Path};
 use zip::ZipArchive;
 
@@ -44,11 +45,59 @@ fn to_chardet_string(bytes: Vec<u8>) -> String {
 struct FileData<'source> {
     name: String,
     source: Cow<'source, str>,
+    line_indices: Vec<ByteIndex>,
 }
 
 impl<'source> FileData<'source> {
     fn new(name: String, source: Cow<'source, str>) -> Self {
-        Self { name, source }
+        let line_indices = std::iter::once(ByteIndex::from(0))
+            .chain(
+                source
+                    .match_indices("\n")
+                    .map(|(index, _nl)| ByteIndex::from(index + 1)),
+            )
+            .collect();
+        Self {
+            name,
+            source,
+            line_indices,
+        }
+    }
+
+    /// Get the ByteIndex for a line/column pair. Returns None if the line or column is out of
+    /// range.
+    fn get_byte_index(&self, line: u64, column: u64) -> Option<ByteIndex> {
+        let &start = self.line_indices.get(line as usize)?;
+        if let Some(&end) = self.line_indices.get(line as usize + 1) {
+            let line_len = usize::from(end) - usize::from(start);
+            if column as usize > line_len {
+                return None;
+            }
+        }
+
+        let index = start + column as isize;
+        if usize::from(index) < self.source.len() {
+            Some(index)
+        } else {
+            None
+        }
+    }
+
+    /// Get the line/column location of a byte index.
+    fn get_location(&self, index: ByteIndex) -> Option<(u64, u64)> {
+        self.line_indices
+            .iter()
+            .map(|start| usize::from(*start))
+            .chain(std::iter::once(self.source.len()))
+            .tuple_windows()
+            .enumerate()
+            .find_map(|(line, (start, end))| {
+                if (start..end).contains(&usize::from(index)) {
+                    Some((line as u64, (usize::from(index) - start) as u64))
+                } else {
+                    None
+                }
+            })
     }
 }
 
@@ -173,31 +222,37 @@ impl<'source> RMSFile<'source> {
         }
     }
 
-    fn source(&self, file: FileId) -> &str {
-        self.files[file.to_usize()].source.as_ref()
-    }
-
     /// Get the [`FileId`] of the main script in this map.
     ///
     /// [`FileId`]: TODO
-    fn file_id(&self) -> FileId {
+    pub fn file_id(&self) -> FileId {
         FileId::new(0)
     }
 
     /// Get the source code of the main script in this map.
-    fn main_source(&self) -> &str {
-        self.source(FileId::new(0))
+    pub fn main_source(&self) -> &str {
+        self.source(self.file_id())
+    }
+
+    /// Get the source code of a file.
+    pub fn source(&self, file: FileId) -> &str {
+        self.files[file.to_usize()].source.as_ref()
+    }
+
+    /// Get the name of a file.
+    pub fn name(&self, file: FileId) -> &str {
+        &self.files[file.to_usize()].name
     }
 
     /// Get the codespan FileId for a file with the given name in this map (mostly for ZR@ maps).
-    fn find_file_id(&self, name: &str) -> Option<FileId> {
+    pub fn find_file_id(&self, name: &str) -> Option<FileId> {
         self.files
             .iter()
             .position(|file| file.name == name)
             .map(|index| FileId::new(index as u32))
     }
 
-    fn find_file_source<'a>(&'a self, name: &str) -> Option<&'a str> {
+    pub fn find_file_source<'a>(&'a self, name: &str) -> Option<&'a str> {
         self.files.iter().find_map(|file| {
             if file.name == name {
                 Some(file.source.as_ref())
@@ -210,29 +265,29 @@ impl<'source> RMSFile<'source> {
     fn is_zip_rms(&self) -> bool {
         self.files[0].name.starts_with("ZR@")
     }
+
+    /// Get the ByteIndex for a line/column pair. Returns None if the line or column is out of
+    /// range.
+    pub fn get_byte_index(&self, file: FileId, line: u64, column: u64) -> Option<ByteIndex> {
+        self.files
+            .get(file.to_usize())
+            .and_then(|file| file.get_byte_index(line, column))
+    }
+
+    /// Get the line/column location of a byte index.
+    pub fn get_location(&self, file: FileId, index: ByteIndex) -> Option<(u64, u64)> {
+        self.files
+            .get(file.to_usize())
+            .and_then(|file| file.get_location(index))
+    }
 }
 
 /// The result of a lint run.
-pub struct RMSCheckResult<'source> {
+pub struct RMSCheckResult {
     diagnostics: Vec<Diagnostic>,
-    rms: RMSFile<'source>,
 }
 
-impl<'source> RMSCheckResult<'source> {
-    /// Get the codespan file ID for a given file name.
-    pub fn file_id(&self, name: &str) -> Option<FileId> {
-        self.rms.find_file_id(name)
-    }
-
-    /// Get a file's source code by the file name.
-    pub fn source(&self, name: &str) -> Option<&str> {
-        self.rms.find_file_source(name)
-    }
-
-    pub fn main_source(&self) -> &str {
-        self.rms.main_source()
-    }
-
+impl RMSCheckResult {
     /// Were there any warnings?
     pub fn has_warnings(&self) -> bool {
         !self.diagnostics.is_empty()
@@ -244,7 +299,7 @@ impl<'source> RMSCheckResult<'source> {
     }
 }
 
-impl IntoIterator for RMSCheckResult<'_> {
+impl IntoIterator for RMSCheckResult {
     type Item = Diagnostic;
     type IntoIter = std::vec::IntoIter<Self::Item>;
     /// Iterate over the diagnostics.
@@ -297,8 +352,8 @@ impl RMSCheck {
     }
 
     /// Run the lints and get the result.
-    pub fn check(self, rms: RMSFile<'_>) -> RMSCheckResult<'_> {
-        let mut checker = self.checker.build(&rms);
+    pub fn check(self, rms: &RMSFile<'_>) -> RMSCheckResult {
+        let mut checker = self.checker.build(rms);
 
         let mut diagnostics = vec![];
 
@@ -316,6 +371,6 @@ impl RMSCheck {
             }
         }
 
-        RMSCheckResult { rms, diagnostics }
+        RMSCheckResult { diagnostics }
     }
 }
