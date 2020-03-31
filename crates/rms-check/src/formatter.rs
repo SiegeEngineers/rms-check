@@ -2,7 +2,7 @@
 
 use crate::diagnostic::FileId;
 use crate::parser::{Atom, AtomKind, Parser};
-use crate::wordize::Word;
+use crate::tokenizer::Word;
 use itertools::Itertools;
 use std::iter::Peekable;
 

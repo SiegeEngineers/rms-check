@@ -2,7 +2,7 @@
 
 use crate::diagnostic::{ByteIndex, FileId, SourceLocation};
 use crate::tokens::TOKENS;
-use crate::wordize::{Tokenizer, Word};
+use crate::tokenizer::{Tokenizer, Word};
 use cow_utils::CowUtils;
 use itertools::MultiPeek;
 use std::fmt::{self, Display};
