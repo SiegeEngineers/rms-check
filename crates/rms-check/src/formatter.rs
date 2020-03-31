@@ -1,10 +1,9 @@
 //! A code formatter for AoE2 random map scripts.
 
+use crate::diagnostic::FileId;
 use crate::parser::{Atom, AtomKind, Parser};
 use crate::wordize::Word;
-use codespan::{FileId, Files};
 use itertools::Itertools;
-use std::borrow::Cow;
 use std::iter::Peekable;
 
 /// Keeps track of alignment widths for commands/attributes.
@@ -87,9 +86,10 @@ impl FormatOptions {
         }
     }
 
-    pub fn format(self, files: &Files<Cow<'_, str>>, file: FileId) -> String {
-        let script = Parser::new(file, files.source(file)).map(|(atom, _errors)| atom);
-        Formatter::new(self, files.source(file)).format(script)
+    pub fn format(self, code: &str) -> String {
+        let file_id = FileId::new(0);
+        let script = Parser::new(file_id, code).map(|(atom, _errors)| atom);
+        Formatter::new(self, code).format(script)
     }
 }
 
@@ -503,7 +503,7 @@ impl<'file> Formatter<'file> {
     ///
     /// A padding line is defined as a newline, followed by whitespace, followed by another newline.
     fn has_padding_line(&self, prev: &Atom<'_>, next: &Atom<'_>) -> bool {
-        let input = &self.source[prev.span.end().to_usize()..next.span.start().to_usize()];
+        let input = &self.source[prev.location.end().into()..next.location.start().into()];
         let empty_lines = input.lines().filter(|line| line.trim().is_empty());
         // at least 2 subsequent newlines? i.e., at least 3 lines?
         // If input ends with a newline, `.lines()` doesn't generate a final empty item, so it will
@@ -520,7 +520,7 @@ impl<'file> Formatter<'file> {
     /// If the `next` atom is a comment, and the input did not put a newline between the `prev` and
     /// `next` atoms, it should.
     fn should_comment_be_on_same_line(&self, prev: &Atom<'_>, next: &Atom<'_>) -> bool {
-        let input = &self.source[prev.span.end().to_usize()..next.span.start().to_usize()];
+        let input = &self.source[prev.location.end().into()..next.location.start().into()];
         if let AtomKind::Comment { .. } = &next.kind {
             !input.contains('\n')
         } else {
@@ -660,9 +660,7 @@ impl<'file> Formatter<'file> {
 
 /// Format an rms source string.
 pub fn format(source: &str, options: FormatOptions) -> String {
-    let mut files = Files::new();
-    let f = files.add("format.rms", Cow::Borrowed(source));
-    options.format(&files, f)
+    options.format(source)
 }
 
 #[cfg(test)]

@@ -8,25 +8,22 @@
 #![warn(missing_docs)]
 #![warn(unused)]
 
-use codespan::{ByteIndex, Files, Span};
-use codespan_lsp::range_to_byte_span;
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use lsp_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
     DiagnosticRelatedInformation, DiagnosticSeverity, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams, FoldingRange,
     FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams, InitializeResult,
-    Location, NumberOrString, PublishDiagnosticsParams, ServerCapabilities, ServerInfo,
+    Location, NumberOrString, Position, PublishDiagnosticsParams, ServerCapabilities, ServerInfo,
     SignatureHelpOptions, TextDocumentItem, TextDocumentPositionParams, TextDocumentSyncCapability,
     TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
 };
 use multisplice::Multisplice;
 use rms_check::{
-    AutoFixReplacement, Compatibility, FormatOptions, RMSCheck, RMSCheckResult, RMSFile, Severity,
-    Warning,
+    ByteIndex, Compatibility, FileId, Fix, FormatOptions, RMSCheck, RMSFile, Severity,
+    SourceLocation,
 };
 use serde_json::{self, json};
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -35,13 +32,55 @@ mod help;
 
 type RpcResult = jsonrpc_core::Result<serde_json::Value>;
 
+struct Document {
+    version: i64,
+    // Can be 'static because we'll only pass in owned data.
+    file: RMSFile<'static>,
+    diagnostics: Vec<rms_check::Diagnostic>,
+}
+
+impl Document {
+    fn new(file: RMSFile<'static>, version: i64) -> Self {
+        Self {
+            version,
+            file,
+            diagnostics: vec![],
+        }
+    }
+
+    fn to_lsp_range(&self, location: SourceLocation) -> Option<lsp_types::Range> {
+        let start = self.file.get_location(location.file(), location.start())?;
+        let end = self.file.get_location(location.file(), location.end())?;
+        Some(lsp_types::Range {
+            start: Position {
+                line: start.0,
+                character: start.1,
+            },
+            end: Position {
+                line: end.0,
+                character: end.1,
+            },
+        })
+    }
+
+    fn to_source_location(&self, file: FileId, range: lsp_types::Range) -> Option<SourceLocation> {
+        let start = self
+            .file
+            .get_byte_index(file, range.start.line, range.start.character)?;
+        let end = self
+            .file
+            .get_byte_index(file, range.end.line, range.end.character)?;
+        Some(SourceLocation::new(file, start..end))
+    }
+}
+
 /// Sync state holder, so only the outer layer has to deal with Arcs.
 struct Inner<Emit>
 where
     Emit: Fn(serde_json::Value) + Send + 'static,
 {
     emit: Emit,
-    documents: HashMap<Url, TextDocumentItem>,
+    documents: HashMap<Url, Document>,
 }
 
 impl<Emit> Inner<Emit>
@@ -49,54 +88,35 @@ where
     Emit: Fn(serde_json::Value) + Send + 'static,
 {
     /// Convert an rms-check warning to an LSP diagnostic.
-    fn make_lsp_diagnostic(&self, files: &Files<Cow<'_, str>>, warn: &Warning) -> Diagnostic {
-        let main_label = warn.main_label();
-        let span = Span::new(main_label.range.start as u32, main_label.range.end as u32);
-        let more_labels = warn.labels();
-
-        let diag = Diagnostic {
-            range: codespan_lsp::byte_span_to_range(files, main_label.file_id, span).unwrap(),
-            severity: Some(match warn.severity() {
-                Severity::Bug => DiagnosticSeverity::Error,
+    fn to_lsp_diagnostic(
+        &self,
+        doc: &Document,
+        input: &rms_check::Diagnostic,
+    ) -> lsp_types::Diagnostic {
+        Diagnostic {
+            range: doc.to_lsp_range(input.location()).unwrap(),
+            severity: Some(match input.severity() {
+                Severity::ParseError => DiagnosticSeverity::Error,
                 Severity::Error => DiagnosticSeverity::Error,
                 Severity::Warning => DiagnosticSeverity::Warning,
-                Severity::Note => DiagnosticSeverity::Information,
-                Severity::Help => DiagnosticSeverity::Hint,
+                Severity::Hint => DiagnosticSeverity::Information,
             }),
-            source: Some("rms-check".into()),
-            code: warn
-                .diagnostic()
-                .code
-                .clone()
-                .map(lsp_types::NumberOrString::String),
-            message: warn.message().into(),
+            source: Some("rms-check".to_string()),
+            code: input.code().map(str::to_string).map(NumberOrString::String),
+            message: input.message().to_string(),
             related_information: Some(
-                more_labels
-                    .iter()
+                input
+                    .labels()
                     .map(|label| DiagnosticRelatedInformation {
                         location: Location {
-                            uri: files.name(label.file_id).to_string_lossy().parse().unwrap(),
-                            range: codespan_lsp::byte_span_to_range(
-                                files,
-                                label.file_id,
-                                Span::new(label.range.start as u32, label.range.end as u32),
-                            )
-                            .unwrap(),
+                            uri: doc.file.name(label.location().file()).parse().unwrap(),
+                            range: doc.to_lsp_range(label.location()).unwrap(),
                         },
-                        message: label.message.clone(),
+                        message: label.message().to_string(),
                     })
                     .collect(),
             ),
             tags: None,
-        };
-
-        Diagnostic {
-            code: warn
-                .diagnostic()
-                .code
-                .as_ref()
-                .map(|code| NumberOrString::String(code.to_string())),
-            ..diag
         }
     }
 
@@ -130,15 +150,21 @@ where
 
     /// A document was opened, lint.
     fn opened(&mut self, params: DidOpenTextDocumentParams) {
-        let uri = params.text_document.uri.clone();
-        self.documents.insert(uri.clone(), params.text_document);
+        let TextDocumentItem {
+            uri, version, text, ..
+        } = params.text_document;
+        self.documents.insert(
+            uri.clone(),
+            Document::new(RMSFile::from_string(uri.clone(), text), version),
+        );
 
-        self.check_and_publish(uri);
+        self.run_checks_and_publish(uri);
     }
 
     /// A document changed, re-lint.
     fn changed(&mut self, params: DidChangeTextDocumentParams) {
-        if let Some(doc) = self.documents.get_mut(&params.text_document.uri) {
+        let uri = params.text_document.uri;
+        if let Some(doc) = self.documents.get_mut(&uri) {
             if let Some(version) = params.text_document.version {
                 if doc.version > version {
                     (self.emit)(json!({
@@ -153,24 +179,23 @@ where
                 }
             }
 
-            let mut files = Files::new();
-            let file_id = files.add(doc.uri.as_str(), Cow::Borrowed(doc.text.as_ref()));
-            let mut splicer = Multisplice::new(&doc.text);
-            for change in &params.content_changes {
-                let span = change
-                    .range
-                    .map(|r| range_to_byte_span(&files, file_id, &r).unwrap())
-                    .unwrap_or_else(|| {
-                        Span::new(
-                            ByteIndex::from(0),
-                            ByteIndex::from(doc.text.as_bytes().len() as u32),
-                        )
-                    });
-                splicer.splice(span.start().to_usize(), span.end().to_usize(), &change.text);
+            let mut splicer = Multisplice::new(doc.file.main_source());
+            for change in params.content_changes {
+                if let Some(range) = change.range {
+                    if let Some(location) = doc.to_source_location(doc.file.file_id(), range) {
+                        let start = usize::from(location.range().start);
+                        let end = usize::from(location.range().end);
+                        splicer.splice(start, end, change.text);
+                    } else {
+                        panic!("got out-of-bounds range");
+                    }
+                } else {
+                    splicer.splice_range(.., change.text);
+                }
             }
             doc.version += 1;
-            doc.text = splicer.to_string();
-            self.check_and_publish(params.text_document.uri);
+            doc.file = RMSFile::from_string(uri.as_str(), splicer.to_string());
+            self.run_checks_and_publish(uri);
         }
     }
 
@@ -182,73 +207,55 @@ where
     /// Retrieve code actions for a cursor position.
     fn code_action(&mut self, params: CodeActionParams) -> RpcResult {
         let doc = self.documents.get(&params.text_document.uri).unwrap();
-        let result = self.check(&doc);
-        let filename = doc.uri.to_string();
-        let files = result.files();
-        let file_id = result
-            .file_id(&filename)
-            .ok_or_else(|| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
-        let start = codespan_lsp::position_to_byte_index(files, file_id, &params.range.start)
-            .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
-        let end = codespan_lsp::position_to_byte_index(files, file_id, &params.range.end)
-            .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?;
+        let source_range = doc
+            .to_source_location(doc.file.file_id(), params.range)
+            .unwrap();
 
-        let warnings = result.iter().filter(|warn| {
-            let label = &warn.diagnostic().labels[0];
-            label.range.contains(&start.to_usize()) && label.range.contains(&end.to_usize())
+        let matching_diagnostics = doc.diagnostics.iter().filter(|diagnostic| {
+            let range = diagnostic.location().range();
+            range.contains(&source_range.start()) || range.contains(&source_range.end())
         });
 
-        let mut actions = vec![];
-        for warn in warnings {
-            for sugg in warn.suggestions() {
-                if !sugg.replacement().is_fixable() {
-                    continue;
-                }
-                actions.push(CodeAction {
-                    title: sugg.message().to_string(),
+        let mut code_actions = vec![];
+        for diagnostic in matching_diagnostics {
+            let to_code_action = |fix: &Fix| {
+                fix.replacement().map(|replacement| CodeAction {
+                    title: fix.message().to_string(),
                     kind: Some("quickfix".to_string()),
-                    diagnostics: Some(vec![self.make_lsp_diagnostic(result.files(), warn)]),
+                    diagnostics: Some(vec![self.to_lsp_diagnostic(&doc, diagnostic)]),
                     edit: Some(WorkspaceEdit {
                         changes: Some({
                             let mut map = HashMap::new();
-                            map.insert(
-                                doc.uri.clone(),
-                                vec![TextEdit {
-                                    range: codespan_lsp::byte_span_to_range(
-                                        files,
-                                        file_id,
-                                        sugg.span(),
-                                    )
-                                    .unwrap(),
-                                    new_text: match sugg.replacement() {
-                                        AutoFixReplacement::Safe(s) => s.clone(),
-                                        replacement => unreachable!(
-                                            "Expected AutoFixReplacement::Safe(), got {:?}",
-                                            replacement
-                                        ),
-                                    },
-                                }],
-                            );
+                            let edit = TextEdit {
+                                range: doc.to_lsp_range(fix.location()).unwrap(),
+                                new_text: replacement.to_string(),
+                            };
+                            map.insert(params.text_document.uri.clone(), vec![edit]);
                             map
                         }),
                         document_changes: None,
                     }),
                     command: None,
                     is_preferred: None,
-                });
-            }
+                })
+            };
+
+            code_actions.extend(
+                diagnostic
+                    .fixes()
+                    .chain(diagnostic.suggestions())
+                    .filter_map(to_code_action),
+            );
         }
 
-        serde_json::to_value(actions)
+        serde_json::to_value(code_actions)
             .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
     }
 
     /// Retrieve folding ranges for the document.
     fn folding_ranges(&self, params: FoldingRangeParams) -> RpcResult {
         let doc = self.documents.get(&params.text_document.uri).unwrap();
-        let mut files = Files::new();
-        let file_id = files.add(doc.uri.as_str(), Cow::Borrowed(doc.text.as_ref()));
-        let folder = folds::FoldingRanges::new(&files, file_id);
+        let folder = folds::FoldingRanges::new(&doc.file);
 
         let folds: Vec<FoldingRange> = folder.collect();
 
@@ -258,13 +265,12 @@ where
     /// Get signature help.
     fn signature_help(&self, params: TextDocumentPositionParams) -> RpcResult {
         let doc = self.documents.get(&params.text_document.uri).unwrap();
-        let mut files = Files::new();
-        let file_id = files.add(doc.uri.as_str(), Cow::Borrowed(doc.text.as_ref()));
+        let Position { line, character } = params.position;
         let help = help::find_signature_help(
-            &files,
-            file_id,
-            codespan_lsp::position_to_byte_index(&files, file_id, &params.position)
-                .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?,
+            &doc.file,
+            doc.file
+                .get_byte_index(doc.file.file_id(), line, character)
+                .unwrap(),
         );
 
         serde_json::to_value(help).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
@@ -273,16 +279,18 @@ where
     /// Format a document.
     fn format(&self, params: DocumentFormattingParams) -> RpcResult {
         let doc = self.documents.get(&params.text_document.uri).unwrap();
-        let mut files = Files::new();
-        let file_id = files.add(doc.uri.as_str(), Cow::Borrowed(doc.text.as_ref()));
 
         let options = FormatOptions::default()
             .tab_size(params.options.tab_size as u32)
             .use_spaces(params.options.insert_spaces);
-        let result = options.format(&files, file_id);
+        let result = options.format(doc.file.main_source());
 
         serde_json::to_value(vec![TextEdit {
-            range: codespan_lsp::byte_span_to_range(&files, file_id, files.source_span(file_id))
+            range: doc
+                .to_lsp_range(SourceLocation::new(
+                    doc.file.file_id(),
+                    ByteIndex::from(0)..ByteIndex::from(doc.file.main_source().len()),
+                ))
                 .unwrap(),
             new_text: result,
         }])
@@ -290,27 +298,33 @@ where
     }
 
     /// Run rms-check.
-    fn check<'source>(&self, doc: &'source TextDocumentItem) -> RMSCheckResult<'source> {
-        let file = RMSFile::from_string(doc.uri.as_str(), &doc.text);
-        RMSCheck::default()
+    fn run_checks(&mut self, uri: Url) {
+        let doc = match self.documents.get_mut(&uri) {
+            Some(doc) => doc,
+            _ => return,
+        };
+
+        let result = RMSCheck::default()
             .compatibility(Compatibility::Conquerors)
-            .check(file)
+            .check(&doc.file);
+
+        doc.diagnostics = result.into_iter().collect();
     }
 
     /// Run rms-check for a file and publish the resulting diagnostics.
-    fn check_and_publish(&self, uri: Url) {
-        let mut diagnostics = vec![];
+    fn run_checks_and_publish(&mut self, uri: Url) {
+        self.run_checks(uri.clone());
+
         let doc = match self.documents.get(&uri) {
             Some(doc) => doc,
             _ => return,
         };
-        let result = self.check(&doc);
-        for warn in result.iter() {
-            let diag = self.make_lsp_diagnostic(result.files(), warn);
-            diagnostics.push(diag);
-        }
+        let diagnostics = doc
+            .diagnostics
+            .iter()
+            .map(|diagnostic| self.to_lsp_diagnostic(&doc, diagnostic));
 
-        let params = PublishDiagnosticsParams::new(doc.uri.clone(), diagnostics, Some(doc.version));
+        let params = PublishDiagnosticsParams::new(uri, diagnostics.collect(), Some(doc.version));
         (self.emit)(json!({
             "jsonrpc": "2.0",
             "method": "textDocument/publishDiagnostics",

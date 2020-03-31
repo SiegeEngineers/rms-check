@@ -1,4 +1,5 @@
-use crate::{Atom, AtomKind, Compatibility, Lint, ParseState, Warning};
+use crate::diagnostic::{Diagnostic, Fix};
+use crate::{Atom, AtomKind, Compatibility, Lint, ParseState};
 
 #[derive(Default)]
 pub struct CompatibilityLint {
@@ -33,41 +34,33 @@ impl Lint for CompatibilityLint {
         "compatibility"
     }
 
-    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
+    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Diagnostic> {
         let mut warnings = vec![];
 
         if let AtomKind::Command { name, .. } = &atom.kind {
             match name.value {
                 "effect_amount" | "effect_percent" => {
                     if !self.has_up_extension(state) {
-                        warnings.push(atom.warning("RMS Effects require UserPatch 1.5").note_at(
-                            atom.file,
-                            atom.span,
-                            "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file",
-                        ))
+                        warnings.push(Diagnostic::warning(atom.location, "RMS Effects require UserPatch 1.5")
+                                      .suggest(Fix::new(atom.location, "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file")));
                     }
                 }
                 "direct_placement" => {
                     if !self.has_up_extension(state) {
-                        warnings.push(
-                            atom.warning("Direct placement requires UserPatch 1.5")
-                                .note_at(
-                                    atom.file,
-                                    atom.span,
+                        warnings.push(Diagnostic::warning(atom.location, "Direct placement requires UserPatch 1.5")
+                                .suggest(Fix::new(atom.location,
                                     "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file",
-                                )
+                                ))
                         )
                     }
                 }
                 "nomad_resources" => {
                     if !self.has_up_available(state) {
                         warnings.push(
-                            atom.warning("Nomad resources requires UserPatch 1.4")
-                                .note_at(
-                                    atom.file,
-                                    atom.span,
+                            Diagnostic::warning(atom.location, "Nomad resources requires UserPatch 1.4")
+                                .suggest(Fix::new(atom.location,
                                     "Wrap this command in an `if UP_AVAILABLE` statement or add a /* Compatibility: UserPatch 1.4 */ comment at the top of the file",
-                                )
+                                ))
                         )
                     }
                 }
@@ -77,11 +70,9 @@ impl Lint for CompatibilityLint {
                 | "actor_area_radius" => {
                     if state.compatibility() != Compatibility::DefinitiveEdition {
                         warnings.push(
-                            atom.warning("Actor areas are only supported in the Definitive Edition")
-                                .note_at(
-                                    atom.file,
-                                    atom.span,
-                                    "Add a /* Compatibility: Definitive Edition */ comment at the top of the file",
+                            Diagnostic::warning(atom.location, "Actor areas are only supported in the Definitive Edition")
+                                .suggest(Fix::new(atom.location,
+                                    "Add a /* Compatibility: Definitive Edition */ comment at the top of the file",)
                                 )
                         )
                     }
@@ -121,13 +112,13 @@ mod tests {
         let file = RMSFile::from_path("./tests/rms/compatibility.rms").unwrap();
         let result = RMSCheck::new()
             .with_lint(Box::new(CompatibilityLint::new()))
-            .check(file);
+            .check(&file);
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
         assert!(warnings.next().is_none());
-        assert_eq!(first.diagnostic().severity, Severity::Warning);
-        assert_eq!(first.diagnostic().code, Some("compatibility".to_string()));
+        assert_eq!(first.severity(), Severity::Warning);
+        assert_eq!(first.code(), Some("compatibility"));
         assert_eq!(first.message(), "RMS Effects require UserPatch 1.5");
     }
 }

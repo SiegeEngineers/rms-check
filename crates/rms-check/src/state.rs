@@ -1,6 +1,6 @@
 //! State tracker while parsing AoE2 random map scripts.
 
-use crate::checker::Warning;
+use crate::diagnostic::{Diagnostic, Label};
 use crate::parser::{Atom, AtomKind, Parser};
 use crate::tokens::TokenType;
 use crate::RMSFile;
@@ -250,35 +250,23 @@ impl<'a> ParseState<'a> {
     }
 
     /// Update the nesting state upon reading a new Atom.
-    pub(crate) fn update_nesting(&mut self, atom: &Atom<'a>) -> Option<Warning> {
-        fn unbalanced_error(name: &str, end: &Atom<'_>, nest: Option<&Nesting<'_>>) -> Warning {
+    pub(crate) fn update_nesting(&mut self, atom: &Atom<'a>) -> Option<Diagnostic> {
+        fn unbalanced_error(name: &str, end: &Atom<'_>, nest: Option<&Nesting<'_>>) -> Diagnostic {
             let msg = format!("Unbalanced `{}`", name);
             match nest {
-                Some(Nesting::Brace(start)) => {
-                    end.error(msg)
-                        .note_at(start.file, start.span, "Matches this open brace `{`")
-                }
-                Some(Nesting::If(start)) => {
-                    end.error(msg)
-                        .note_at(start.file, start.span, "Matches this `if`")
-                }
-                Some(Nesting::ElseIf(start)) => {
-                    end.error(msg)
-                        .note_at(start.file, start.span, "Matches this `elseif`")
-                }
-                Some(Nesting::Else(start)) => {
-                    end.error(msg)
-                        .note_at(start.file, start.span, "Matches this `else`")
-                }
-                Some(Nesting::StartRandom(start)) => {
-                    end.error(msg)
-                        .note_at(start.file, start.span, "Matches this `start_random`")
-                }
-                Some(Nesting::PercentChance(start)) => {
-                    end.error(msg)
-                        .note_at(start.file, start.span, "Matches this `percent_chance`")
-                }
-                None => end.error(format!("{}–nothing is open", msg)),
+                Some(Nesting::Brace(start)) => Diagnostic::error(end.location, msg)
+                    .add_label(Label::new(start.location, "Matches this open brace `{`")),
+                Some(Nesting::If(start)) => Diagnostic::error(end.location, msg)
+                    .add_label(Label::new(start.location, "Matches this `if`")),
+                Some(Nesting::ElseIf(start)) => Diagnostic::error(end.location, msg)
+                    .add_label(Label::new(start.location, "Matches this `elseif`")),
+                Some(Nesting::Else(start)) => Diagnostic::error(end.location, msg)
+                    .add_label(Label::new(start.location, "Matches this `else`")),
+                Some(Nesting::StartRandom(start)) => Diagnostic::error(end.location, msg)
+                    .add_label(Label::new(start.location, "Matches this `start_random`")),
+                Some(Nesting::PercentChance(start)) => Diagnostic::error(end.location, msg)
+                    .add_label(Label::new(start.location, "Matches this `percent_chance`")),
+                None => Diagnostic::error(end.location, format_args!("{}–nothing is open", msg)),
             }
         }
 

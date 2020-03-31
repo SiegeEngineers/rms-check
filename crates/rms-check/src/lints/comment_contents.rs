@@ -1,11 +1,12 @@
-use crate::{
-    Atom, AtomKind, Compatibility, Lint, Nesting, ParseErrorKind, ParseState, Parser, Suggestion,
-    Warning,
-};
-use codespan::{ByteOffset, Span};
+use crate::diagnostic::{ByteIndex, Diagnostic, Fix, Label, SourceLocation};
+use crate::{Atom, AtomKind, Compatibility, Lint, Nesting, ParseErrorKind, ParseState, Parser};
+use std::ops::Range;
 
-fn offset_span(span: Span, offset: ByteOffset) -> Span {
-    Span::new(span.start() + offset, span.end() + offset)
+fn offset_range(span: Range<ByteIndex>, offset: isize) -> Range<ByteIndex> {
+    Range {
+        start: span.start + offset,
+        end: span.end + offset,
+    }
 }
 
 #[derive(Default)]
@@ -26,14 +27,14 @@ impl Lint for CommentContentsLint {
         true
     }
 
-    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
+    fn lint_atom(&mut self, state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Diagnostic> {
         if let AtomKind::Comment {
             open,
             content,
             close,
         } = &atom.kind
         {
-            let offset = ByteOffset(open.span.end().to_usize() as i64);
+            let offset = usize::from(open.end()) as isize;
 
             let (has_start_random, has_if) =
                 state
@@ -70,13 +71,12 @@ impl Lint for CommentContentsLint {
                     if may_trigger_parsing_bug
                         && (state.has_define(value.value) || state.has_const(value.value))
                     {
-                        let suggestion = Suggestion::from(
-                            &value,
+                        let suggestion = Fix::new(
+                            value.location,
                             "Add `backticks` around the name to make the parser ignore it",
                         )
-                        .replace(format!("`{}`", value.value));
-                        warnings.push(Warning::warning(value.file,
-                                                       offset_span(value.span, offset),
+                        .replace(format_args!("`{}`", value.value));
+                        warnings.push(Diagnostic::warning(SourceLocation::new(value.location.file(), offset_range(value.location.range(), offset)),
                                                       "Using constant names in comments inside `start_random` or `if` statements can be dangerous, because the game may interpret them as other tokens instead.")
                                     .suggest(suggestion));
                     }
@@ -86,8 +86,8 @@ impl Lint for CommentContentsLint {
             }
 
             if let (Some(atom), Some(close_comment)) = (&expecting_more_arguments, close) {
-                warnings.push(close_comment.warning("This close comment may be ignored because a previous command is expecting more arguments")
-                              .note_at(atom.file, offset_span(atom.span, offset), "Command started here"));
+                warnings.push(Diagnostic::warning(close_comment.location, "This close comment may be ignored because a previous command is expecting more arguments")
+                              .add_label(Label::new(SourceLocation::new(atom.location.file(), offset_range(atom.location.range(), offset)), "Command started here")));
             }
 
             return warnings;
@@ -107,30 +107,21 @@ mod tests {
         let file = RMSFile::from_path("./tests/rms/comment-contents.rms").unwrap();
         let result = RMSCheck::new()
             .with_lint(Box::new(CommentContentsLint::new()))
-            .check(file);
+            .check(&file);
 
         let mut warnings = result.iter();
         let first = warnings.next().unwrap();
         let second = warnings.next().unwrap();
         let third = warnings.next().unwrap();
         assert!(warnings.next().is_none());
-        assert_eq!(first.diagnostic().severity, Severity::Warning);
-        assert_eq!(
-            first.diagnostic().code,
-            Some("comment-contents".to_string())
-        );
+        assert_eq!(first.severity(), Severity::Warning);
+        assert_eq!(first.code(), Some("comment-contents"));
         assert_eq!(first.message(), "This close comment may be ignored because a previous command is expecting more arguments");
-        assert_eq!(second.diagnostic().severity, Severity::Warning);
-        assert_eq!(
-            second.diagnostic().code,
-            Some("comment-contents".to_string())
-        );
+        assert_eq!(second.severity(), Severity::Warning);
+        assert_eq!(second.code(), Some("comment-contents"));
         assert_eq!(second.message(), "This close comment may be ignored because a previous command is expecting more arguments");
-        assert_eq!(third.diagnostic().severity, Severity::Warning);
-        assert_eq!(
-            third.diagnostic().code,
-            Some("comment-contents".to_string())
-        );
+        assert_eq!(third.severity(), Severity::Warning);
+        assert_eq!(third.code(), Some("comment-contents"));
         assert_eq!(third.message(), "Using constant names in comments inside `start_random` or `if` statements can be dangerous, because the game may interpret them as other tokens instead.");
     }
 }

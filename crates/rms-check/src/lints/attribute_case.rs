@@ -1,4 +1,5 @@
-use crate::{Atom, AtomKind, Lint, ParseState, Suggestion, Warning, TOKENS};
+use crate::diagnostic::{Diagnostic, Fix};
+use crate::{Atom, AtomKind, Lint, ParseState, TOKENS};
 use cow_utils::CowUtils;
 use std::borrow::Cow;
 
@@ -25,14 +26,16 @@ impl Lint for AttributeCaseLint {
     fn name(&self) -> &'static str {
         "attribute-case"
     }
-    fn lint_atom(&mut self, _state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Warning> {
+    fn lint_atom(&mut self, _state: &mut ParseState<'_>, atom: &Atom<'_>) -> Vec<Diagnostic> {
         match atom.kind {
             AtomKind::Command { name, .. } => {
                 if let Some(fixed_case) = self.fix_case(name.value) {
-                    let suggestion =
-                        Suggestion::from(&name, "Convert to lowercase").replace(fixed_case);
-                    let message = format!("Unknown attribute `{}`", name.value);
-                    vec![atom.error(message).suggest(suggestion)]
+                    let diagnostic = Diagnostic::error(
+                        name.location,
+                        format_args!("Unknown attribute `{}`", name.value),
+                    )
+                    .autofix(Fix::new(name.location, "Convert to lowercase").replace(fixed_case));
+                    vec![diagnostic]
                 } else {
                     vec![]
                 }
