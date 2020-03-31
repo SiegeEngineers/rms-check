@@ -117,7 +117,7 @@
   "devDependencies": {
     "@zeit/ncc": "^0.22.0",
     "aoe2-rms": "github:mangudai/vscode",
-    "cpy-cli": "^2.0.0",
+    "cpy-cli": "^3.1.0",
     "simple-concat": "^1.0.0",
     "vsce": "^1.72.0",
     "vscode": "^1.1.34",
