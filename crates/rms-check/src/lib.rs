@@ -13,8 +13,8 @@ mod formatter;
 mod lints;
 mod parser;
 mod state;
-mod tokens;
 mod tokenizer;
+mod tokens;
 
 use crate::checker::Checker;
 pub use crate::checker::{CheckerBuilder, Lint};
@@ -22,8 +22,8 @@ pub use crate::diagnostic::{ByteIndex, Diagnostic, FileId, Fix, Severity, Source
 pub use crate::formatter::{format, FormatOptions};
 pub use crate::parser::{Atom, AtomKind, ParseErrorKind, Parser};
 pub use crate::state::{Compatibility, Nesting, ParseState};
-pub use crate::tokens::{ArgType, TokenContext, TokenType, TOKENS};
 pub use crate::tokenizer::Word;
+pub use crate::tokens::{ArgType, TokenContext, TokenType, TOKENS};
 use encoding_rs::Encoding;
 use itertools::Itertools;
 use std::{borrow::Cow, fs::File, io, path::Path};

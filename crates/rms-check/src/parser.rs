@@ -1,8 +1,8 @@
 //! AoE2 random map script parser, turning a source string into a sequence of parsed units called "atoms".
 
 use crate::diagnostic::{ByteIndex, FileId, SourceLocation};
-use crate::tokens::TOKENS;
 use crate::tokenizer::{Tokenizer, Word};
+use crate::tokens::TOKENS;
 use cow_utils::CowUtils;
 use itertools::MultiPeek;
 use std::fmt::{self, Display};
