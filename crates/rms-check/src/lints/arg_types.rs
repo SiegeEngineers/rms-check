@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(first.message(), "Expected a const name, but got a number 0");
         assert_eq!(
             first.location(),
-            SourceLocation::new(file, ByteIndex::from(63)..ByteIndex::from(64))
+            SourceLocation::new(file, ByteIndex::from(64)..ByteIndex::from(65))
         );
 
         assert_eq!(second.severity(), Severity::Error);
@@ -407,7 +407,7 @@ mod tests {
         );
         assert_eq!(
             second.location(),
-            SourceLocation::new(file, ByteIndex::from(106)..ByteIndex::from(108))
+            SourceLocation::new(file, ByteIndex::from(109)..ByteIndex::from(111))
         );
 
         assert_eq!(third.severity(), Severity::Error);
@@ -418,7 +418,7 @@ mod tests {
         );
         assert_eq!(
             third.location(),
-            SourceLocation::new(file, ByteIndex::from(169)..ByteIndex::from(176))
+            SourceLocation::new(file, ByteIndex::from(176)..ByteIndex::from(183))
         );
 
         assert_eq!(fourth.severity(), Severity::Error);
@@ -426,7 +426,7 @@ mod tests {
         assert_eq!(fourth.message(), "Missing arguments to create_object");
         assert_eq!(
             fourth.location(),
-            SourceLocation::new(file, ByteIndex::from(205)..ByteIndex::from(218))
+            SourceLocation::new(file, ByteIndex::from(215)..ByteIndex::from(228))
         );
     }
 

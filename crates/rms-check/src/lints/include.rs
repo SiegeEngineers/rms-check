@@ -73,7 +73,7 @@ mod tests {
         );
         assert_eq!(
             second.location(),
-            SourceLocation::new(file, ByteIndex::from(35)..ByteIndex::from(51))
+            SourceLocation::new(file, ByteIndex::from(37)..ByteIndex::from(53))
         );
     }
 }
