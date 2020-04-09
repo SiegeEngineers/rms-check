@@ -77,6 +77,16 @@ impl Lint for CompatibilityLint {
                         )
                     }
                 }
+                "second_object" => {
+                    if state.compatibility() != Compatibility::DefinitiveEdition {
+                        warnings.push(
+                            Diagnostic::warning(atom.location, "second_object is only supported in the Definitive Edition")
+                                .suggest(Fix::new(atom.location,
+                                    "Add a /* Compatibility: Definitive Edition */ comment at the top of the file",)
+                                )
+                        )
+                    }
+                }
                 _ => (),
             }
         };

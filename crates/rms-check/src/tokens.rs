@@ -276,6 +276,7 @@ lazy_static! {
         m.insert(token!("avoid_actor_area", create_object, [Number]));
         m.insert(token!("force_placement", create_object));
         m.insert(token!("find_closest", create_object));
+        m.insert(token!("second_object", create_object, [Token]));
 
         let connect_attribute_context = TokenContext::AnyOf(&[
             TokenContext::Attribute(Some("create_connect_all_players_land")),
