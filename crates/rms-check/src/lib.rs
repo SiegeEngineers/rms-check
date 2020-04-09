@@ -109,6 +109,8 @@ pub struct RMSFile<'source> {
     def_aoc: FileId,
     /// File ID of the HD Edition random_map.def file.
     def_hd: FileId,
+    /// File ID of the Definitive Edition random_map.def file.
+    def_de: FileId,
     /// File ID of the WololoKingdoms random_map.def file.
     def_wk: FileId,
 }
@@ -125,6 +127,11 @@ impl<'source> RMSFile<'source> {
             "random_map.def".into(),
             include_str!("def_hd.rms").into(),
         ));
+        let def_de = FileId::new(files.len() as u32);
+        files.push(FileData::new(
+            "random_map.def".into(),
+            include_str!("def_de.rms").into(),
+        ));
         let def_wk = FileId::new(files.len() as u32);
         files.push(FileData::new(
             "random_map.def".into(),
@@ -135,6 +142,7 @@ impl<'source> RMSFile<'source> {
             files,
             def_aoc,
             def_hd,
+            def_de,
             def_wk,
         }
     }
@@ -218,6 +226,7 @@ impl<'source> RMSFile<'source> {
         match compatibility {
             Compatibility::WololoKingdoms => (self.def_wk, self.source(self.def_wk)),
             Compatibility::HDEdition => (self.def_hd, self.source(self.def_hd)),
+            Compatibility::DefinitiveEdition => (self.def_de, self.source(self.def_de)),
             _ => (self.def_aoc, self.source(self.def_aoc)),
         }
     }

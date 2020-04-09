@@ -44,11 +44,17 @@ struct CliCompat {
     /// `/* Compatibility: */` comments.
     #[structopt(long = "wk")]
     wololo_kingdoms: bool,
+    /// Set the default compatibility to Definitive Edition. Scripts can override this using
+    /// `/* Compatibility: */` comments.
+    #[structopt(long = "de")]
+    definitive_edition: bool,
 }
 
 impl CliCompat {
     fn to_compatibility(&self) -> Compatibility {
-        if self.wololo_kingdoms {
+        if self.definitive_edition {
+            Compatibility::DefinitiveEdition
+        } else if self.wololo_kingdoms {
             Compatibility::WololoKingdoms
         } else if self.hd_edition {
             Compatibility::HDEdition
