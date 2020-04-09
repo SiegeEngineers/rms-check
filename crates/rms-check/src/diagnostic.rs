@@ -22,7 +22,7 @@ impl FileId {
 }
 
 /// Byte index in a file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ByteIndex(usize);
 
 impl From<usize> for ByteIndex {

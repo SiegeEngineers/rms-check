@@ -25,7 +25,6 @@ pub use crate::state::{Compatibility, Nesting, ParseState};
 pub use crate::tokenizer::Word;
 pub use crate::tokens::{ArgType, TokenContext, TokenType, TOKENS};
 use encoding_rs::Encoding;
-use itertools::Itertools;
 use std::{borrow::Cow, fs::File, io, path::Path};
 use zip::ZipArchive;
 
@@ -85,19 +84,17 @@ impl<'source> FileData<'source> {
 
     /// Get the line/column location of a byte index.
     fn get_location(&self, index: ByteIndex) -> Option<(u64, u64)> {
-        self.line_indices
-            .iter()
-            .map(|start| usize::from(*start))
-            .chain(std::iter::once(self.source.len()))
-            .tuple_windows()
-            .enumerate()
-            .find_map(|(line, (start, end))| {
-                if (start..end).contains(&usize::from(index)) {
-                    Some((line as u64, (usize::from(index) - start) as u64))
-                } else {
-                    None
-                }
-            })
+        let line = match self.line_indices.binary_search(&index) {
+            Ok(line) => Some(line),
+            Err(next_line) => Some(next_line - 1),
+        };
+
+        line.and_then(|line| {
+            let start_index = self.line_indices[line];
+            usize::from(index)
+                .checked_sub(usize::from(start_index))
+                .map(|column| (line as u64, column as u64))
+        })
     }
 }
 
