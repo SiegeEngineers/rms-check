@@ -1,8 +1,7 @@
 {
   "name": "rms-check-vscode",
-  "displayName": "AoE2 RMS Check (Beta)",
   "description": "Age of Empires 2 Random Map Script syntax highlighting and linting support.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "Renée Kooi <renee@kooi.me>",
   "activationEvents": [
     "workspaceContains:**/*.rms",
@@ -11,6 +10,7 @@
     "onCommand:rms-check.edit-zr-map",
     "onWebviewPanel:rms-check.zr-map"
   ],
+  "bugs": "https://github.com/goto-bus-stop/rms-check/issues",
   "categories": [
     "Programming Languages"
   ],
@@ -127,9 +127,11 @@
     "which": "^2.0.2",
     "yazl": "^2.5.1"
   },
+  "displayName": "AoE2 RMS Check (Beta)",
   "engines": {
     "vscode": "^1.23.0"
   },
+  "homepage": "https://github.com/goto-bus-stop/rms-check",
   "keywords": [
     "Age of Empires 2",
     "aoe2",
@@ -142,17 +144,17 @@
   "publisher": "Anda",
   "repository": {
     "type": "git",
-    "url": "https://github.com/goto-bus-stop/rms-check",
+    "url": "https://github.com/goto-bus-stop/rms-check.git",
     "directory": "vscode"
   },
   "scripts": {
-    "build-ext": "cpy node_modules/aoe2-rms/{language-configuration.json,aoe2-rms.tmLanguage} .",
     "build-client": "ncc build client/extension.js -e vscode -o dist/client",
-    "build-server-wasm": "npm run wasm-pack -- --profiling",
-    "build-server-js": "ncc build server/index.js -o dist/server",
+    "build-ext": "cpy node_modules/aoe2-rms/{language-configuration.json,aoe2-rms.tmLanguage} .",
     "build-server": "npm run build-server-wasm && npm run build-server-js",
-    "wasm-pack": "cd .. && wasm-pack build vscode/server --target nodejs",
+    "build-server-js": "ncc build server/index.js -o dist/server",
+    "build-server-wasm": "npm run wasm-pack -- --profiling",
+    "package": "npm run prepare && vsce package",
     "prepare": "npm run build-ext && npm run build-server && npm run build-client",
-    "package": "npm run prepare && vsce package"
+    "wasm-pack": "cd .. && wasm-pack build vscode/server --target nodejs"
   }
 }

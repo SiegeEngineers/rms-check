@@ -1,6 +1,6 @@
 [package]
 name = "rms-check"
-version = "0.1.0"
+version = "0.0.2"
 authors = ["Renée Kooi <renee@kooi.me>"]
 license = "GPL-3.0"
 description = "Detect common problems with AoE Random Map Scripts"
