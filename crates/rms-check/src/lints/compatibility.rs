@@ -67,6 +67,7 @@ impl Lint for CompatibilityLint {
                 "actor_area"
                 | "actor_area_to_place_in"
                 | "avoid_actor_area"
+                | "avoid_all_actor_areas"
                 | "actor_area_radius" => {
                     if state.compatibility() != Compatibility::DefinitiveEdition {
                         warnings.push(
@@ -76,6 +77,16 @@ impl Lint for CompatibilityLint {
                                 )
                         )
                     }
+                }
+                "avoid_forest_zone"
+                | "place_on_forest_zone"
+                | "avoid_cliff_zone" if state.compatibility() != Compatibility::DefinitiveEdition => {
+                    warnings.push(
+                        Diagnostic::warning(atom.location, "Forest and cliff zones are only supported in the Definitive Edition")
+                            .suggest(Fix::new(atom.location,
+                                "Add a /* Compatibility: Definitive Edition */ comment at the top of the file",)
+                            )
+                    )
                 }
                 "second_object" => {
                     if state.compatibility() != Compatibility::DefinitiveEdition {

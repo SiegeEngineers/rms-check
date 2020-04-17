@@ -270,10 +270,12 @@ lazy_static! {
         m.insert(token!("resource_delta", create_object, [Number]));
         m.insert(token!("avoid_forest_zone", create_object, [Number]));
         m.insert(token!("place_on_forest_zone", create_object, [Number]));
+        m.insert(token!("avoid_cliff_zone", create_object, [Number]));
         m.insert(token!("actor_area", create_object, [Number]));
         m.insert(token!("actor_area_radius", create_object, [Number]));
         m.insert(token!("actor_area_to_place_in", create_object, [Number]));
         m.insert(token!("avoid_actor_area", create_object, [Number]));
+        m.insert(token!("avoid_all_actor_areas", create_object));
         m.insert(token!("force_placement", create_object));
         m.insert(token!("find_closest", create_object));
         m.insert(token!("second_object", create_object, [Token]));
