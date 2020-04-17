@@ -23,7 +23,8 @@
           "aoe2-rms"
         ],
         "extensions": [
-          ".rms"
+          ".rms",
+          ".rms2"
         ],
         "configuration": "./language-configuration.json"
       }
