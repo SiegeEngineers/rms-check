@@ -119,12 +119,12 @@
     "aoe2-rms": "github:mangudai/vscode",
     "cpy-cli": "^3.1.0",
     "simple-concat": "^1.0.0",
-    "vsce": "^1.72.0",
+    "vsce": "^1.75.0",
     "vscode": "^1.1.34",
     "vscode-jsonrpc": "^5.0.1",
     "vscode-languageclient": "^6.1.3",
     "wasm-opt": "^1.1.1",
-    "which": "^2.0.1",
+    "which": "^2.0.2",
     "yazl": "^2.5.1"
   },
   "engines": {
