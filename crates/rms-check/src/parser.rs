@@ -290,6 +290,19 @@ impl<'a> Parser<'a> {
             }
         }
 
+        // Special-case some tokens that take optional arguments for backward compatibility
+        // reasons.
+        if lower_name == "circle_radius" {
+            match self.peek_arg() {
+                Some(_) => {
+                    arguments.push(self.iter.next().unwrap())
+                }
+                None => {
+                    self.iter.reset_peek();
+                },
+            }
+        }
+
         let range = match arguments.last() {
             Some(arg) => name.location.start()..arg.location.end(),
             _ => name.location.range(),
@@ -701,6 +714,22 @@ mod tests {
         } else {
             assert!(false)
         }
+    }
+
+    /// Support circle_radius being called with 1 or 2 arguments.
+    #[test]
+    fn circle_radius() {
+        let source = "
+            <PLAYER_SETUP>
+            circle_placement
+            circle_radius 20
+            circle_radius 20 5
+        ";
+        let mut kinds = Parser::new(FileId::new(0), source).map(|(atom, _)| atom.kind).collect::<Vec<_>>();
+        // new-style: 2 arguments
+        assert!(matches!(kinds.pop(), Some(AtomKind::Command { arguments, .. }) if arguments.len() == 2));
+        // old-style: 1 argument
+        assert!(matches!(kinds.pop(), Some(AtomKind::Command { arguments, .. }) if arguments.len() == 1));
     }
 
     #[test]
