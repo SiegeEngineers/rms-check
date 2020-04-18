@@ -25,12 +25,21 @@ use rms_check::{
 };
 use serde_json::{self, json};
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
 mod folds;
 mod help;
 
 type RpcResult = jsonrpc_core::Result<serde_json::Value>;
+
+fn internal_error(message: impl Display) -> jsonrpc_core::Error {
+    jsonrpc_core::Error {
+        code: ErrorCode::InternalError,
+        message: message.to_string(),
+        data: None,
+    }
+}
 
 struct Document {
     version: i64,
@@ -145,11 +154,11 @@ where
                 version: None,
             }),
         };
-        serde_json::to_value(result).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
+        serde_json::to_value(result).map_err(internal_error)
     }
 
     /// A document was opened, lint.
-    fn opened(&mut self, params: DidOpenTextDocumentParams) {
+    fn opened(&mut self, params: DidOpenTextDocumentParams) -> Result<(), jsonrpc_core::Error> {
         let TextDocumentItem {
             uri, version, text, ..
         } = params.text_document;
@@ -159,23 +168,19 @@ where
         );
 
         self.run_checks_and_publish(uri);
+        Ok(())
     }
 
     /// A document changed, re-lint.
-    fn changed(&mut self, params: DidChangeTextDocumentParams) {
+    fn changed(&mut self, params: DidChangeTextDocumentParams) -> Result<(), jsonrpc_core::Error> {
         let uri = params.text_document.uri;
         if let Some(doc) = self.documents.get_mut(&uri) {
             if let Some(version) = params.text_document.version {
                 if doc.version > version {
-                    (self.emit)(json!({
-                        "jsonrpc": "2.0",
-                        "method": "window/showMessage",
-                        "params": lsp_types::ShowMessageParams {
-                            typ: lsp_types::MessageType::Warning,
-                            message: format!("version mismatch: {} > {}", doc.version, version),
-                        },
-                    }));
-                    return;
+                    return Err(jsonrpc_core::Error::invalid_params(format!(
+                        "Error applying incremental change: version mismatch: {} > {}",
+                        doc.version, version
+                    )));
                 }
             }
 
@@ -187,7 +192,9 @@ where
                         let end = usize::from(location.range().end);
                         splicer.splice(start, end, change.text);
                     } else {
-                        panic!("got out-of-bounds range");
+                        return Err(jsonrpc_core::Error::invalid_params(
+                            "Error applying incremental change: range out of bounds",
+                        ));
                     }
                 } else {
                     splicer.splice_range(.., change.text);
@@ -197,11 +204,14 @@ where
             doc.file = RMSFile::from_string(uri.as_str(), splicer.to_string());
             self.run_checks_and_publish(uri);
         }
+
+        Ok(())
     }
 
     /// A document was closed, clean up.
-    fn closed(&mut self, params: DidCloseTextDocumentParams) {
+    fn closed(&mut self, params: DidCloseTextDocumentParams) -> Result<(), jsonrpc_core::Error> {
         self.documents.remove(&params.text_document.uri);
+        Ok(())
     }
 
     /// Retrieve code actions for a cursor position.
@@ -248,8 +258,7 @@ where
             );
         }
 
-        serde_json::to_value(code_actions)
-            .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
+        serde_json::to_value(code_actions).map_err(internal_error)
     }
 
     /// Retrieve folding ranges for the document.
@@ -259,7 +268,7 @@ where
 
         let folds: Vec<FoldingRange> = folder.collect();
 
-        serde_json::to_value(folds).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
+        serde_json::to_value(folds).map_err(internal_error)
     }
 
     /// Get signature help.
@@ -273,7 +282,7 @@ where
                 .unwrap(),
         );
 
-        serde_json::to_value(help).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
+        serde_json::to_value(help).map_err(internal_error)
     }
 
     /// Format a document.
@@ -294,7 +303,7 @@ where
                 .unwrap(),
             new_text: result,
         }])
-        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
+        .map_err(internal_error)
     }
 
     /// Run rms-check.
@@ -359,95 +368,91 @@ impl RMSCheckLSP {
 
     /// Install JSON-RPC methods and notification handlers.
     fn install_handlers(&mut self) {
-        {
-            let inner = Arc::clone(&self.inner);
-            self.handler
-                .add_method("initialize", move |params: Params| {
-                    let params: InitializeParams = params.parse()?;
-                    inner
-                        .lock()
-                        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
-                        .initialize(params)
-                });
-        }
+        self.add_method("initialize", |inner, params: InitializeParams| {
+            inner.initialize(params)
+        });
 
-        self.handler
-            .add_notification("initialized", move |_params: Params| {});
+        self.add_notification("initialized", |_inner, _params: ()| Ok(()));
 
-        {
-            let inner = Arc::clone(&self.inner);
-            self.handler
-                .add_notification("textDocument/didOpen", move |params: Params| {
-                    let params: DidOpenTextDocumentParams = params.parse().unwrap();
-                    inner.lock().unwrap().opened(params)
-                });
-        }
+        self.add_notification(
+            "textDocument/didOpen",
+            |inner, params: DidOpenTextDocumentParams| inner.opened(params),
+        );
 
-        {
-            let inner = Arc::clone(&self.inner);
-            self.handler
-                .add_notification("textDocument/didChange", move |params: Params| {
-                    let params: DidChangeTextDocumentParams = params.parse().unwrap();
-                    inner.lock().unwrap().changed(params)
-                });
-        }
+        self.add_notification(
+            "textDocument/didChange",
+            |inner, params: DidChangeTextDocumentParams| inner.changed(params),
+        );
 
-        {
-            let inner = Arc::clone(&self.inner);
-            self.handler
-                .add_notification("textDocument/didClose", move |params: Params| {
-                    let params: DidCloseTextDocumentParams = params.parse().unwrap();
-                    inner.lock().unwrap().closed(params)
-                });
-        }
+        self.add_notification(
+            "textDocument/didClose",
+            |inner, params: DidCloseTextDocumentParams| inner.closed(params),
+        );
 
-        {
-            let inner = Arc::clone(&self.inner);
-            self.handler
-                .add_method("textDocument/codeAction", move |params: Params| {
-                    let params: CodeActionParams = params.parse().unwrap();
-                    inner
-                        .lock()
-                        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
-                        .code_action(params)
-                });
-        }
+        self.add_method(
+            "textDocument/codeAction",
+            |inner, params: CodeActionParams| inner.code_action(params),
+        );
 
-        {
-            let inner = Arc::clone(&self.inner);
-            self.handler
-                .add_method("textDocument/foldingRange", move |params: Params| {
-                    let params: FoldingRangeParams = params.parse().unwrap();
-                    inner
-                        .lock()
-                        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
-                        .folding_ranges(params)
-                });
-        }
+        self.add_method(
+            "textDocument/foldingRange",
+            |inner, params: FoldingRangeParams| inner.folding_ranges(params),
+        );
 
-        {
-            let inner = Arc::clone(&self.inner);
-            self.handler
-                .add_method("textDocument/signatureHelp", move |params: Params| {
-                    let params: TextDocumentPositionParams = params.parse().unwrap();
-                    inner
-                        .lock()
-                        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
-                        .signature_help(params)
-                });
-        }
+        self.add_method(
+            "textDocument/signatureHelp",
+            |inner, params: TextDocumentPositionParams| inner.signature_help(params),
+        );
 
-        {
-            let inner = Arc::clone(&self.inner);
-            self.handler
-                .add_method("textDocument/formatting", move |params: Params| {
-                    let params: DocumentFormattingParams = params.parse().unwrap();
-                    inner
-                        .lock()
-                        .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?
-                        .format(params)
-                });
-        }
+        self.add_method(
+            "textDocument/formatting",
+            |inner, params: DocumentFormattingParams| inner.format(params),
+        );
+    }
+
+    fn add_notification<TParams, TCallback>(&mut self, name: &str, callback: TCallback)
+    where
+        TParams: for<'de> serde::Deserialize<'de>,
+        TCallback: (Fn(&mut Inner<Emit>, TParams) -> Result<(), jsonrpc_core::Error>)
+            + Send
+            + Sync
+            + 'static,
+    {
+        let inner = Arc::clone(&self.inner);
+        self.handler.add_notification(name, move |params: Params| {
+            let handle_error = |error: jsonrpc_core::Error| match inner.lock() {
+                Ok(guard) => (guard.emit)(json!({})),
+                Err(_) => panic!("{}", error),
+            };
+
+            let params: TParams = match params.parse() {
+                Ok(result) => result,
+                Err(err) => return handle_error(internal_error(err)),
+            };
+            let mut guard = match inner.lock() {
+                Ok(guard) => guard,
+                Err(err) => return handle_error(internal_error(err)),
+            };
+
+            match callback(&mut guard, params) {
+                Ok(()) => (),
+                Err(err) => return handle_error(err),
+            }
+        })
+    }
+
+    fn add_method<TParams, TCallback>(&mut self, name: &str, callback: TCallback)
+    where
+        TParams: for<'de> serde::Deserialize<'de>,
+        TCallback: (Fn(&mut Inner<Emit>, TParams) -> RpcResult) + Send + Sync + 'static,
+    {
+        let inner = Arc::clone(&self.inner);
+        self.handler.add_method(name, move |params: Params| {
+            let params: TParams = params.parse()?;
+            let mut guard = inner.lock().map_err(internal_error)?;
+
+            callback(&mut guard, params)
+        });
     }
 
     /// Handle a JSON-RPC message.
