@@ -41,6 +41,14 @@ fn internal_error(message: impl Display) -> jsonrpc_core::Error {
     }
 }
 
+fn unknown_file() -> jsonrpc_core::Error {
+    jsonrpc_core::Error::invalid_params("Request referenced an unknown file")
+}
+
+fn out_of_range() -> jsonrpc_core::Error {
+    internal_error("Range conversion between rms-check and the Language Server Protocol failed. This is a bug.")
+}
+
 struct Document {
     version: i64,
     // Can be 'static because we'll only pass in owned data.
@@ -101,9 +109,9 @@ where
         &self,
         doc: &Document,
         input: &rms_check::Diagnostic,
-    ) -> lsp_types::Diagnostic {
-        Diagnostic {
-            range: doc.to_lsp_range(input.location()).unwrap(),
+    ) -> Result<lsp_types::Diagnostic, jsonrpc_core::Error> {
+        Ok(Diagnostic {
+            range: doc.to_lsp_range(input.location()).ok_or_else(out_of_range)?,
             severity: Some(match input.severity() {
                 Severity::ParseError => DiagnosticSeverity::Error,
                 Severity::Error => DiagnosticSeverity::Error,
@@ -116,17 +124,17 @@ where
             related_information: Some(
                 input
                     .labels()
-                    .map(|label| DiagnosticRelatedInformation {
+                    .map(|label| Ok(DiagnosticRelatedInformation {
                         location: Location {
-                            uri: doc.file.name(label.location().file()).parse().unwrap(),
-                            range: doc.to_lsp_range(label.location()).unwrap(),
+                            uri: doc.file.name(label.location().file()).parse().map_err(internal_error)?,
+                            range: doc.to_lsp_range(label.location()).ok_or_else(out_of_range)?,
                         },
                         message: label.message().to_string(),
-                    })
-                    .collect(),
+                    }))
+                    .collect::<Result<Vec<_>, _>>()?,
             ),
             tags: None,
-        }
+        })
     }
 
     /// Initialize the language server.
@@ -167,8 +175,7 @@ where
             Document::new(RMSFile::from_string(uri.clone(), text), version),
         );
 
-        self.run_checks_and_publish(uri);
-        Ok(())
+        self.run_checks_and_publish(uri)
     }
 
     /// A document changed, re-lint.
@@ -202,7 +209,7 @@ where
             }
             doc.version += 1;
             doc.file = RMSFile::from_string(uri.as_str(), splicer.to_string());
-            self.run_checks_and_publish(uri);
+            self.run_checks_and_publish(uri)?;
         }
 
         Ok(())
@@ -216,10 +223,10 @@ where
 
     /// Retrieve code actions for a cursor position.
     fn code_action(&mut self, params: CodeActionParams) -> RpcResult {
-        let doc = self.documents.get(&params.text_document.uri).unwrap();
+        let doc = self.documents.get(&params.text_document.uri).ok_or_else(unknown_file)?;
         let source_range = doc
             .to_source_location(doc.file.file_id(), params.range)
-            .unwrap();
+            .ok_or_else(out_of_range)?;
 
         let matching_diagnostics = doc.diagnostics.iter().filter(|diagnostic| {
             let range = diagnostic.location().range();
@@ -228,34 +235,29 @@ where
 
         let mut code_actions = vec![];
         for diagnostic in matching_diagnostics {
-            let to_code_action = |fix: &Fix| {
-                fix.replacement().map(|replacement| CodeAction {
-                    title: fix.message().to_string(),
-                    kind: Some("quickfix".to_string()),
-                    diagnostics: Some(vec![self.to_lsp_diagnostic(&doc, diagnostic)]),
-                    edit: Some(WorkspaceEdit {
-                        changes: Some({
-                            let mut map = HashMap::new();
-                            let edit = TextEdit {
-                                range: doc.to_lsp_range(fix.location()).unwrap(),
-                                new_text: replacement.to_string(),
-                            };
-                            map.insert(params.text_document.uri.clone(), vec![edit]);
-                            map
+            for fix in diagnostic.fixes().chain(diagnostic.suggestions()) {
+                if let Some(replacement) = fix.replacement() {
+                    code_actions.push(CodeAction {
+                        title: fix.message().to_string(),
+                        kind: Some("quickfix".to_string()),
+                        diagnostics: Some(vec![self.to_lsp_diagnostic(&doc, diagnostic)?]),
+                        edit: Some(WorkspaceEdit {
+                            changes: Some({
+                                let mut map = HashMap::new();
+                                let edit = TextEdit {
+                                    range: doc.to_lsp_range(fix.location()).ok_or_else(out_of_range)?,
+                                    new_text: replacement.to_string(),
+                                };
+                                map.insert(params.text_document.uri.clone(), vec![edit]);
+                                map
+                            }),
+                            document_changes: None,
                         }),
-                        document_changes: None,
-                    }),
-                    command: None,
-                    is_preferred: None,
-                })
-            };
-
-            code_actions.extend(
-                diagnostic
-                    .fixes()
-                    .chain(diagnostic.suggestions())
-                    .filter_map(to_code_action),
-            );
+                        command: None,
+                        is_preferred: None,
+                    });
+                }
+            }
         }
 
         serde_json::to_value(code_actions).map_err(internal_error)
@@ -263,7 +265,7 @@ where
 
     /// Retrieve folding ranges for the document.
     fn folding_ranges(&self, params: FoldingRangeParams) -> RpcResult {
-        let doc = self.documents.get(&params.text_document.uri).unwrap();
+        let doc = self.documents.get(&params.text_document.uri).ok_or_else(unknown_file)?;
         let folder = folds::FoldingRanges::new(&doc.file);
 
         let folds: Vec<FoldingRange> = folder.collect();
@@ -273,13 +275,13 @@ where
 
     /// Get signature help.
     fn signature_help(&self, params: TextDocumentPositionParams) -> RpcResult {
-        let doc = self.documents.get(&params.text_document.uri).unwrap();
+        let doc = self.documents.get(&params.text_document.uri).ok_or_else(unknown_file)?;
         let Position { line, character } = params.position;
         let help = help::find_signature_help(
             &doc.file,
             doc.file
                 .get_byte_index(doc.file.file_id(), line, character)
-                .unwrap(),
+                .ok_or_else(out_of_range)?,
         );
 
         serde_json::to_value(help).map_err(internal_error)
@@ -287,7 +289,7 @@ where
 
     /// Format a document.
     fn format(&self, params: DocumentFormattingParams) -> RpcResult {
-        let doc = self.documents.get(&params.text_document.uri).unwrap();
+        let doc = self.documents.get(&params.text_document.uri).ok_or_else(unknown_file)?;
 
         let options = FormatOptions::default()
             .tab_size(params.options.tab_size as u32)
@@ -300,7 +302,7 @@ where
                     doc.file.file_id(),
                     ByteIndex::from(0)..ByteIndex::from(doc.file.main_source().len()),
                 ))
-                .unwrap(),
+                .ok_or_else(out_of_range)?,
             new_text: result,
         }])
         .map_err(internal_error)
@@ -321,24 +323,27 @@ where
     }
 
     /// Run rms-check for a file and publish the resulting diagnostics.
-    fn run_checks_and_publish(&mut self, uri: Url) {
+    fn run_checks_and_publish(&mut self, uri: Url) -> Result<(), jsonrpc_core::Error> {
         self.run_checks(uri.clone());
 
         let doc = match self.documents.get(&uri) {
             Some(doc) => doc,
-            _ => return,
+            _ => return Err(unknown_file()),
         };
-        let diagnostics = doc
+        let diagnostics: Vec<lsp_types::Diagnostic> = doc
             .diagnostics
             .iter()
-            .map(|diagnostic| self.to_lsp_diagnostic(&doc, diagnostic));
+            .map(|diagnostic| self.to_lsp_diagnostic(&doc, diagnostic))
+            .collect::<Result<Vec<_>, _>>()?;
 
-        let params = PublishDiagnosticsParams::new(uri, diagnostics.collect(), Some(doc.version));
+        let params = PublishDiagnosticsParams::new(uri, diagnostics, Some(doc.version));
         (self.emit)(json!({
             "jsonrpc": "2.0",
             "method": "textDocument/publishDiagnostics",
             "params": params,
         }));
+
+        Ok(())
     }
 }
 
