@@ -20,8 +20,7 @@ use lsp_types::{
 };
 use multisplice::Multisplice;
 use rms_check::{
-    ByteIndex, Compatibility, FileId, Fix, FormatOptions, RMSCheck, RMSFile, Severity,
-    SourceLocation,
+    ByteIndex, Compatibility, FileId, FormatOptions, RMSCheck, RMSFile, Severity, SourceLocation,
 };
 use serde_json::{self, json};
 use std::collections::HashMap;
@@ -111,7 +110,9 @@ where
         input: &rms_check::Diagnostic,
     ) -> Result<lsp_types::Diagnostic, jsonrpc_core::Error> {
         Ok(Diagnostic {
-            range: doc.to_lsp_range(input.location()).ok_or_else(out_of_range)?,
+            range: doc
+                .to_lsp_range(input.location())
+                .ok_or_else(out_of_range)?,
             severity: Some(match input.severity() {
                 Severity::ParseError => DiagnosticSeverity::Error,
                 Severity::Error => DiagnosticSeverity::Error,
@@ -124,13 +125,21 @@ where
             related_information: Some(
                 input
                     .labels()
-                    .map(|label| Ok(DiagnosticRelatedInformation {
-                        location: Location {
-                            uri: doc.file.name(label.location().file()).parse().map_err(internal_error)?,
-                            range: doc.to_lsp_range(label.location()).ok_or_else(out_of_range)?,
-                        },
-                        message: label.message().to_string(),
-                    }))
+                    .map(|label| {
+                        Ok(DiagnosticRelatedInformation {
+                            location: Location {
+                                uri: doc
+                                    .file
+                                    .name(label.location().file())
+                                    .parse()
+                                    .map_err(internal_error)?,
+                                range: doc
+                                    .to_lsp_range(label.location())
+                                    .ok_or_else(out_of_range)?,
+                            },
+                            message: label.message().to_string(),
+                        })
+                    })
                     .collect::<Result<Vec<_>, _>>()?,
             ),
             tags: None,
@@ -223,7 +232,10 @@ where
 
     /// Retrieve code actions for a cursor position.
     fn code_action(&mut self, params: CodeActionParams) -> RpcResult {
-        let doc = self.documents.get(&params.text_document.uri).ok_or_else(unknown_file)?;
+        let doc = self
+            .documents
+            .get(&params.text_document.uri)
+            .ok_or_else(unknown_file)?;
         let source_range = doc
             .to_source_location(doc.file.file_id(), params.range)
             .ok_or_else(out_of_range)?;
@@ -245,7 +257,9 @@ where
                             changes: Some({
                                 let mut map = HashMap::new();
                                 let edit = TextEdit {
-                                    range: doc.to_lsp_range(fix.location()).ok_or_else(out_of_range)?,
+                                    range: doc
+                                        .to_lsp_range(fix.location())
+                                        .ok_or_else(out_of_range)?,
                                     new_text: replacement.to_string(),
                                 };
                                 map.insert(params.text_document.uri.clone(), vec![edit]);
@@ -265,7 +279,10 @@ where
 
     /// Retrieve folding ranges for the document.
     fn folding_ranges(&self, params: FoldingRangeParams) -> RpcResult {
-        let doc = self.documents.get(&params.text_document.uri).ok_or_else(unknown_file)?;
+        let doc = self
+            .documents
+            .get(&params.text_document.uri)
+            .ok_or_else(unknown_file)?;
         let folder = folds::FoldingRanges::new(&doc.file);
 
         let folds: Vec<FoldingRange> = folder.collect();
@@ -275,7 +292,10 @@ where
 
     /// Get signature help.
     fn signature_help(&self, params: TextDocumentPositionParams) -> RpcResult {
-        let doc = self.documents.get(&params.text_document.uri).ok_or_else(unknown_file)?;
+        let doc = self
+            .documents
+            .get(&params.text_document.uri)
+            .ok_or_else(unknown_file)?;
         let Position { line, character } = params.position;
         let help = help::find_signature_help(
             &doc.file,
@@ -289,7 +309,10 @@ where
 
     /// Format a document.
     fn format(&self, params: DocumentFormattingParams) -> RpcResult {
-        let doc = self.documents.get(&params.text_document.uri).ok_or_else(unknown_file)?;
+        let doc = self
+            .documents
+            .get(&params.text_document.uri)
+            .ok_or_else(unknown_file)?;
 
         let options = FormatOptions::default()
             .tab_size(params.options.tab_size as u32)
@@ -427,6 +450,7 @@ impl RMSCheckLSP {
         self.handler.add_notification(name, move |params: Params| {
             let handle_error = |error: jsonrpc_core::Error| match inner.lock() {
                 Ok(guard) => (guard.emit)(json!({})),
+                #[allow(clippy::match_wild_err_arm)]
                 Err(_) => panic!("{}", error),
             };
 
@@ -441,7 +465,7 @@ impl RMSCheckLSP {
 
             match callback(&mut guard, params) {
                 Ok(()) => (),
-                Err(err) => return handle_error(err),
+                Err(err) => handle_error(err),
             }
         })
     }
