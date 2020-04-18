@@ -291,10 +291,11 @@ lazy_static! {
         m.insert(token!("create_connect_teams_lands", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
         m.insert(token!("create_connect_same_land_zones", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
         m.insert(token!("create_connect_all_lands", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
+        m.insert(token!("create_connect_to_nonplayer_land", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
         m.insert(token!("replace_terrain", connect_attribute_context, [Token, Token]));
         m.insert(token!("terrain_cost", connect_attribute_context, [Token, Number]));
         m.insert(token!("terrain_size", connect_attribute_context, [Token, Number, Number]));
-        m.insert(token!("default_terrain_placement", connect_attribute_context, [Token]));
+        m.insert(token!("default_terrain_replacement", connect_attribute_context, [Token]));
 
         m.insert(token!("create_elevation", TokenContext::Command(Some("<ELEVATION_GENERATION>")), [Number]));
         m.insert(token!("spacing", TokenContext::Attribute(Some("create_elevation")), [Number]));
