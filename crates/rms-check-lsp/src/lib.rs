@@ -153,6 +153,7 @@ where
             code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
             document_formatting_provider: Some(true),
             folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
+            hover_provider: Some(true),
             signature_help_provider: Some(SignatureHelpOptions {
                 trigger_characters: Some(vec![" ".to_string(), "\t".to_string()]),
                 retrigger_characters: None,
@@ -332,6 +333,21 @@ where
         .map_err(internal_error)
     }
 
+    /// Get hover help.
+    fn hover(&self, params: TextDocumentPositionParams) -> RpcResult {
+        let doc = self.documents.get(&params.text_document.uri).unwrap();
+        let mut files = Files::new();
+        let file_id = files.add(doc.uri.as_str(), &doc.text);
+        let hover = help::find_hover_help(
+            &files,
+            file_id,
+            codespan_lsp::position_to_byte_index(&files, file_id, &params.position)
+                .map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))?,
+        );
+
+        serde_json::to_value(hover).map_err(|_| jsonrpc_core::Error::new(ErrorCode::InternalError))
+    }
+
     /// Run rms-check.
     fn run_checks(&mut self, uri: Url) {
         let doc = match self.documents.get_mut(&uri) {
@@ -436,6 +452,11 @@ impl RMSCheckLSP {
         self.add_method(
             "textDocument/formatting",
             |inner, params: DocumentFormattingParams| inner.format(params),
+        );
+
+        self.add_method(
+            "textDocument/hover",
+            |inner, params: TextDocumentPositionParams| inner.hover(params),
         );
     }
 

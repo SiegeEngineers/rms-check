@@ -1,7 +1,8 @@
 mod en;
 
 use lsp_types::{
-    Documentation, ParameterInformation, ParameterLabel, SignatureHelp, SignatureInformation,
+    Documentation, Hover, HoverContents, MarkupContent, MarkupKind, ParameterInformation,
+    ParameterLabel, SignatureHelp, SignatureInformation,
 };
 use rms_check::{ArgType, AtomKind, ByteIndex, Parser, RMSFile, TOKENS};
 
@@ -78,6 +79,37 @@ fn get_signature(command_name: &str) -> Option<&SignatureInformation> {
     en::SIGNATURES.get(command_name)
 }
 
+fn get_hover_contents(command_name: &str, argument: Option<usize>) -> Option<HoverContents> {
+    fn format_param(arg: &ParameterInformation) -> String {
+        let label = match &arg.label {
+            ParameterLabel::Simple(s) => s,
+            _ => unreachable!(),
+        };
+        let doc = if let Some(Documentation::String(doc)) = &arg.documentation {
+            doc
+        } else {
+            unreachable!();
+        };
+        format!("```\n{}\n```\n{}", label, doc)
+    }
+
+    en::SIGNATURES
+        .get(command_name)
+        .map(|sig| MarkupContent {
+            kind: MarkupKind::Markdown,
+            // created by SignatureBuilder, always a Documentation::String
+            value: if let Some(arg_index) = argument {
+                let params = sig.parameters.as_ref().unwrap();
+                format_param(&params[arg_index])
+            } else if let Some(Documentation::String(doc)) = &sig.documentation {
+                format!("```\n{}\n```\n{}", sig.label, doc)
+            } else {
+                unreachable!()
+            },
+        })
+        .map(HoverContents::Markup)
+}
+
 pub fn find_signature_help(file: &RMSFile<'_>, position: ByteIndex) -> Option<SignatureHelp> {
     let parser = Parser::new(file.file_id(), file.main_source());
     for (atom, _) in parser {
@@ -107,6 +139,31 @@ pub fn find_signature_help(file: &RMSFile<'_>, position: ByteIndex) -> Option<Si
                 signatures: vec![sig.clone()],
                 active_signature: Some(0),
                 active_parameter,
+            });
+        }
+    }
+    None
+}
+
+pub fn find_hover_help(files: &Files, file_id: FileId, position: ByteIndex) -> Option<Hover> {
+    let parser = Parser::new(file_id, files.source(file_id));
+    for (atom, _) in parser {
+        let (name, args) = match &atom {
+            // Turn args from a Vec<Word> into a Vec<&Word>
+            Atom::Command(name, args) => (name, args.iter().collect()),
+            Atom::Define(def, name) | Atom::Const(def, name, None) => (def, vec![name]),
+            Atom::Const(def, name, Some(value)) => (def, vec![name, value]),
+            _ => continue,
+        };
+        let span = atom.span();
+        if span.start() <= position && span.end() >= position {
+            let active_parameter = args
+                .iter()
+                .position(|word| word.start() <= position && word.end() >= position);
+            let hover_span = active_parameter.map(|idx| args[idx].span).unwrap_or(span);
+            return get_hover_contents(name.value, active_parameter).map(|contents| Hover {
+                contents,
+                range: Some(codespan_lsp::byte_span_to_range(files, file_id, hover_span).unwrap()),
             });
         }
     }
