@@ -14,9 +14,10 @@ use lsp_types::{
     DiagnosticRelatedInformation, DiagnosticSeverity, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams, FoldingRange,
     FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams, InitializeResult,
-    Location, NumberOrString, Position, PublishDiagnosticsParams, ServerCapabilities, ServerInfo,
-    SignatureHelpOptions, TextDocumentItem, TextDocumentPositionParams, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
+    Location, MessageType, NumberOrString, Position, PublishDiagnosticsParams, ServerCapabilities,
+    ServerInfo, ShowMessageParams, SignatureHelpOptions, TextDocumentItem,
+    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
+    WorkDoneProgressOptions, WorkspaceEdit,
 };
 use multisplice::Multisplice;
 use rms_check::{
@@ -438,7 +439,7 @@ impl RMSCheckLSP {
         );
     }
 
-    fn add_notification<TParams, TCallback>(&mut self, name: &str, callback: TCallback)
+    fn add_notification<TParams, TCallback>(&mut self, name: &'static str, callback: TCallback)
     where
         TParams: for<'de> serde::Deserialize<'de>,
         TCallback: (Fn(&mut Inner<Emit>, TParams) -> Result<(), jsonrpc_core::Error>)
@@ -448,15 +449,28 @@ impl RMSCheckLSP {
     {
         let inner = Arc::clone(&self.inner);
         self.handler.add_notification(name, move |params: Params| {
+            let params_clone: serde_json::Value = params.clone().into();
             let handle_error = |error: jsonrpc_core::Error| match inner.lock() {
-                Ok(guard) => (guard.emit)(json!({})),
-                #[allow(clippy::match_wild_err_arm)]
-                Err(_) => panic!("{}", error),
+                Ok(guard) => (guard.emit)(json!({
+                    "jsonrpc": "2.0",
+                    "method": "window/showMessage",
+                    "params": ShowMessageParams {
+                        typ: MessageType::Error,
+                        message: format!(
+                            "internal rms-check error while handling notification `{}`\n\nParams: {:?}\nError: {}", name, params_clone, error),
+                    },
+                })),
+                Err(lock_err) => {
+                    // if we can't emit there's not much we _can_ do…just hope this never happens
+                    // and panic
+                    drop(lock_err);
+                    panic!("could not obtain lock to emit error: {}", error)
+                }
             };
 
             let params: TParams = match params.parse() {
                 Ok(result) => result,
-                Err(err) => return handle_error(internal_error(err)),
+                Err(err) => return handle_error(err),
             };
             let mut guard = match inner.lock() {
                 Ok(guard) => guard,
@@ -470,7 +484,7 @@ impl RMSCheckLSP {
         })
     }
 
-    fn add_method<TParams, TCallback>(&mut self, name: &str, callback: TCallback)
+    fn add_method<TParams, TCallback>(&mut self, name: &'static str, callback: TCallback)
     where
         TParams: for<'de> serde::Deserialize<'de>,
         TCallback: (Fn(&mut Inner<Emit>, TParams) -> RpcResult) + Send + Sync + 'static,
