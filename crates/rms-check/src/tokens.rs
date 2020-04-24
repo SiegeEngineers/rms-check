@@ -247,6 +247,8 @@ lazy_static! {
         m.insert(token!("set_flat_terrain_only", TokenContext::Attribute(Some("create_terrain"))));
         m.insert(token!("set_avoid_player_start_areas", TokenContext::Attribute(Some("create_terrain"))));
         m.insert(token!("clumping_factor", TokenContext::Attribute(Some("create_terrain")), [Number]));
+        m.insert(token!("base_layer", TokenContext::Attribute(Some("create_terrain")), [Token]));
+        m.insert(token!("layer_to_place_on", TokenContext::Attribute(Some("create_terrain")), [Token]));
 
         m.insert(token!("create_object", TokenContext::Command(Some("<OBJECTS_GENERATION>")), [Token]));
         let create_object = TokenContext::Attribute(Some("create_object"));
