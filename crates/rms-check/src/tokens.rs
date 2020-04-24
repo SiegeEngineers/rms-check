@@ -248,7 +248,6 @@ lazy_static! {
         m.insert(token!("set_avoid_player_start_areas", TokenContext::Attribute(Some("create_terrain"))));
         m.insert(token!("clumping_factor", TokenContext::Attribute(Some("create_terrain")), [Number]));
         m.insert(token!("base_layer", TokenContext::Attribute(Some("create_terrain")), [Token]));
-        m.insert(token!("layer_to_place_on", TokenContext::Attribute(Some("create_terrain")), [Token]));
 
         m.insert(token!("create_object", TokenContext::Command(Some("<OBJECTS_GENERATION>")), [Token]));
         let create_object = TokenContext::Attribute(Some("create_object"));
@@ -261,6 +260,7 @@ lazy_static! {
         m.insert(token!("set_loose_grouping", create_object));
         m.insert(token!("set_tight_grouping", create_object));
         m.insert(token!("terrain_to_place_on", create_object, [Token]));
+        m.insert(token!("layer_to_place_on", create_object, [Token]));
         m.insert(token!("set_gaia_object_only", create_object));
         m.insert(token!("set_place_for_every_player", create_object));
         m.insert(token!("place_on_specific_land_id", create_object, [Number]));
