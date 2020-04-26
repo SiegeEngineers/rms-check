@@ -13,4 +13,5 @@ lazy_static = "1.4"
 lsp-types = "0.73"
 multisplice = "0.3"
 rms-check = { version = "0.0.2", path = "../rms-check/" }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

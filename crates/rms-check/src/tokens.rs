@@ -247,6 +247,7 @@ lazy_static! {
         m.insert(token!("set_flat_terrain_only", TokenContext::Attribute(Some("create_terrain"))));
         m.insert(token!("set_avoid_player_start_areas", TokenContext::Attribute(Some("create_terrain"))));
         m.insert(token!("clumping_factor", TokenContext::Attribute(Some("create_terrain")), [Number]));
+        m.insert(token!("base_layer", TokenContext::Attribute(Some("create_terrain")), [Token]));
 
         m.insert(token!("create_object", TokenContext::Command(Some("<OBJECTS_GENERATION>")), [Token]));
         let create_object = TokenContext::Attribute(Some("create_object"));
@@ -259,6 +260,7 @@ lazy_static! {
         m.insert(token!("set_loose_grouping", create_object));
         m.insert(token!("set_tight_grouping", create_object));
         m.insert(token!("terrain_to_place_on", create_object, [Token]));
+        m.insert(token!("layer_to_place_on", create_object, [Token]));
         m.insert(token!("set_gaia_object_only", create_object));
         m.insert(token!("set_place_for_every_player", create_object));
         m.insert(token!("place_on_specific_land_id", create_object, [Number]));
@@ -291,10 +293,11 @@ lazy_static! {
         m.insert(token!("create_connect_teams_lands", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
         m.insert(token!("create_connect_same_land_zones", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
         m.insert(token!("create_connect_all_lands", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
+        m.insert(token!("create_connect_to_nonplayer_land", TokenContext::Command(Some("<CONNECTION_GENERATION>"))));
         m.insert(token!("replace_terrain", connect_attribute_context, [Token, Token]));
         m.insert(token!("terrain_cost", connect_attribute_context, [Token, Number]));
         m.insert(token!("terrain_size", connect_attribute_context, [Token, Number, Number]));
-        m.insert(token!("default_terrain_placement", connect_attribute_context, [Token]));
+        m.insert(token!("default_terrain_replacement", connect_attribute_context, [Token]));
 
         m.insert(token!("create_elevation", TokenContext::Command(Some("<ELEVATION_GENERATION>")), [Number]));
         m.insert(token!("spacing", TokenContext::Attribute(Some("create_elevation")), [Number]));
