@@ -31,5 +31,4 @@ zip = { version = "0.5", default-features = false } # only need `store`
 members = [
   "crates/rms-check",
   "crates/rms-check-lsp",
-  "vscode/server",
 ]
