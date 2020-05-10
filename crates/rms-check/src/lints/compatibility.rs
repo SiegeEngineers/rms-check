@@ -40,8 +40,8 @@ impl Lint for CompatibilityLint {
         if let AtomKind::Command { name, .. } = &atom.kind {
             match name.value {
                 "effect_amount" | "effect_percent" => {
-                    if !self.has_up_extension(state) {
-                        warnings.push(Diagnostic::warning(atom.location, "RMS Effects require UserPatch 1.5")
+                    if !self.has_up_extension(state) && state.compatibility() != Compatibility::DefinitiveEdition {
+                        warnings.push(Diagnostic::warning(atom.location, "RMS Effects require UserPatch 1.5 or Definitive Edition")
                                       .suggest(Fix::new(atom.location, "Wrap this command in an `if UP_EXTENSION` statement or add a /* Compatibility: UserPatch 1.5 */ comment at the top of the file")));
                     }
                 }
@@ -89,6 +89,14 @@ impl Lint for CompatibilityLint {
                 "second_object" if state.compatibility() != Compatibility::DefinitiveEdition => {
                     warnings.push(
                         Diagnostic::warning(atom.location, "second_object is only supported in the Definitive Edition")
+                            .suggest(Fix::new(atom.location,
+                                "Add a /* Compatibility: Definitive Edition */ comment at the top of the file",)
+                            )
+                    )
+                }
+                "enable_balanced_elevation" if state.compatibility() != Compatibility::DefinitiveEdition => {
+                    warnings.push(
+                        Diagnostic::warning(atom.location, "enable_balanced_elevation is only supported in the Definitive Edition")
                             .suggest(Fix::new(atom.location,
                                 "Add a /* Compatibility: Definitive Edition */ comment at the top of the file",)
                             )
