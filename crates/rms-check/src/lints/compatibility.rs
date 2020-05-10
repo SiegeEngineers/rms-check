@@ -144,7 +144,7 @@ mod tests {
         assert!(warnings.next().is_none());
         assert_eq!(first.severity(), Severity::Warning);
         assert_eq!(first.code(), Some("compatibility"));
-        assert_eq!(first.message(), "RMS Effects require UserPatch 1.5");
+        assert_eq!(first.message(), "RMS Effects require UserPatch 1.5 or Definitive Edition");
         Ok(())
     }
 
