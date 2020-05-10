@@ -301,6 +301,7 @@ lazy_static! {
 
         m.insert(token!("create_elevation", TokenContext::Command(Some("<ELEVATION_GENERATION>")), [Number]));
         m.insert(token!("spacing", TokenContext::Attribute(Some("create_elevation")), [Number]));
+        m.insert(token!("enable_balanced_elevation", TokenContext::Attribute(Some("enable_balanced_elevation"))));
 
         m.insert(token!("effect_amount", TokenContext::Command(Some("<PLAYER_SETUP>")), [Token, Token, Token, Number]));
         m.insert(token!("effect_percent", TokenContext::Command(Some("<PLAYER_SETUP>")), [Token, Token, Token, Number]));
