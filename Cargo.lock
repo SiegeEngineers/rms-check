@@ -403,7 +403,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "rms-check"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow 1.0.30 (registry+https://github.com/rust-lang/crates.io-index)",
  "chardet 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -417,15 +417,15 @@ dependencies = [
 
 [[package]]
 name = "rms-check-cli"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "ansi_term 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "anyhow 1.0.30 (registry+https://github.com/rust-lang/crates.io-index)",
  "codespan-reporting 0.9.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "multisplice 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "notify 4.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
- "rms-check 0.0.2",
- "rms-check-lsp 0.0.2",
+ "rms-check 0.0.3",
+ "rms-check-lsp 0.0.3",
  "serde_json 1.0.53 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "termcolor 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -434,13 +434,13 @@ dependencies = [
 
 [[package]]
 name = "rms-check-lsp"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "jsonrpc-core 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lsp-types 0.74.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "multisplice 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rms-check 0.0.2",
+ "rms-check 0.0.3",
  "serde 1.0.110 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.53 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

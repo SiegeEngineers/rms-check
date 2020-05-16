@@ -1,6 +1,6 @@
 [package]
 name = "rms-check-lsp"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Renée Kooi <renee@kooi.me>"]
 license = "GPL-3.0"
 description = "Language server for Age of Empires random map scripts."
@@ -12,6 +12,6 @@ jsonrpc-core = "14.1"
 lazy_static = "1.4"
 lsp-types = "0.74"
 multisplice = "0.3"
-rms-check = { version = "0.0.2", path = "../rms-check/" }
+rms-check = { version = "0.0.3", path = "../rms-check/" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

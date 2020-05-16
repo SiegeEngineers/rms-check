@@ -1,7 +1,7 @@
 {
   "name": "rms-check-vscode",
   "description": "Age of Empires 2 Random Map Script syntax highlighting and linting support.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "author": "Renée Kooi <renee@kooi.me>",
   "activationEvents": [
     "workspaceContains:**/*.rms",

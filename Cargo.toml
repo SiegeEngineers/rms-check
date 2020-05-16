@@ -1,6 +1,6 @@
 [package]
 name = "rms-check-cli"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Renée Kooi <renee@kooi.me>"]
 license = "GPL-3.0"
 description = "Detect common problems with AoE Random Map Scripts"
@@ -20,8 +20,8 @@ anyhow = "1.0.30"
 codespan-reporting = "0.9"
 multisplice = "^0.3.0"
 notify = "4.0.15"
-rms-check = { version = "0.0.2", path = "crates/rms-check" }
-rms-check-lsp = { version = "0.0.2", path = "crates/rms-check-lsp" }
+rms-check = { version = "0.0.3", path = "crates/rms-check" }
+rms-check-lsp = { version = "0.0.3", path = "crates/rms-check-lsp" }
 serde_json = "1.0"
 structopt = "0.3"
 termcolor = "1.1"
