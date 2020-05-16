@@ -5,7 +5,6 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## 0.0.3
-
 Thanks to Chrazini and Zetnus for the feedback on the initial beta release!
 
 ### Command additions and fixes
