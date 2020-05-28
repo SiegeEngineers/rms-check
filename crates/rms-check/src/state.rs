@@ -2,10 +2,11 @@
 
 use crate::diagnostic::{Diagnostic, Label};
 use crate::parser::{Atom, AtomKind, Parser};
+use crate::tokenizer::Word;
 use crate::tokens::TokenType;
 use crate::RMSFile;
 use cow_utils::CowUtils;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 /// The target compatibility for a map script.
@@ -69,6 +70,23 @@ impl FromStr for HeaderName {
 }
 
 #[derive(Debug)]
+pub struct ConstDefinition<'a> {
+    atom: Atom<'a>,
+    value: Option<Word<'a>>,
+    // depends_on: Vec<ConstDependency>,
+}
+
+impl<'a> ConstDefinition<'a> {
+    fn name(&self) -> &'a str {
+        match &self.atom.kind {
+            AtomKind::Const { name, .. } => name.value,
+            AtomKind::Define { name, .. } => name.value,
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct ParseState<'a> {
     /// The files.
     pub rms: &'a RMSFile<'a>,
@@ -87,9 +105,9 @@ pub struct ParseState<'a> {
     /// List of builtin #define definitions.
     builtin_defines: HashSet<String>,
     /// List of user-mode #const definitions we've seen so far.
-    pub seen_consts: HashSet<String>,
+    consts: HashMap<&'a str, ConstDefinition<'a>>,
     /// List of user-mode #define definitions we've seen so far.
-    pub seen_defines: HashSet<String>,
+    defines: HashMap<&'a str, ConstDefinition<'a>>,
     /// List of builtin optional definitions.
     pub option_defines: HashSet<String>,
     /// Are we still parsing header comments?
@@ -107,8 +125,8 @@ impl<'a> ParseState<'a> {
             current_section: None,
             builtin_consts: HashSet::new(),
             builtin_defines: HashSet::new(),
-            seen_consts: HashSet::new(),
-            seen_defines: HashSet::new(),
+            consts: HashMap::new(),
+            defines: HashMap::new(),
             option_defines: HashSet::new(),
             end_of_headers: false,
         };
@@ -123,16 +141,16 @@ impl<'a> ParseState<'a> {
         self.option_defines.insert(name.to_string());
     }
     /// Track that a `#define` name exists.
-    pub fn define(&mut self, name: impl ToString) {
-        self.seen_defines.insert(name.to_string());
+    pub fn define(&mut self, definition: ConstDefinition<'a>) {
+        self.defines.insert(definition.name(), definition);
     }
     /// Track that a `#const` name exists.
-    pub fn define_const(&mut self, name: impl ToString) {
-        self.seen_consts.insert(name.to_string());
+    pub fn define_const(&mut self, definition: ConstDefinition<'a>) {
+        self.consts.insert(definition.name(), definition);
     }
     /// Does a given `#define` name exist?
     pub fn has_define(&self, name: &str) -> bool {
-        self.seen_defines.contains(name) || self.builtin_defines.contains(name)
+        self.defines.contains_key(name) || self.builtin_defines.contains(name)
     }
     /// May a given `#define` name exist at this point?
     pub fn may_have_define(&self, name: &str) -> bool {
@@ -140,20 +158,20 @@ impl<'a> ParseState<'a> {
     }
     /// Does a given `#const` name exist?
     pub fn has_const(&self, name: &str) -> bool {
-        self.seen_consts.contains(name) || self.builtin_consts.contains(name)
+        self.consts.contains_key(name) || self.builtin_consts.contains(name)
     }
     /// List all the `#const` names that are currently available.
     pub fn consts(&self) -> impl Iterator<Item = &str> {
-        self.seen_consts
-            .iter()
-            .map(|string| string.as_ref())
+        self.consts
+            .keys()
+            .copied()
             .chain(self.builtin_consts.iter().map(|string| string.as_ref()))
     }
     /// List all the `#define` names that are currently available.
     pub fn defines(&self) -> impl Iterator<Item = &str> {
-        self.seen_defines
-            .iter()
-            .map(|string| string.as_ref())
+        self.defines
+            .keys()
+            .copied()
             .chain(self.builtin_defines.iter().map(|string| string.as_ref()))
     }
 
@@ -194,11 +212,17 @@ impl<'a> ParseState<'a> {
             AtomKind::Section { .. } => {
                 self.current_section = Some(atom.clone());
             }
-            AtomKind::Define { name, .. } => {
-                self.define(name.value);
+            AtomKind::Define { .. } => {
+                self.define(ConstDefinition {
+                    atom: atom.clone(),
+                    value: None,
+                });
             }
-            AtomKind::Const { name, .. } => {
-                self.define_const(name.value);
+            AtomKind::Const { value, .. } => {
+                self.define_const(ConstDefinition {
+                    atom: atom.clone(),
+                    value,
+                });
             }
             _ => (),
         }
