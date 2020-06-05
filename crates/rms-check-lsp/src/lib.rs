@@ -14,8 +14,8 @@ use lsp_types::{
     DiagnosticRelatedInformation, DiagnosticSeverity, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams, FoldingRange,
     FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams, InitializeResult,
-    Location, MessageType, NumberOrString, Position, PublishDiagnosticsParams, ServerCapabilities,
-    ServerInfo, ShowMessageParams, SignatureHelpOptions, TextDocumentItem,
+    InitializedParams, Location, MessageType, NumberOrString, Position, PublishDiagnosticsParams,
+    ServerCapabilities, ServerInfo, ShowMessageParams, SignatureHelpOptions, TextDocumentItem,
     TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
     WorkDoneProgressOptions, WorkspaceEdit,
 };
@@ -401,7 +401,7 @@ impl RMSCheckLSP {
             inner.initialize(params)
         });
 
-        self.add_notification("initialized", |_inner, _params: ()| Ok(()));
+        self.add_notification("initialized", |_inner, _params: InitializedParams| Ok(()));
 
         self.add_notification(
             "textDocument/didOpen",
