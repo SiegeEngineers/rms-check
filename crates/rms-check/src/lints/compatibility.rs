@@ -102,6 +102,14 @@ impl Lint for CompatibilityLint {
                             )
                     )
                 }
+                "set_gaia_unconvertible" | "set_gaia_civilization" if state.compatibility() != Compatibility::DefinitiveEdition => {
+                    warnings.push(
+                        Diagnostic::warning(atom.location, format_args!("{} is only supported in the Definitive Edition", name.value))
+                            .suggest(Fix::new(atom.location,
+                                "Add a /* Compatibility: Definitive Edition */ comment at the top of the file",)
+                            )
+                    )
+                }
                 _ => (),
             }
         };

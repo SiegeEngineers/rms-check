@@ -177,6 +177,7 @@ lazy_static! {
         m.insert(token!("guard_state", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Token, Token, Number, Number]));
         m.insert(token!("enable_waves", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Number]));
         m.insert(token!("terrain_mask", TokenContext::TopLevelAttribute(Some("<PLAYER_SETUP>")), [Number]));
+        m.insert(token!("set_gaia_civilization", TokenContext::TopLevelAttribute(None), [Number])); // does this need <PLAYER_SETUP>?
 
         let land_attribute_context = TokenContext::AnyOf(&[
            TokenContext::Attribute(Some("create_land")),
@@ -262,6 +263,7 @@ lazy_static! {
         m.insert(token!("terrain_to_place_on", create_object, [Token]));
         m.insert(token!("layer_to_place_on", create_object, [Token]));
         m.insert(token!("set_gaia_object_only", create_object));
+        m.insert(token!("set_gaia_unconvertible", create_object));
         m.insert(token!("set_place_for_every_player", create_object));
         m.insert(token!("place_on_specific_land_id", create_object, [Number]));
         m.insert(token!("min_distance_to_players", create_object, [Number]));
