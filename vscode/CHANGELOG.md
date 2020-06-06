@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## 0.0.4
+
+### Language server
+* Fix a crash when handling the `initialized` message.
+* Implement `textDocument/definition`, providing "Go To Definition" support for consts.
+
+### Command additions and fixes
+* Add `set_gaia_unconvertible` and `set_gaia_civilization`.
+
+### Known issues
+* The optional "variance" argument to `circle_radius` is not yet supported.
+
 ## 0.0.3
 Thanks to Chrazini and Zetnus for the feedback on the initial beta release!
 

@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "rms-check"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "chardet",
  "cow-utils",
@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "rms-check-lsp"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "jsonrpc-core",
  "lazy_static",
@@ -204,7 +204,7 @@ dependencies = [
 
 [[package]]
 name = "rms-check-vscode-server-wasm"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "rms-check-lsp",
  "serde_json",
