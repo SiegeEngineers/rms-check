@@ -13,15 +13,16 @@ use lsp_types::{
     CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
     DiagnosticRelatedInformation, DiagnosticSeverity, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams, FoldingRange,
-    FoldingRangeParams, FoldingRangeProviderCapability, InitializeParams, InitializeResult,
-    InitializedParams, Location, MessageType, NumberOrString, Position, PublishDiagnosticsParams,
-    ServerCapabilities, ServerInfo, ShowMessageParams, SignatureHelpOptions, TextDocumentItem,
-    TextDocumentPositionParams, TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
-    WorkDoneProgressOptions, WorkspaceEdit,
+    FoldingRangeParams, FoldingRangeProviderCapability, GotoDefinitionParams, InitializeParams,
+    InitializeResult, InitializedParams, Location, MessageType, NumberOrString, Position,
+    PublishDiagnosticsParams, ServerCapabilities, ServerInfo, ShowMessageParams,
+    SignatureHelpOptions, TextDocumentItem, TextDocumentPositionParams, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
 };
 use multisplice::Multisplice;
 use rms_check::{
-    ByteIndex, Compatibility, FileId, FormatOptions, RMSCheck, RMSFile, Severity, SourceLocation,
+    AtomKind, ByteIndex, Compatibility, FileId, FormatOptions, RMSCheck, RMSFile, Severity,
+    SourceLocation,
 };
 use serde_json::{self, json};
 use std::collections::HashMap;
@@ -160,6 +161,7 @@ where
                     work_done_progress: None,
                 },
             }),
+            definition_provider: Some(true),
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
                 TextDocumentSyncKind::Incremental,
             )),
@@ -308,6 +310,82 @@ where
         serde_json::to_value(help).map_err(internal_error)
     }
 
+    /// Jump to the definition of a #const or #define.
+    fn goto_definition(&self, params: GotoDefinitionParams) -> RpcResult {
+        let GotoDefinitionParams {
+            text_document_position_params:
+                TextDocumentPositionParams {
+                    text_document,
+                    position,
+                },
+            ..
+        } = params;
+
+        let doc = self
+            .documents
+            .get(&text_document.uri)
+            .ok_or_else(unknown_file)?;
+        let Position { line, character } = position;
+        let index = doc
+            .file
+            .get_byte_index(doc.file.file_id(), line, character)
+            .ok_or_else(out_of_range)?;
+
+        let (state, atom) = doc
+            .file
+            .parse_to(doc.file.file_id(), index, Compatibility::Conquerors);
+        let atom = match atom {
+            Some(atom) => atom,
+            None => return Ok(serde_json::to_value(()).unwrap()),
+        };
+
+        // Extract the word that is being focused from atoms that can contain const names
+        let loc = match atom.kind {
+            AtomKind::If { condition, .. } | AtomKind::ElseIf { condition, .. } => {
+                // Check that we're actually focusing on a token
+                if condition.location.range().contains(&index) {
+                    state
+                        .get_define(condition.value)
+                        .map(|def| (condition.location, def.location()))
+                } else {
+                    None
+                }
+            }
+            AtomKind::Command { arguments, .. } => {
+                if let Some(arg) = arguments
+                    .iter()
+                    .find(|arg| arg.location.range().contains(&index))
+                {
+                    state
+                        .get_const(arg.value)
+                        .map(|def| (arg.location, def.location()))
+                } else {
+                    None
+                }
+            }
+            // For completeness: jump to current statement if already on a #define or #const line
+            AtomKind::Const { name, .. } | AtomKind::Define { name, .. } => {
+                Some((name.location, atom.location))
+            }
+            _ => None,
+        };
+
+        if let Some((_source_location, target_location)) = loc {
+            // Maybe use LocationLink here later
+            serde_json::to_value(Some(Location {
+                uri: doc
+                    .file
+                    .name(target_location.file())
+                    .parse()
+                    .map_err(internal_error)?,
+                range: doc.to_lsp_range(target_location).ok_or_else(out_of_range)?,
+            }))
+        } else {
+            serde_json::to_value(Option::<Location>::None)
+        }
+        .map_err(internal_error)
+    }
+
     /// Format a document.
     fn format(&self, params: DocumentFormattingParams) -> RpcResult {
         let doc = self
@@ -426,6 +504,11 @@ impl RMSCheckLSP {
         self.add_method(
             "textDocument/foldingRange",
             |inner, params: FoldingRangeParams| inner.folding_ranges(params),
+        );
+
+        self.add_method(
+            "textDocument/definition",
+            |inner, params: GotoDefinitionParams| inner.goto_definition(params),
         );
 
         self.add_method(

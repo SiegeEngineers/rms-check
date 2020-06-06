@@ -286,6 +286,28 @@ impl<'source> RMSFile<'source> {
             .get(file.to_usize())
             .and_then(|file| file.get_location(index))
     }
+
+    /// Get the parsing state at a particular offset.
+    pub fn parse_to(
+        &self,
+        file: FileId,
+        offset: ByteIndex,
+        compatibility: Compatibility,
+    ) -> (ParseState<'_>, Option<Atom<'_>>) {
+        let parser = Parser::new(file, self.source(file))
+            .map(|(atom, _errs)| atom)
+            .take_while(|atom| atom.range().start < offset);
+        let mut state = ParseState::new(self, compatibility);
+        let mut focus_atom = None;
+        for atom in parser {
+            if atom.range().end > offset {
+                focus_atom = Some(atom);
+            } else {
+                state.update(&atom);
+            }
+        }
+        (state, focus_atom)
+    }
 }
 
 /// The result of a lint run.

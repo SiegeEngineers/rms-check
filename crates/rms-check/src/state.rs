@@ -1,6 +1,6 @@
 //! State tracker while parsing AoE2 random map scripts.
 
-use crate::diagnostic::{Diagnostic, Label};
+use crate::diagnostic::{Diagnostic, Label, SourceLocation};
 use crate::parser::{Atom, AtomKind, Parser};
 use crate::tokenizer::Word;
 use crate::tokens::TokenType;
@@ -69,7 +69,7 @@ impl FromStr for HeaderName {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConstDefinition<'a> {
     atom: Atom<'a>,
     value: Option<Word<'a>>,
@@ -77,12 +77,18 @@ pub struct ConstDefinition<'a> {
 }
 
 impl<'a> ConstDefinition<'a> {
-    fn name(&self) -> &'a str {
+    /// Get the name of this definition.
+    pub fn name(&self) -> &'a str {
         match &self.atom.kind {
             AtomKind::Const { name, .. } => name.value,
             AtomKind::Define { name, .. } => name.value,
             _ => unreachable!(),
         }
+    }
+
+    /// Get the location where this const is defined.
+    pub fn location(&self) -> SourceLocation {
+        self.atom.location
     }
 }
 
@@ -173,6 +179,14 @@ impl<'a> ParseState<'a> {
             .keys()
             .copied()
             .chain(self.builtin_defines.iter().map(|string| string.as_ref()))
+    }
+
+    pub fn get_define(&self, name: &str) -> Option<&ConstDefinition<'_>> {
+        self.defines.get(name)
+    }
+
+    pub fn get_const(&self, name: &str) -> Option<&ConstDefinition<'_>> {
+        self.consts.get(name)
     }
 
     /// Get the compatibility mode the parser runs in.
