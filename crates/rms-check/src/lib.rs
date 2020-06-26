@@ -345,6 +345,7 @@ impl Default for RMSCheck {
     fn default() -> RMSCheck {
         RMSCheck::new()
             .with_lint(Box::new(lints::ArgTypesLint::new()))
+            .with_lint(Box::new(lints::ActorAreasMatchLint::new()))
             .with_lint(Box::new(lints::AttributeCaseLint {}))
             .with_lint(Box::new(lints::CommentContentsLint::new()))
             .with_lint(Box::new(lints::CompatibilityLint::new()))

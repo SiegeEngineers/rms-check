@@ -1,12 +1,10 @@
-use crate::diagnostic::{Diagnostic, Fix, SourceLocation};
+use crate::diagnostic::{Diagnostic, Fix};
 use crate::{ArgType, Atom, AtomKind, Lint, ParseState, Word, TOKENS};
 use cow_utils::CowUtils;
 use strsim::jaro_winkler;
 
 #[derive(Default)]
-pub struct ArgTypesLint {
-    actor_areas: Vec<(i32, SourceLocation)>,
-}
+pub struct ArgTypesLint {}
 
 impl ArgTypesLint {
     pub fn new() -> Self {
@@ -291,21 +289,6 @@ impl Lint for ArgTypesLint {
                     }
                 }
                 "assign_to" => self.check_assign_to(&arguments, &mut warnings),
-                "actor_area" if !arguments.is_empty() => {
-                    if let Ok(n) = arguments[0].value.parse::<i32>() {
-                        self.actor_areas.push((n, arguments[0].location));
-                    }
-                }
-                "actor_area_to_place_in" | "avoid_actor_area" if !arguments.is_empty() => {
-                    if let Ok(to_place_in) = arguments[0].value.parse::<i32>() {
-                        if self.actor_areas.iter().all(|(n, _)| *n != to_place_in) {
-                            warnings.push(Diagnostic::warning(
-                                arguments[0].location,
-                                format_args!("Actor area {} is never defined", to_place_in),
-                            ));
-                        }
-                    }
-                }
                 _ => (),
             }
 
@@ -353,7 +336,7 @@ fn is_valid_rnd(s: &str) -> (bool, Option<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagnostic::ByteIndex;
+    use crate::diagnostic::{ByteIndex, SourceLocation};
     use crate::{Compatibility, RMSCheck, RMSFile, Severity};
 
     #[test]
@@ -508,45 +491,6 @@ mod tests {
             third.message(),
             "`assign_to` Flags must only combine flags 1 and 2"
         );
-        assert!(warnings.next().is_none());
-    }
-
-    #[test]
-    fn actor_area() {
-        let filename = "actor_area.rms";
-        let file = RMSFile::from_string(
-            filename,
-            "
-            create_object VILLAGER {
-                actor_area 1
-            }
-            create_object VILLAGER {
-                actor_area_to_place_in 1
-            }
-            create_object VILLAGER {
-                avoid_actor_area 1
-            }
-            create_object VILLAGER {
-                actor_area_to_place_in 17
-            }
-            create_object VILLAGER {
-                avoid_actor_area 18
-            }
-        ",
-        );
-        let result = RMSCheck::new()
-            .with_lint(Box::new(ArgTypesLint::new()))
-            .check(&file);
-        let mut warnings = result.iter();
-
-        let first = warnings.next().unwrap();
-        assert_eq!(first.severity(), Severity::Warning);
-        assert_eq!(first.code(), Some("arg-types"));
-        assert_eq!(first.message(), "Actor area 17 is never defined");
-        let second = warnings.next().unwrap();
-        assert_eq!(second.severity(), Severity::Warning);
-        assert_eq!(second.code(), Some("arg-types"));
-        assert_eq!(second.message(), "Actor area 18 is never defined");
         assert!(warnings.next().is_none());
     }
 }
