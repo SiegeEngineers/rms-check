@@ -88,6 +88,9 @@ impl ArgTypesLint {
                         Fix::new(arg.location, "Did you forget the `rnd`?")
                             .replace(replacement.unwrap_or_else(|| format!("rnd{}", arg.value))),
                     )
+                } else if let Ok(float) = arg.value.parse::<f32>() {
+                    warn.suggest(Fix::new(arg.location, "Remove the decimal part")
+                                 .replace(float.trunc().to_string()))
                 } else {
                     warn
                 }
@@ -432,6 +435,30 @@ mod tests {
             first.location(),
             SourceLocation::new(file, ByteIndex::from(29)..ByteIndex::from(30))
         );
+    }
+
+    #[test]
+    fn floats() {
+        let filename = "floats.rms";
+        let file = RMSFile::from_string(filename, "create_land { land_percent 3.5 }");
+        let result = RMSCheck::new()
+            .with_lint(Box::new(ArgTypesLint::new()))
+            .check(&file);
+        let file = file.file_id();
+
+        let mut warnings = result.iter();
+        let first = warnings.next().unwrap();
+        assert!(warnings.next().is_none());
+        assert_eq!(first.severity(), Severity::Error);
+        assert_eq!(first.code(), Some("arg-types"));
+        assert_eq!(first.message(), "Expected a number argument to land_percent, but got 3.5");
+        assert_eq!(
+            first.location(),
+            SourceLocation::new(file, ByteIndex::from(27)..ByteIndex::from(30))
+        );
+        let suggestion = first.suggestions().next().unwrap();
+        assert_eq!(suggestion.message(), "Remove the decimal part");
+        assert_eq!(suggestion.replacement(), Some("3"));
     }
 
     #[test]
