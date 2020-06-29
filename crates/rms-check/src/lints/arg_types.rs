@@ -89,8 +89,10 @@ impl ArgTypesLint {
                             .replace(replacement.unwrap_or_else(|| format!("rnd{}", arg.value))),
                     )
                 } else if let Ok(float) = arg.value.parse::<f32>() {
-                    warn.suggest(Fix::new(arg.location, "Remove the decimal part")
-                                 .replace(float.trunc().to_string()))
+                    warn.suggest(
+                        Fix::new(arg.location, "Remove the decimal part")
+                            .replace(float.trunc().to_string()),
+                    )
                 } else {
                     warn
                 }
@@ -451,7 +453,10 @@ mod tests {
         assert!(warnings.next().is_none());
         assert_eq!(first.severity(), Severity::Error);
         assert_eq!(first.code(), Some("arg-types"));
-        assert_eq!(first.message(), "Expected a number argument to land_percent, but got 3.5");
+        assert_eq!(
+            first.message(),
+            "Expected a number argument to land_percent, but got 3.5"
+        );
         assert_eq!(
             first.location(),
             SourceLocation::new(file, ByteIndex::from(27)..ByteIndex::from(30))

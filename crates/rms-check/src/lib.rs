@@ -388,16 +388,24 @@ impl RMSCheck {
 
         let parser = Parser::new(rms.file_id(), rms.main_source());
         for (atom, parse_warning) in parser {
-            diagnostics.extend(checker.write_atom(&atom));
+            let warnings = checker.write_atom(&atom);
             for w in parse_warning {
                 if w.kind == ParseErrorKind::MissingCommandArgs {
                     // Handled by arg-types lint
                     continue;
                 }
-                diagnostics.push(
-                    Diagnostic::parse_error(w.location, format!("{:?}", w.kind)).with_code("parse"),
-                );
+                if warnings.iter().all(|lint_warning| {
+                    let lint_range = lint_warning.location().range();
+                    let parse_range = w.location.range();
+                    lint_range.contains(&parse_range.start) && lint_range.contains(&parse_range.end)
+                }) {
+                    diagnostics.push(
+                        Diagnostic::parse_error(w.location, format!("{:?}", w.kind))
+                            .with_code("parse"),
+                    );
+                }
             }
+            diagnostics.extend(warnings);
         }
 
         RMSCheckResult { diagnostics }
