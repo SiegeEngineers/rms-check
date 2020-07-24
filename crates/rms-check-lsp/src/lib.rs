@@ -10,7 +10,7 @@
 
 use jsonrpc_core::{ErrorCode, IoHandler, Params};
 use lsp_types::{
-    CodeAction, CodeActionParams, CodeActionProviderCapability, Diagnostic,
+    CodeAction, CodeActionKind, CodeActionParams, CodeActionProviderCapability, Diagnostic,
     DiagnosticRelatedInformation, DiagnosticSeverity, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams, FoldingRange,
     FoldingRangeParams, FoldingRangeProviderCapability, GotoDefinitionParams, InitializeParams,
@@ -254,7 +254,7 @@ where
                 if let Some(replacement) = fix.replacement() {
                     code_actions.push(CodeAction {
                         title: fix.message().to_string(),
-                        kind: Some("quickfix".to_string()),
+                        kind: Some(CodeActionKind::QUICKFIX),
                         diagnostics: Some(vec![self.to_lsp_diagnostic(&doc, diagnostic)?]),
                         edit: Some(WorkspaceEdit {
                             changes: Some({
