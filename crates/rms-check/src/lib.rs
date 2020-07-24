@@ -394,11 +394,13 @@ impl RMSCheck {
                     // Handled by arg-types lint
                     continue;
                 }
-                if warnings.iter().all(|lint_warning| {
+
+                let overlaps_parse_warning = |lint_warning: &Diagnostic| {
                     let lint_range = lint_warning.location().range();
                     let parse_range = w.location.range();
                     lint_range.contains(&parse_range.start) && lint_range.contains(&parse_range.end)
-                }) {
+                };
+                if warnings.iter().all(overlaps_parse_warning) {
                     diagnostics.push(
                         Diagnostic::parse_error(w.location, format!("{:?}", w.kind))
                             .with_code("parse"),
