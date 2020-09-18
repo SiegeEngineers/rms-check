@@ -10,7 +10,7 @@ edition = "2018"
 [dependencies]
 jsonrpc-core = "14.2"
 lazy_static = "1.4"
-lsp-types = "0.80"
+lsp-types = "0.81"
 multisplice = "0.3"
 rms-check = { version = "0.0.4", path = "../rms-check/" }
 serde = { version = "1.0", features = ["derive"] }
