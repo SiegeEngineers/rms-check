@@ -14,7 +14,7 @@ use lsp_types::{
     DiagnosticRelatedInformation, DiagnosticSeverity, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams, FoldingRange,
     FoldingRangeParams, FoldingRangeProviderCapability, GotoDefinitionParams, InitializeParams,
-    InitializeResult, InitializedParams, Location, MessageType, NumberOrString, Position,
+    InitializeResult, InitializedParams, Location, MessageType, NumberOrString, OneOf, Position,
     PublishDiagnosticsParams, ServerCapabilities, ServerInfo, ShowMessageParams,
     SignatureHelpOptions, TextDocumentItem, TextDocumentPositionParams, TextDocumentSyncCapability,
     TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
@@ -152,7 +152,7 @@ where
     fn initialize(&mut self, _params: InitializeParams) -> RpcResult {
         let capabilities = ServerCapabilities {
             code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
-            document_formatting_provider: Some(true),
+            document_formatting_provider: Some(OneOf::Left(true)),
             folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
             signature_help_provider: Some(SignatureHelpOptions {
                 trigger_characters: Some(vec![" ".to_string(), "\t".to_string()]),
@@ -161,7 +161,7 @@ where
                     work_done_progress: None,
                 },
             }),
-            definition_provider: Some(true),
+            definition_provider: Some(OneOf::Left(true)),
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
                 TextDocumentSyncKind::Incremental,
             )),
