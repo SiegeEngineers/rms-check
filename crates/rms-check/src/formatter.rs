@@ -212,10 +212,7 @@ impl<'file> Formatter<'file> {
     where
         I: Iterator<Item = Atom<'file>>,
     {
-        let is_end = |atom: &Atom<'_>| match atom.kind {
-            AtomKind::CloseBlock { .. } => true,
-            _ => false,
-        };
+        let is_end = |atom: &Atom<'_>| matches!(atom.kind, AtomKind::CloseBlock { .. });
 
         self.inside_block += 1;
 
@@ -298,10 +295,8 @@ impl<'file> Formatter<'file> {
                     _ => (),
                 }
 
-                match atom.kind {
-                    AtomKind::EndIf { .. } if depth == 0 => false,
-                    _ => true,
-                }
+                // end on an endif atom at depth 0, else continue
+                depth > 0 || !matches!(atom.kind, AtomKind::EndIf { .. })
             })
             .collect();
 
@@ -568,12 +563,10 @@ impl<'file> Formatter<'file> {
             AtomKind::Const { name, value, .. } => self.const_(name, value),
             AtomKind::Undefine { name, .. } => self.undefine(name),
             AtomKind::Command { name, arguments } => {
-                let is_block =
-                    if let Some(AtomKind::OpenBlock { .. }) = input.peek().map(|atom| &atom.kind) {
-                        true
-                    } else {
-                        false
-                    };
+                let is_block = matches!(
+                    input.peek().map(|atom| &atom.kind),
+                    Some(AtomKind::OpenBlock { .. })
+                );
                 self.command(name, arguments, is_block);
             }
             AtomKind::Comment { content, .. } => self.comment(content),
