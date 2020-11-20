@@ -65,7 +65,7 @@ impl<'source> FileData<'source> {
 
     /// Get the ByteIndex for a line/column pair. Returns None if the line or column is out of
     /// range.
-    fn get_byte_index(&self, line: u64, column: u64) -> Option<ByteIndex> {
+    fn get_byte_index(&self, line: u32, column: u32) -> Option<ByteIndex> {
         let &start = self.line_indices.get(line as usize)?;
         if let Some(&end) = self.line_indices.get(line as usize + 1) {
             let line_len = usize::from(end) - usize::from(start);
@@ -83,7 +83,7 @@ impl<'source> FileData<'source> {
     }
 
     /// Get the line/column location of a byte index.
-    fn get_location(&self, index: ByteIndex) -> Option<(u64, u64)> {
+    fn get_location(&self, index: ByteIndex) -> Option<(u32, u32)> {
         let line = match self.line_indices.binary_search(&index) {
             Ok(line) => Some(line),
             Err(next_line) => Some(next_line - 1),
@@ -93,7 +93,7 @@ impl<'source> FileData<'source> {
             let start_index = self.line_indices[line];
             usize::from(index)
                 .checked_sub(usize::from(start_index))
-                .map(|column| (line as u64, column as u64))
+                .map(|column| (line as u32, column as u32))
         })
     }
 }
@@ -274,14 +274,14 @@ impl<'source> RMSFile<'source> {
 
     /// Get the ByteIndex for a line/column pair. Returns None if the line or column is out of
     /// range.
-    pub fn get_byte_index(&self, file: FileId, line: u64, column: u64) -> Option<ByteIndex> {
+    pub fn get_byte_index(&self, file: FileId, line: u32, column: u32) -> Option<ByteIndex> {
         self.files
             .get(file.to_usize())
             .and_then(|file| file.get_byte_index(line, column))
     }
 
     /// Get the line/column location of a byte index.
-    pub fn get_location(&self, file: FileId, index: ByteIndex) -> Option<(u64, u64)> {
+    pub fn get_location(&self, file: FileId, index: ByteIndex) -> Option<(u32, u32)> {
         self.files
             .get(file.to_usize())
             .and_then(|file| file.get_location(index))

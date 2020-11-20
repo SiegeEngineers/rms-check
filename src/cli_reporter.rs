@@ -21,10 +21,10 @@ impl<'a> codespan_reporting::files::Files<'a> for Adapter<'a> {
     }
 
     fn line_range(&'a self, id: Self::FileId, line: usize) -> Option<Range<usize>> {
-        let start_of_line = self.0.get_byte_index(id, line as u64, 0)?;
+        let start_of_line = self.0.get_byte_index(id, line as u32, 0)?;
         let end_of_line = self
             .0
-            .get_byte_index(id, line as u64 + 1, 0)
+            .get_byte_index(id, line as u32 + 1, 0)
             .unwrap_or_else(|| ByteIndex::from(self.0.source(id).len()));
         Some(usize::from(start_of_line)..usize::from(end_of_line))
     }

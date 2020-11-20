@@ -102,7 +102,7 @@ pub fn find_signature_help(file: &RMSFile<'_>, position: ByteIndex) -> Option<Si
             let active_parameter = args
                 .iter()
                 .position(|word| word.location.range().contains(&position))
-                .map(|index| index as i64);
+                .map(|index| index as u32);
             return get_signature(name.value).map(|sig| SignatureHelp {
                 signatures: vec![sig.clone()],
                 active_signature: Some(0),

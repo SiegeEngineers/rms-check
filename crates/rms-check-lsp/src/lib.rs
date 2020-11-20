@@ -51,14 +51,14 @@ fn out_of_range() -> jsonrpc_core::Error {
 }
 
 struct Document {
-    version: i64,
+    version: i32,
     // Can be 'static because we'll only pass in owned data.
     file: RMSFile<'static>,
     diagnostics: Vec<rms_check::Diagnostic>,
 }
 
 impl Document {
-    fn new(file: RMSFile<'static>, version: i64) -> Self {
+    fn new(file: RMSFile<'static>, version: i32) -> Self {
         Self {
             version,
             file,
@@ -194,13 +194,11 @@ where
     fn changed(&mut self, params: DidChangeTextDocumentParams) -> Result<(), jsonrpc_core::Error> {
         let uri = params.text_document.uri;
         if let Some(doc) = self.documents.get_mut(&uri) {
-            if let Some(version) = params.text_document.version {
-                if doc.version > version {
-                    return Err(jsonrpc_core::Error::invalid_params(format!(
-                        "Error applying incremental change: version mismatch: {} > {}",
-                        doc.version, version
-                    )));
-                }
+            if doc.version > params.text_document.version {
+                return Err(jsonrpc_core::Error::invalid_params(format!(
+                    "Error applying incremental change: version mismatch: {} > {}",
+                    doc.version, params.text_document.version
+                )));
             }
 
             let mut splicer = Multisplice::new(doc.file.main_source());

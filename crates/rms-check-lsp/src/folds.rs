@@ -21,7 +21,7 @@ impl<'a> FoldingRanges<'a> {
         }
     }
 
-    fn line(&self, index: ByteIndex) -> u64 {
+    fn line(&self, index: ByteIndex) -> u32 {
         self.file
             .get_location(self.file.file_id(), index)
             .unwrap()
@@ -34,12 +34,12 @@ impl<'a> FoldingRanges<'a> {
 
     fn fold_lines(&mut self, range: impl RangeBounds<ByteIndex>, kind: Option<FoldingRangeKind>) {
         let start_line = match range.start_bound() {
-            Bound::Unbounded => 0u64,
+            Bound::Unbounded => 0u32,
             Bound::Included(index) => self.line(*index),
             Bound::Excluded(index) => self.line(*index) + 1,
         };
         let end_line = match range.end_bound() {
-            Bound::Unbounded => 0u64,
+            Bound::Unbounded => 0u32,
             Bound::Included(index) => self.line(*index),
             Bound::Excluded(index) => self.line(*index) - 1,
         };
@@ -56,7 +56,7 @@ impl<'a> FoldingRanges<'a> {
 
     fn fold(&mut self, range: impl RangeBounds<ByteIndex>, kind: Option<FoldingRangeKind>) {
         let (start_line, start_character) = match range.start_bound() {
-            Bound::Unbounded => (0u64, 0u64),
+            Bound::Unbounded => (0u32, 0u32),
             Bound::Included(index) => self.file.get_location(self.file.file_id(), *index).unwrap(),
             Bound::Excluded(index) => self
                 .file
@@ -64,7 +64,7 @@ impl<'a> FoldingRanges<'a> {
                 .unwrap(),
         };
         let (end_line, end_character) = match range.end_bound() {
-            Bound::Unbounded => (0u64, 0u64),
+            Bound::Unbounded => (0u32, 0u32),
             Bound::Included(index) => self.file.get_location(self.file.file_id(), *index).unwrap(),
             Bound::Excluded(index) => self
                 .file
