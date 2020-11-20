@@ -1,5 +1,5 @@
 use ansi_term::{Colour, Style};
-use rms_check::{ByteIndex, AtomKind, Parser, Word, RMSFile};
+use rms_check::{AtomKind, ByteIndex, Parser, RMSFile, Word};
 use std::io::{Cursor, Result, Write};
 
 struct Printer<'a> {
@@ -9,13 +9,19 @@ struct Printer<'a> {
 
 impl<'a> Printer<'a> {
     fn print_whitespace(&mut self, index: ByteIndex, mut output: impl Write) -> Result<()> {
-        let last_index = self.last_index.take().unwrap_or(ByteIndex::from(0));
+        let last_index = self.last_index.take().unwrap_or_else(|| ByteIndex::from(0));
         let slice = &self.source[usize::from(last_index)..usize::from(index)];
         output.write_all(slice.as_bytes())?;
         Ok(())
     }
 
-    fn print_string(&mut self, string: &str, end: ByteIndex, style: Style, mut output: impl Write) -> Result<()> {
+    fn print_string(
+        &mut self,
+        string: &str,
+        end: ByteIndex,
+        style: Style,
+        mut output: impl Write,
+    ) -> Result<()> {
         write!(output, "{}", style.paint(string))?;
         self.last_index = Some(end);
         Ok(())
@@ -51,9 +57,18 @@ fn highlight_atoms_to(source: &str, parser: Parser, mut output: impl Write) -> R
             AtomKind::Section { name } => {
                 printer.print_word(name, color_section, &mut output)?;
             }
-            AtomKind::Comment { open, content, close } => {
+            AtomKind::Comment {
+                open,
+                content,
+                close,
+            } => {
                 printer.print_word(open, color_comment, &mut output)?;
-                printer.print_string(&content, open.location.end() + content.len() as isize, color_comment, &mut output)?;
+                printer.print_string(
+                    &content,
+                    open.location.end() + content.len() as isize,
+                    color_comment,
+                    &mut output,
+                )?;
                 if let Some(close) = close {
                     printer.print_word(close, color_comment, &mut output)?;
                 }
@@ -64,9 +79,11 @@ fn highlight_atoms_to(source: &str, parser: Parser, mut output: impl Write) -> R
             AtomKind::If { head, condition } | AtomKind::ElseIf { head, condition } => {
                 printer.print_word(head, color_keyword, &mut output)?;
                 printer.print_word(condition, color_const, &mut output)?;
-            },
-            AtomKind::Else { head } | AtomKind::EndIf { head } |
-            AtomKind::StartRandom { head } | AtomKind::EndRandom { head } => {
+            }
+            AtomKind::Else { head }
+            | AtomKind::EndIf { head }
+            | AtomKind::StartRandom { head }
+            | AtomKind::EndRandom { head } => {
                 printer.print_word(head, color_keyword, &mut output)?;
             }
             AtomKind::PercentChance { head, chance } => {
@@ -83,9 +100,8 @@ fn highlight_atoms_to(source: &str, parser: Parser, mut output: impl Write) -> R
                     };
                     printer.print_word(arg, colour, &mut output)?;
                 }
-            },
-            _ => {
             }
+            _ => {}
         }
     }
 
