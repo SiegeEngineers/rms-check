@@ -1,8 +1,8 @@
 use ansi_term::Colour::Cyan;
 use ansi_term::Style;
 use codespan_reporting::diagnostic::{Diagnostic, Label, LabelStyle, Severity};
+use codespan_reporting::files::{Error, Files};
 use codespan_reporting::term::{emit, Config};
-use codespan_reporting::files::{Files, Error};
 use rms_check::{ByteIndex, FileId, RMSCheckResult, RMSFile};
 use std::ops::Range;
 use termcolor::{ColorChoice, StandardStream};
@@ -22,7 +22,10 @@ impl<'a> Files<'a> for Adapter<'a> {
     }
 
     fn line_range(&'a self, id: Self::FileId, line: usize) -> Result<Range<usize>, Error> {
-        let start_of_line = self.0.get_byte_index(id, line as u32, 0).ok_or(Error::FileMissing)?;
+        let start_of_line = self
+            .0
+            .get_byte_index(id, line as u32, 0)
+            .ok_or(Error::FileMissing)?;
         let end_of_line = self
             .0
             .get_byte_index(id, line as u32 + 1, 0)
@@ -31,7 +34,10 @@ impl<'a> Files<'a> for Adapter<'a> {
     }
 
     fn line_index(&'a self, id: Self::FileId, byte_index: usize) -> Result<usize, Error> {
-        let (line, _) = self.0.get_location(id, ByteIndex::from(byte_index)).ok_or(Error::FileMissing)?;
+        let (line, _) = self
+            .0
+            .get_location(id, ByteIndex::from(byte_index))
+            .ok_or(Error::FileMissing)?;
         // let start_of_line = self.0.get_byte_index(id, line, 0)?;
         Ok(line as usize)
     }
