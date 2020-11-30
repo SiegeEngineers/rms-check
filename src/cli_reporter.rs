@@ -2,37 +2,38 @@ use ansi_term::Colour::Cyan;
 use ansi_term::Style;
 use codespan_reporting::diagnostic::{Diagnostic, Label, LabelStyle, Severity};
 use codespan_reporting::term::{emit, Config};
+use codespan_reporting::files::{Files, Error};
 use rms_check::{ByteIndex, FileId, RMSCheckResult, RMSFile};
 use std::ops::Range;
 use termcolor::{ColorChoice, StandardStream};
 
 struct Adapter<'a>(&'a RMSFile<'a>);
-impl<'a> codespan_reporting::files::Files<'a> for Adapter<'a> {
+impl<'a> Files<'a> for Adapter<'a> {
     type FileId = FileId;
     type Name = &'a str;
     type Source = &'a str;
 
-    fn name(&'a self, id: Self::FileId) -> Option<Self::Name> {
-        Some(self.0.name(id))
+    fn name(&'a self, id: Self::FileId) -> Result<Self::Name, Error> {
+        Ok(self.0.name(id))
     }
 
-    fn source(&'a self, id: Self::FileId) -> Option<Self::Source> {
-        Some(self.0.source(id))
+    fn source(&'a self, id: Self::FileId) -> Result<Self::Source, Error> {
+        Ok(self.0.source(id))
     }
 
-    fn line_range(&'a self, id: Self::FileId, line: usize) -> Option<Range<usize>> {
-        let start_of_line = self.0.get_byte_index(id, line as u32, 0)?;
+    fn line_range(&'a self, id: Self::FileId, line: usize) -> Result<Range<usize>, Error> {
+        let start_of_line = self.0.get_byte_index(id, line as u32, 0).ok_or(Error::FileMissing)?;
         let end_of_line = self
             .0
             .get_byte_index(id, line as u32 + 1, 0)
             .unwrap_or_else(|| ByteIndex::from(self.0.source(id).len()));
-        Some(usize::from(start_of_line)..usize::from(end_of_line))
+        Ok(usize::from(start_of_line)..usize::from(end_of_line))
     }
 
-    fn line_index(&'a self, id: Self::FileId, byte_index: usize) -> Option<usize> {
-        let (line, _) = self.0.get_location(id, ByteIndex::from(byte_index))?;
+    fn line_index(&'a self, id: Self::FileId, byte_index: usize) -> Result<usize, Error> {
+        let (line, _) = self.0.get_location(id, ByteIndex::from(byte_index)).ok_or(Error::FileMissing)?;
         // let start_of_line = self.0.get_byte_index(id, line, 0)?;
-        Some(line as usize)
+        Ok(line as usize)
     }
 }
 
