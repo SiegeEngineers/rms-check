@@ -571,7 +571,7 @@ impl RMSCheckLSP {
         TCallback: (Fn(&mut Inner<Emit>, TParams) -> RpcResult) + Send + Sync + 'static,
     {
         let inner = Arc::clone(&self.inner);
-        self.handler.add_method(name, move |params: Params| {
+        self.handler.add_sync_method(name, move |params: Params| {
             let params: TParams = params.parse()?;
             let mut guard = inner.lock().map_err(internal_error)?;
 
