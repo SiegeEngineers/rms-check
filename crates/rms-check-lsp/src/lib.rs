@@ -123,7 +123,9 @@ where
             }),
             source: Some("rms-check".to_string()),
             code: input.code().map(str::to_string).map(NumberOrString::String),
+            code_description: None,
             message: input.message().to_string(),
+            data: None,
             related_information: Some(
                 input
                     .labels()
@@ -255,6 +257,7 @@ where
                         kind: Some(CodeActionKind::QUICKFIX),
                         diagnostics: Some(vec![self.to_lsp_diagnostic(&doc, diagnostic)?]),
                         edit: Some(WorkspaceEdit {
+                            change_annotations: None,
                             changes: Some({
                                 let mut map = HashMap::new();
                                 let edit = TextEdit {
@@ -269,6 +272,8 @@ where
                             document_changes: None,
                         }),
                         command: None,
+                        data: None,
+                        disabled: None,
                         is_preferred: None,
                     });
                 }

@@ -68,6 +68,7 @@ impl SignatureBuilder {
         SignatureInformation {
             label,
             documentation: self.description.map(Documentation::String),
+            active_parameter: None,
             parameters: Some(self.args),
         }
     }
