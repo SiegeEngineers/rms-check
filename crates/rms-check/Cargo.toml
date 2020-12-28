@@ -11,7 +11,7 @@ edition = "2018"
 chardet = "0.2"
 cow-utils = "0.1.2"
 encoding_rs = "0.8"
-itertools = "0.9"
+itertools = "0.10"
 lazy_static = "1.4"
 strsim = "0.10"
 zip = { version = "0.5", default-features = false } # only need `store`
