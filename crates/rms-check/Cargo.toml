@@ -17,4 +17,4 @@ strsim = "0.10"
 zip = { version = "0.5", default-features = false } # only need `store`
 
 [dev-dependencies]
-anyhow = "1.0.36"
+anyhow = "1.0.38"
