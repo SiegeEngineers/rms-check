@@ -186,7 +186,7 @@ impl ArgTypesLint {
         if let Some(Ok(number)) = args.get(1).map(|f| f.value.parse::<i32>()) {
             match target {
                 Some(AssignTarget::Color) | Some(AssignTarget::Player) => {
-                    if number < 0 || number > 8 {
+                    if !(0..=8).contains(&number) {
                         warnings.push(Diagnostic::warning(
                             args[1].location,
                             "`assign_to` Number must be 1-8 when targeting AT_COLOR or AT_PLAYER",
@@ -259,7 +259,7 @@ impl Lint for ArgTypesLint {
                 "base_elevation" if !arguments.is_empty() => {
                     let arg = arguments[0];
                     if let Ok(n) = arg.value.parse::<i32>() {
-                        if n < 0 || n > 7 {
+                        if !(0..=7).contains(&n) {
                             warnings.push(Diagnostic::warning(
                                 arg.location,
                                 "Elevation value out of range (0 or 1-7)",
@@ -269,7 +269,7 @@ impl Lint for ArgTypesLint {
                 }
                 "land_position" => {
                     if let Some(Ok(first)) = arguments.get(0).map(|f| f.value.parse::<i32>()) {
-                        if first < 0 || first > 100 {
+                        if !(0..=100).contains(&first) {
                             warnings.push(Diagnostic::warning(
                                 arguments[0].location,
                                 "Land position out of range (0-100)",
@@ -277,7 +277,7 @@ impl Lint for ArgTypesLint {
                         }
                     }
                     if let Some(Ok(second)) = arguments.get(1).map(|f| f.value.parse::<i32>()) {
-                        if second < 0 || second > 99 {
+                        if !(0..=99).contains(&second) {
                             warnings.push(Diagnostic::warning(
                                 arguments[1].location,
                                 "Land position out of range (0-99)",
