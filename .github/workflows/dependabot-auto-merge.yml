@@ -1,0 +1,15 @@
+name: Auto Merge
+
+on:
+  pull_request:
+    branches: [default]
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto Merge Dependabot PRs
+        uses: ahmadnassri/action-dependabot-auto-merge@v2
+        with:
+          target: default
+          github-token: ${{secrets.GITHUB_TOKEN}}
