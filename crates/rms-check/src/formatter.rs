@@ -386,7 +386,13 @@ impl<'file> Formatter<'file> {
             if stmts.is_empty() {
                 return true;
             }
-            matches!(stmts[0].kind, AtomKind::Define { .. } | AtomKind::Const { .. } | AtomKind::Undefine { .. } | AtomKind::Command { .. })
+            matches!(
+                stmts[0].kind,
+                AtomKind::Define { .. }
+                    | AtomKind::Const { .. }
+                    | AtomKind::Undefine { .. }
+                    | AtomKind::Command { .. }
+            )
         });
 
         if has_simple_branches {
