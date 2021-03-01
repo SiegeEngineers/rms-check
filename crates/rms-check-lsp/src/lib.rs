@@ -228,6 +228,7 @@ where
     }
 
     /// A document was closed, clean up.
+    #[allow(clippy::unnecessary_wraps)]
     fn closed(&mut self, params: DidCloseTextDocumentParams) -> Result<(), jsonrpc_core::Error> {
         self.documents.remove(&params.text_document.uri);
         Ok(())

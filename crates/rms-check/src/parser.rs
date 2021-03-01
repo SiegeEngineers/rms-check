@@ -273,6 +273,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Read a command with arguments.
+    #[allow(clippy::unnecessary_wraps)]
     fn read_command(
         &mut self,
         name: Word<'a>,
