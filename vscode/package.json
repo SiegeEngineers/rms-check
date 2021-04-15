@@ -116,9 +116,7 @@
     }
   },
   "devDependencies": {
-    "@zeit/ncc": "^0.22.0",
-    "aoe2-rms": "github:mangudai/vscode",
-    "cpy-cli": "^3.1.0",
+    "@vercel/ncc": "^0.28.3",
     "simple-concat": "^1.0.0",
     "vsce": "^1.76.0",
     "vscode-jsonrpc": "^5.0.1",
@@ -149,12 +147,11 @@
   },
   "scripts": {
     "build-client": "ncc build client/extension.js -e vscode -o dist/client",
-    "build-ext": "cpy node_modules/aoe2-rms/{language-configuration.json,aoe2-rms.tmLanguage} .",
     "build-server": "npm run build-server-wasm && npm run build-server-js",
     "build-server-js": "ncc build server/index.js -o dist/server",
     "build-server-wasm": "npm run wasm-pack -- --profiling",
     "package": "npm run prepare && vsce package",
-    "prepare": "npm run build-ext && npm run build-server && npm run build-client",
+    "prepare": "npm run build-server && npm run build-client",
     "wasm-pack": "cd .. && wasm-pack build vscode/server --target nodejs"
   }
 }
