@@ -116,10 +116,10 @@ where
                 .to_lsp_range(input.location())
                 .ok_or_else(out_of_range)?,
             severity: Some(match input.severity() {
-                Severity::ParseError => DiagnosticSeverity::Error,
-                Severity::Error => DiagnosticSeverity::Error,
-                Severity::Warning => DiagnosticSeverity::Warning,
-                Severity::Hint => DiagnosticSeverity::Information,
+                Severity::ParseError => DiagnosticSeverity::ERROR,
+                Severity::Error => DiagnosticSeverity::ERROR,
+                Severity::Warning => DiagnosticSeverity::WARNING,
+                Severity::Hint => DiagnosticSeverity::INFORMATION,
             }),
             source: Some("rms-check".to_string()),
             code: input.code().map(str::to_string).map(NumberOrString::String),
@@ -165,7 +165,7 @@ where
             }),
             definition_provider: Some(OneOf::Left(true)),
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                TextDocumentSyncKind::Incremental,
+                TextDocumentSyncKind::INCREMENTAL,
             )),
             ..ServerCapabilities::default()
         };
@@ -542,7 +542,7 @@ impl RMSCheckLSP {
                     "jsonrpc": "2.0",
                     "method": "window/showMessage",
                     "params": ShowMessageParams {
-                        typ: MessageType::Error,
+                        typ: MessageType::ERROR,
                         message: format!(
                             "internal rms-check error while handling notification `{}`\n\nParams: {:?}\nError: {}", name, params_clone, error),
                     },
