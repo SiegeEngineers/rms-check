@@ -115,7 +115,7 @@ impl<'a> Checker<'a> {
         let mut warnings = vec![];
         for lint in self.lints.iter_mut() {
             let new_warnings = lint
-                .lint_atom(&mut state, atom)
+                .lint_atom(state, atom)
                 .into_iter()
                 .map(move |warning| warning.with_code(lint.name()));
             warnings.extend(new_warnings);

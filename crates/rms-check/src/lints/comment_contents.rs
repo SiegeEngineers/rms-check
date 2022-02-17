@@ -50,7 +50,7 @@ impl Lint for CommentContentsLint {
                 && state.compatibility <= Compatibility::UserPatch14
                 || has_start_random && state.compatibility <= Compatibility::UserPatch15;
 
-            let parser = Parser::new(state.rms.file_id(), &content);
+            let parser = Parser::new(state.rms.file_id(), content);
             let mut warnings = vec![];
 
             let mut expecting_more_arguments = None;

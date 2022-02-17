@@ -51,7 +51,7 @@ impl<'a> Iterator for Tokenizer<'a> {
         let mut start = ByteIndex::from(0);
         let mut end = ByteIndex::from(self.source.len());
         let mut saw_word = false;
-        while let Some((index, c)) = self.chars.next() {
+        for (index, c) in self.chars.by_ref() {
             let index = ByteIndex::from(index);
             if !saw_word {
                 if !c.is_ascii_whitespace() {

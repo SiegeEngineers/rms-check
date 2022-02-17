@@ -293,7 +293,7 @@ impl Lint for ArgTypesLint {
                         ));
                     }
                 }
-                "assign_to" => self.check_assign_to(&arguments, &mut warnings),
+                "assign_to" => self.check_assign_to(arguments, &mut warnings),
                 _ => (),
             }
 

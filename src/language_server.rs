@@ -26,7 +26,7 @@ fn read_message<R: BufRead>(from: &mut R) -> io::Result<String> {
         let header_value = parts[1].trim();
         match header_name.as_ref() {
             "content-length" => {
-                length = Some(usize::from_str_radix(header_value, 10).map_err(|_| {
+                length = Some(header_value.parse().map_err(|_| {
                     io::Error::new(io::ErrorKind::InvalidData, "content-length is not a number")
                 })?)
             }

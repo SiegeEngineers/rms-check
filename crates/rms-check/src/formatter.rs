@@ -286,7 +286,7 @@ impl<'file> Formatter<'file> {
         });
 
         let mut depth = 1;
-        let content: Vec<Atom<'file>> = input
+        let mut sub_input = input
             .by_ref()
             .peeking_take_while(|atom| {
                 match atom.kind {
@@ -298,9 +298,8 @@ impl<'file> Formatter<'file> {
                 // end on an endif atom at depth 0, else continue
                 depth > 0 || !matches!(atom.kind, AtomKind::EndIf { .. })
             })
-            .collect();
+            .peekable();
 
-        let mut sub_input = content.into_iter().peekable();
         while let Some(atom) = sub_input.next() {
             match &atom.kind {
                 AtomKind::ElseIf { .. } | AtomKind::Else { .. } => {
@@ -539,13 +538,13 @@ impl<'file> Formatter<'file> {
             // - Maintain padding lines.
             // - Do not add linebreak before comments at the end of a line
 
-            if self.has_padding_line(&prev, &atom) {
+            if self.has_padding_line(prev, &atom) {
                 // A padding line may already have been added by the formatter for another reason,
                 // like after top-level `endif`s. Don't add another in that case.
                 if !self.result.ends_with("\r\n\r\n") {
                     self.newline();
                 }
-            } else if self.should_comment_be_on_same_line(&prev, &atom) {
+            } else if self.should_comment_be_on_same_line(prev, &atom) {
                 if self.result.ends_with("\r\n") {
                     self.result.pop();
                     self.result.pop();

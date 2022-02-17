@@ -256,7 +256,7 @@ where
                     code_actions.push(CodeAction {
                         title: fix.message().to_string(),
                         kind: Some(CodeActionKind::QUICKFIX),
-                        diagnostics: Some(vec![self.to_lsp_diagnostic(&doc, diagnostic)?]),
+                        diagnostics: Some(vec![self.to_lsp_diagnostic(doc, diagnostic)?]),
                         edit: Some(WorkspaceEdit {
                             change_annotations: None,
                             changes: Some({
@@ -439,7 +439,7 @@ where
         let diagnostics: Vec<lsp_types::Diagnostic> = doc
             .diagnostics
             .iter()
-            .map(|diagnostic| self.to_lsp_diagnostic(&doc, diagnostic))
+            .map(|diagnostic| self.to_lsp_diagnostic(doc, diagnostic))
             .collect::<Result<Vec<_>, _>>()?;
 
         let params = PublishDiagnosticsParams::new(uri, diagnostics, Some(doc.version));
