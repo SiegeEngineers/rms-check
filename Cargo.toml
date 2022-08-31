@@ -19,7 +19,7 @@ ansi_term = "0.12"
 anyhow = "1.0.44"
 codespan-reporting = "0.11"
 multisplice = "^0.3.0"
-notify = "4.0.17"
+notify = "5.0.0"
 rms-check = { version = "0.0.4", path = "crates/rms-check" }
 rms-check-lsp = { version = "0.0.4", path = "crates/rms-check-lsp" }
 serde_json = "1.0"
